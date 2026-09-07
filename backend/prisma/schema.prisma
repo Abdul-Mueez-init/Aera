@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CompanyMemberRole {
+  OWNER
+  DISPATCHER
+  TECHNICIAN
+}
+
+enum CompanyMemberStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+model User {
+  id           String          @id @default(uuid()) @db.Uuid
+  email        String?         @unique
+  phone        String?         @unique
+  passwordHash String?
+  firstName    String
+  lastName     String
+  avatarUrl    String?
+  isActive     Boolean         @default(true)
+  memberships  CompanyMember[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@map("users")
+}
+
+model Company {
+  id           String          @id @default(uuid()) @db.Uuid
+  name         String
+  slug         String          @unique
+  timezone     String          @default("UTC")
+  defaultCurrency String       @default("USD") @db.Char(3)
+  memberships  CompanyMember[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@map("companies")
+}
+
+model CompanyMember {
+  id        String              @id @default(uuid()) @db.Uuid
+  companyId String              @db.Uuid
+  userId    String              @db.Uuid
+  role      CompanyMemberRole
+  status    CompanyMemberStatus @default(INVITED)
+  company   Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@unique([companyId, userId])
+  @@index([companyId, role, status])
+  @@map("company_members")
+}
