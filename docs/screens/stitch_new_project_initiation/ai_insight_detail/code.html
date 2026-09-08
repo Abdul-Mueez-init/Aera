@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;620;650&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "inverse-primary": "#97d1ce", "success": "#2F7D5A", "ink": "#151917", "surface-variant": "#e0e3e0", "on-primary-fixed-variant": "#0e4f4d", "accent": "#1E5A58", "warning": "#9A6A22", "primary-fixed-dim": "#97d1ce", "error": "#ba1a1a", "on-surface": "#181c1a", "success-soft": "#E5F2EA", "inverse-on-surface": "#eef2ee", "tertiary-fixed": "#ffdbcc", "outline-variant": "#bfc8c7", "inverse-surface": "#2d312f", "warning-soft": "#F8EEDB", "on-secondary-fixed": "#161d1a", "secondary-fixed": "#dde4de", "on-secondary-container": "#5d6460", "background": "#f7faf6", "tertiary": "#5a2f19", "secondary": "#59605b", "surface-dim": "#d8dbd7", "surface-container-lowest": "#ffffff", "surface-container": "#ecefeb", "line": "#DCE0DB", "secondary-container": "#dae1db", "outline": "#707978", "danger-soft": "#F7E8E7", "on-tertiary-fixed-variant": "#693b25", "surface-container-highest": "#e0e3e0", "accent-deep": "#12403F", "surface-subtle": "#EEF0EC", "on-primary-container": "#96cfcc", "on-tertiary": "#ffffff", "on-tertiary-container": "#f7b598", "on-secondary-fixed-variant": "#414844", "surface": "#FFFFFF", "danger": "#A84A46", "on-error-container": "#93000a", "primary-fixed": "#b3edea", "scrim": "#151917", "accent-soft": "#E0EEEB", "tertiary-container": "#75452e", "error-container": "#ffdad6", "surface-bright": "#f7faf6", "info": "#4D6882", "secondary-fixed-dim": "#c1c8c3", "surface-tint": "#2d6765", "on-primary-fixed": "#00201f", "on-error": "#ffffff", "tertiary-fixed-dim": "#fab79a", "on-background": "#181c1a", "surface-container-high": "#e6e9e5", "info-soft": "#E9EFF5", "canvas": "#F6F5F1", "primary-container": "#1e5a58", "ink-soft": "#343B37", "on-tertiary-fixed": "#341101", "on-surface-variant": "#404848", "on-secondary": "#ffffff", "primary": "#004240", "on-primary": "#ffffff", "surface-container-low": "#f1f4f1" }, borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, spacing: { "1": "4px", "2": "8px", "3": "12px", "4": "16px", "5": "20px", "6": "24px", "7": "28px", "8": "32px", "10": "40px", "12": "48px", "16": "64px" }, fontFamily: { "headline-md": ["Inter"], "h1": ["Inter"], "h2": ["Inter"], "body-sm": ["Inter"], "body": ["Inter"], "body-md": ["Inter"], "display": ["Inter"], "h3": ["Inter"], "body-lg": ["Inter"], "label-md": ["Inter"], "headline-sm": ["Inter"], "headline-lg": ["Inter"], "money": ["Inter"], "label": ["Inter"] }, fontSize: { "headline-md": ["24px", { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "650" }], "h1": ["30px", { lineHeight: "1.12", letterSpacing: "-0.025em", fontWeight: "650" }], "h2": ["24px", { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "650" }], "body-sm": ["14px", { lineHeight: "1.45", fontWeight: "400" }], "body": ["16px", { lineHeight: "1.5", fontWeight: "400" }], "body-md": ["14px", { lineHeight: "1.45", fontWeight: "400" }], "display": ["36px", { lineHeight: "1.08", letterSpacing: "-0.03em", fontWeight: "650" }], "h3": ["18px", { lineHeight: "1.25", letterSpacing: "-0.01em", fontWeight: "620" }], "body-lg": ["16px", { lineHeight: "1.5", fontWeight: "400" }], "label-md": ["12px", { lineHeight: "1.25", letterSpacing: "0.01em", fontWeight: "650" }], "headline-sm": ["18px", { lineHeight: "1.25", letterSpacing: "-0.01em", fontWeight: "620" }], "headline-lg": ["30px", { lineHeight: "1.12", letterSpacing: "-0.025em", fontWeight: "650" }], "money": ["28px", { lineHeight: "1.05", letterSpacing: "-0.025em", fontWeight: "650" }], "label": ["12px", { lineHeight: "1.25", letterSpacing: "0.01em", fontWeight: "650" }] } } } };</script><style>@layer base { html, body { width: 100%; margin: 0; padding: 0; } body { overscroll-behavior-y: none; } .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); } .pt-safe { padding-top: env(safe-area-inset-top, 0px); } main > :first-child { margin-top: 0 !important; } main > :last-child { margin-bottom: 0 !important; } } ::-webkit-scrollbar { display: none; }</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-canvas text-ink font-body min-h-screen flex flex-col antialiased selection:bg-accent-soft selection:text-accent-deep"><header class="fixed top-0 w-full z-50 pt-safe bg-canvas/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(21,25,23,0.04)]"><div class="h-16 px-4 flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-accent text-surface flex items-center justify-center font-display text-h3 tracking-tight select-none shadow-[0_2px_8px_rgba(30,90,88,0.2)]">A</div><div class="flex flex-col"><span class="font-label-md text-label-md uppercase tracking-wider text-accent font-semibold leading-none">Aera OS</span><h1 class="font-headline-sm text-headline-sm text-ink leading-tight">Ai Command Center</h1></div></div><div class="flex items-center gap-2"><button aria-label="Global Notifications" class="w-11 h-11 rounded-full flex items-center justify-center text-ink-soft hover:text-ink transition-colors"><span class="material-symbols-outlined text-[22px]">notifications</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-canvas"><div class="flex flex-col w-full px-4 py-3 pb-8 space-y-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-danger-soft text-danger font-label-md text-label-md uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-danger animate-ping"></span>
+        Schedule Risk • Critical Dispatch Buffer
+      </span>
+</div>
+<span class="font-label-md text-label-md text-ink-soft flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] text-accent">verified</span>
+      Audited 09:45 AM
+    </span>
+</div>
+<div class="bg-surface rounded-xl p-5 shadow-sm space-y-3">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md uppercase tracking-wider text-ink-soft">Core Autonomous Recommendation</span>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-accent-soft text-accent font-label-md text-label-md">High Confidence (94%)</span>
+</div>
+<h2 class="font-headline-sm text-headline-sm text-ink leading-tight">
+      Reassign Job #JOB-8492 (Sarah Khan) to Omar Khan or advance dispatch window to 15:00.
+    </h2>
+<div class="flex items-center gap-2 pt-1 text-ink-soft font-body-sm text-body-sm">
+<span class="material-symbols-outlined text-[18px] text-danger">crisis_alert</span>
+<span>Imminent 22-minute arrival SLA breach detected on primary technician.</span>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex items-center justify-between px-1">
+<h3 class="font-label-md text-label-md uppercase tracking-wider text-ink-soft">Evidence Stack &amp; Algorithmic Trace</h3>
+<span class="font-label-md text-label-md text-accent cursor-pointer hover:underline" id="toggle-evidence-btn">Detailed Telemetry</span>
+</div>
+<div class="grid grid-cols-2 gap-2.5">
+<div class="bg-surface rounded-xl p-3.5 shadow-sm space-y-1">
+<div class="flex items-center justify-between text-ink-soft">
+<span class="font-label-md text-label-md">Current Delay</span>
+<span class="material-symbols-outlined text-[16px] text-danger">schedule</span>
+</div>
+<p class="font-headline-sm text-headline-sm text-danger font-semibold">+28 min</p>
+<p class="font-body-sm text-body-sm text-ink-soft line-clamp-2">Ahmed Raza at Model Town unit coil cleaning</p>
+</div>
+<div class="bg-surface rounded-xl p-3.5 shadow-sm space-y-1">
+<div class="flex items-center justify-between text-ink-soft">
+<span class="font-label-md text-label-md">Transit Distance</span>
+<span class="material-symbols-outlined text-[16px] text-warning">alt_route</span>
+</div>
+<p class="font-headline-sm text-headline-sm text-ink font-semibold">17.4 km</p>
+<p class="font-body-sm text-body-sm text-ink-soft line-clamp-2">Via Ring Road (Heavy congestion reported)</p>
+</div>
+<div class="bg-surface rounded-xl p-3.5 shadow-sm space-y-1">
+<div class="flex items-center justify-between text-ink-soft">
+<span class="font-label-md text-label-md">Est. Transit Time</span>
+<span class="material-symbols-outlined text-[16px] text-ink-soft">navigation</span>
+</div>
+<p class="font-headline-sm text-headline-sm text-ink font-semibold">34 min</p>
+<p class="font-body-sm text-body-sm text-ink-soft">Historical dynamic traffic blend at 14:00 peak</p>
+</div>
+<div class="bg-surface rounded-xl p-3.5 shadow-sm space-y-1">
+<div class="flex items-center justify-between text-ink-soft">
+<span class="font-label-md text-label-md">Buffer Deficit</span>
+<span class="material-symbols-outlined text-[16px] text-danger">hourglass_bottom</span>
+</div>
+<p class="font-headline-sm text-headline-sm text-danger font-semibold">-22 min</p>
+<p class="font-body-sm text-body-sm text-ink-soft">Window: 12 min left | Arrival breach imminent</p>
+</div>
+</div>
+</div>
+<div class="bg-surface rounded-xl p-4 shadow-sm space-y-3">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md uppercase tracking-wider text-ink-soft">Route Telemetry Context</span>
+<span class="font-label-md text-label-md text-success flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-success"></span> Live GPS Stream
+      </span>
+</div>
+<div class="w-full h-36 bg-surface-subtle rounded-lg bg-cover bg-center flex flex-col justify-end p-2.5 relative overflow-hidden" data-location="Model Town to Phase 5 DHA, Lahore" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAAFZEj_N554fQL8clJG6Je8FzVTMdc65vE1pAnm2TE0wth93nunronPSXDANURT6HOIVVrAxhIaV4JzBV4qBZEqhg457O_LJaloOAPFP18XgDIc00wC0VCUoPdZYoRysWiF4gdi4ec1XvMqJzJl8SIesLC6ZaX8Gpu_w5nX7bLbM6o1lj4uiVB0flbtIrXc3HY4pDqoB5NVb6YzhdgVUslzOj74ceBhEe2I6irpxhOhQ7n_ipGsSNefA')">
+<div class="absolute inset-0 bg-gradient-to-t from-scrim/80 via-transparent to-transparent"></div>
+<div class="relative z-10 flex items-center justify-between text-surface">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-inverse-primary">location_on</span>
+<span class="font-label-md text-label-md">DHA Phase 5 Corridor</span>
+</div>
+<span class="font-label-md text-label-md bg-scrim/60 px-2 py-0.5 rounded backdrop-blur-sm">Speed: 18 km/h</span>
+</div>
+</div>
+</div>
+<div class="space-y-2.5">
+<span class="font-label-md text-label-md uppercase tracking-wider text-ink-soft px-1">Contextual Alternative Analysis</span>
+<label class="block cursor-pointer" onclick="selectOption('A')">
+<input checked="" class="sr-only" id="option-a-radio" name="recommendation_route" type="radio"/>
+<div class="bg-surface-subtle p-4 rounded-xl shadow-sm transition-all flex flex-col gap-2" id="option-a-card">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-4 h-4 rounded-full bg-accent flex items-center justify-center" id="radio-indicator-a">
+<span class="w-1.5 h-1.5 rounded-full bg-surface"></span>
+</span>
+<span class="font-headline-sm text-headline-sm text-ink font-semibold">Option A • Technician Swap (Optimal)</span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-success-soft text-success font-label-md text-label-md font-semibold">0 min Delay</span>
+</div>
+<p class="font-body-sm text-body-sm text-ink pl-6">
+          Assign to <span class="font-semibold text-accent-deep">Omar Khan</span> (Free at 13:45 in Phase 5, just 3.8 km away). Yields a <strong class="font-semibold text-success">98% on-time completion probability</strong>.
+        </p>
+<div class="pl-6 flex items-center gap-3 pt-1 text-ink-soft font-label-md text-label-md">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">bolt</span> Immediate Dispatch</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">local_gas_station</span> Saves 13.6 km transit</span>
+</div>
+</div>
+</label>
+<label class="block cursor-pointer" onclick="selectOption('B')">
+<input class="sr-only" id="option-b-radio" name="recommendation_route" type="radio"/>
+<div class="bg-surface p-4 rounded-xl shadow-sm transition-all flex flex-col gap-2" id="option-b-card">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-4 h-4 rounded-full bg-surface-subtle flex items-center justify-center" id="radio-indicator-b">
+<span class="w-1.5 h-1.5 rounded-full bg-surface-subtle"></span>
+</span>
+<span class="font-headline-sm text-headline-sm text-ink font-semibold">Option B • Reschedule Window</span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-warning-soft text-warning font-label-md text-label-md font-semibold">+35 min Shift</span>
+</div>
+<p class="font-body-sm text-body-sm text-ink-soft pl-6">
+          Keep Ahmed Raza. Dispatch automated customer SMS notification to Sarah Khan shifting delivery window to <span class="font-semibold text-ink">14:30 – 15:00</span>.
+        </p>
+<div class="pl-6 flex items-center gap-2 pt-1 text-ink-soft font-label-md text-label-md">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">sms</span> Automated CX Push</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">warning</span> Minor CSAT risk</span>
+</div>
+</div>
+</label>
+</div>
+<div class="bg-surface p-3.5 rounded-xl flex items-center gap-3 shadow-sm">
+<div class="w-8 h-8 rounded-lg bg-accent-soft flex items-center justify-center text-accent flex-shrink-0">
+<span class="material-symbols-outlined text-[18px]">hub</span>
+</div>
+<p class="font-body-sm text-body-sm text-ink-soft">
+      Cross-referenced against live van telemetry, job complexity ratings, and Google Maps API traffic matrix at 09:45 AM.
+    </p>
+</div>
+<div class="pt-2 space-y-2">
+<button class="w-full h-12 rounded-lg bg-accent hover:bg-accent-deep text-surface font-headline-sm text-headline-sm flex items-center justify-center gap-2 shadow-[0_4px_14px_rgba(30,90,88,0.25)] transition-colors active:scale-[0.99]" id="execute-btn" onclick="handlePrimaryAction()">
+<span class="material-symbols-outlined text-[20px]">swap_horiz</span>
+<span id="primary-btn-label">Execute Reassignment to Omar →</span>
+</button>
+<button class="w-full h-11 rounded-lg bg-surface-subtle text-ink font-headline-sm text-headline-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.99]" id="secondary-btn" onclick="handleSecondaryAction()">
+<span class="material-symbols-outlined text-[18px]">sms</span>
+<span>Keep Ahmed &amp; Notify Client via SMS</span>
+</button>
+<div class="flex justify-center pt-1">
+<button class="text-ink-soft hover:text-ink font-body-sm text-body-sm flex items-center gap-1 py-1" onclick="dismissInsight()">
+<span class="material-symbols-outlined text-[16px]">visibility_off</span>
+        Dismiss insight (I'll handle manually)
+      </button>
+</div>
+</div>
+<div class="fixed bottom-20 left-4 right-4 bg-ink text-surface p-3.5 rounded-lg shadow-xl flex items-center justify-between opacity-0 pointer-events-none transition-opacity duration-200 z-50" id="toast">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-inverse-primary text-[20px]" id="toast-icon">check_circle</span>
+<span class="font-body-sm text-body-sm font-medium" id="toast-msg">Reassignment executed successfully.</span>
+</div>
+<button class="text-surface-dim hover:text-surface" onclick="hideToast()">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+</div>
+<script>
+  let selected = 'A';
+
+  function selectOption(option) {
+    selected = option;
+    const cardA = document.getElementById('option-a-card');
+    const cardB = document.getElementById('option-b-card');
+    const indA = document.getElementById('radio-indicator-a');
+    const indB = document.getElementById('radio-indicator-b');
+    const primaryBtn = document.getElementById('primary-btn-label');
+
+    if (option === 'A') {
+      cardA.classList.remove('bg-surface');
+      cardA.classList.add('bg-surface-subtle');
+      cardB.classList.remove('bg-surface-subtle');
+      cardB.classList.add('bg-surface');
+
+      indA.classList.remove('bg-surface-subtle');
+      indA.classList.add('bg-accent');
+      indA.firstElementChild.classList.remove('bg-surface-subtle');
+      indA.firstElementChild.classList.add('bg-surface');
+
+      indB.classList.remove('bg-accent');
+      indB.classList.add('bg-surface-subtle');
+      indB.firstElementChild.classList.remove('bg-surface');
+      indB.firstElementChild.classList.add('bg-surface-subtle');
+
+      primaryBtn.textContent = 'Execute Reassignment to Omar →';
+    } else {
+      cardB.classList.remove('bg-surface');
+      cardB.classList.add('bg-surface-subtle');
+      cardA.classList.remove('bg-surface-subtle');
+      cardA.classList.add('bg-surface');
+
+      indB.classList.remove('bg-surface-subtle');
+      indB.classList.add('bg-accent');
+      indB.firstElementChild.classList.remove('bg-surface-subtle');
+      indB.firstElementChild.classList.add('bg-surface');
+
+      indA.classList.remove('bg-accent');
+      indA.classList.add('bg-surface-subtle');
+      indA.firstElementChild.classList.remove('bg-surface');
+      indA.firstElementChild.classList.add('bg-surface-subtle');
+
+      primaryBtn.textContent = 'Update Window & Queue SMS →';
+    }
+  }
+
+  function showToast(message, icon = 'check_circle') {
+    const toast = document.getElementById('toast');
+    const msg = document.getElementById('toast-msg');
+    const ico = document.getElementById('toast-icon');
+    msg.textContent = message;
+    ico.textContent = icon;
+    toast.classList.remove('opacity-0', 'pointer-events-none');
+    toast.classList.add('opacity-100', 'pointer-events-auto');
+    setTimeout(hideToast, 3500);
+  }
+
+  function hideToast() {
+    const toast = document.getElementById('toast');
+    toast.classList.add('opacity-0', 'pointer-events-none');
+    toast.classList.remove('opacity-100', 'pointer-events-auto');
+  }
+
+  function handlePrimaryAction() {
+    if (selected === 'A') {
+      showToast('Dispatched: #JOB-8492 reassigned to Omar Khan.', 'done_all');
+    } else {
+      showToast('Client notified: Sarah Khan window shifted to 14:30.', 'send');
+    }
+  }
+
+  function handleSecondaryAction() {
+    showToast('SMS dispatched to Sarah Khan: Arrival scheduled 14:30.', 'sms');
+  }
+
+  function dismissInsight() {
+    showToast('Insight archived. Dispatched to manual review log.', 'archive');
+  }
+
+  document.getElementById('toggle-evidence-btn').addEventListener('click', () => {
+    showToast('Live telemetry refreshed with latest GPS probe.', 'sync');
+  });
+</script></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/90 backdrop-blur-xl shadow-[0_-2px_12px_rgba(21,25,23,0.04)]" data-active-classes="text-accent font-semibold"><div class="h-16 px-3 flex items-center justify-around"><a class="flex flex-col items-center justify-center w-14 h-12 text-ink-soft hover:text-ink transition-colors gap-1" data-path="experience-hub" href="#"><span class="material-symbols-outlined text-[24px]">support_agent</span><span class="font-label-md text-label-md leading-none">CX Hub</span></a><a class="flex flex-col items-center justify-center w-14 h-12 text-ink-soft hover:text-ink transition-colors gap-1" data-path="customer-portal" href="#"><span class="material-symbols-outlined text-[24px]">group</span><span class="font-label-md text-label-md leading-none">Clients</span></a><a aria-current="page" class="relative -top-2 flex flex-col items-center justify-center w-14 h-14 rounded-full bg-accent shadow-[0_8px_20px_rgba(30,90,88,0.35)] hover:bg-accent-deep transition-colors text-accent font-semibold" data-path="ai-command-center" href="#"><span class="material-symbols-outlined text-[26px]">neurology</span></a><a class="flex flex-col items-center justify-center w-14 h-12 text-ink-soft hover:text-ink transition-colors gap-1" data-path="automation-logs" href="#"><span class="material-symbols-outlined text-[24px]">electric_bolt</span><span class="font-label-md text-label-md leading-none">Actions</span></a><a class="flex flex-col items-center justify-center w-14 h-12 text-ink-soft hover:text-ink transition-colors gap-1" data-path="company-settings" href="#"><span class="material-symbols-outlined text-[24px]">corporate_fare</span><span class="font-label-md text-label-md leading-none">Company</span></a></div></nav></body></html>

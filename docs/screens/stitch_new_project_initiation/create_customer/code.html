@@ -1,0 +1,304 @@
+<!DOCTYPE html><html class="h-full" lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;620;650;700&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{width:100vw;min-height:100%;margin:0;padding:0;background-color:#F6F5F1;}body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "primary-container": "#1e5a58", "accent-deep": "#12403F", "error-container": "#ffdad6", "on-secondary": "#ffffff", "secondary": "#59605b", "accent": "#1E5A58", "canvas": "#F6F5F1", "on-surface-variant": "#404848", "surface-container": "#ecefeb", "inverse-on-surface": "#eef2ee", "on-surface": "#181c1a", "inverse-primary": "#97d1ce", "primary-fixed-dim": "#97d1ce", "tertiary-fixed": "#ffdbcc", "error": "#ba1a1a", "inverse-surface": "#2d312f", "surface-bright": "#f7faf6", "primary": "#004240", "danger-soft": "#F7E8E7", "secondary-container": "#dae1db", "surface-tint": "#2d6765", "on-tertiary-container": "#f7b598", "on-tertiary-fixed-variant": "#693b25", "secondary-fixed-dim": "#c1c8c3", "outline-variant": "#bfc8c7", "info": "#4D6882", "on-primary-fixed": "#00201f", "surface-dim": "#d8dbd7", "ink": "#151917", "on-tertiary-fixed": "#341101", "primary-fixed": "#b3edea", "on-error-container": "#93000a", "danger": "#A84A46", "success": "#2F7D5A", "on-primary-fixed-variant": "#0e4f4d", "warning-soft": "#F8EEDB", "on-secondary-fixed": "#161d1a", "success-soft": "#E5F2EA", "tertiary-fixed-dim": "#fab79a", "on-secondary-container": "#5d6460", "info-soft": "#E9EFF5", "warning": "#9A6A22", "on-primary-container": "#96cfcc", "ink-soft": "#343B37", "surface-subtle": "#EEF0EC", "surface": "#FFFFFF", "surface-container-lowest": "#ffffff", "on-background": "#181c1a", "surface-variant": "#e0e3e0", "tertiary-container": "#75452e", "secondary-fixed": "#dde4de", "on-primary": "#ffffff", "background": "#f7faf6", "line": "#DCE0DB", "on-secondary-fixed-variant": "#414844", "surface-container-low": "#f1f4f1", "accent-soft": "#E0EEEB", "tertiary": "#5a2f19", "scrim": "#151917", "surface-container-high": "#e6e9e5", "surface-container-highest": "#e0e3e0", "outline": "#707978", "on-error": "#ffffff", "on-tertiary": "#ffffff" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "4": "16px", "2": "8px", "6": "24px", "16": "64px", "10": "40px", "3": "12px", "1": "4px", "5": "20px", "12": "48px", "8": "32px", "7": "28px" }, "fontFamily": { "h2": ["Inter"], "h3": ["Inter"], "headline-sm": ["Inter"], "body-lg": ["Inter"], "money": ["Inter"], "headline-lg": ["Inter"], "display": ["Inter"], "h1": ["Inter"], "label": ["Inter"], "label-md": ["Inter"], "body-md": ["Inter"], "body": ["Inter"], "headline-md": ["Inter"], "body-sm": ["Inter"] }, "fontSize": { "h2": ["24px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "650" }], "h3": ["18px", { "lineHeight": "1.25", "letterSpacing": "-0.01em", "fontWeight": "620" }], "headline-sm": ["18px", { "lineHeight": "1.25", "letterSpacing": "-0.01em", "fontWeight": "620" }], "body-lg": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }], "money": ["28px", { "lineHeight": "1.05", "letterSpacing": "-0.025em", "fontWeight": "650" }], "headline-lg": ["30px", { "lineHeight": "1.12", "letterSpacing": "-0.025em", "fontWeight": "650" }], "display": ["36px", { "lineHeight": "1.08", "letterSpacing": "-0.03em", "fontWeight": "650" }], "h1": ["30px", { "lineHeight": "1.12", "letterSpacing": "-0.025em", "fontWeight": "650" }], "label": ["12px", { "lineHeight": "1.25", "letterSpacing": "0.01em", "fontWeight": "650" }], "label-md": ["12px", { "lineHeight": "1.25", "letterSpacing": "0.01em", "fontWeight": "650" }], "body-md": ["14px", { "lineHeight": "1.45", "fontWeight": "400" }], "body": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }], "headline-md": ["24px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "650" }], "body-sm": ["14px", { "lineHeight": "1.45", "fontWeight": "400" }] } } } };</script></head><body class="bg-canvas text-ink font-body min-h-screen flex flex-col antialiased selection:bg-accent-soft selection:text-accent"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(21,25,23,0.04)]"><div class="h-16 px-3 flex items-center justify-between gap-2"><div class="flex items-center gap-2 min-w-0"><button aria-label="Back" class="w-11 h-11 flex items-center justify-center rounded-lg text-ink hover:bg-surface-subtle transition-colors" onclick="history.back()"><span class="material-symbols-outlined text-[22px]">arrow_back</span></button><img alt="Brand logo. - Primary color: #1e5a58
+- Font: inter
+- Mode: light
+- Roundness: rounded-md
+" class="h-7 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1Ug1XXBcmGJZGypd8313L8OujNOteYVBV1sN9Cy69PaYPEpLyKbzsP7p2kqAukd2flRYBYvKzHUea2XCwBn4oNWpgmKA4oVlnFclxOMyvR8gEQhi2_vJc8XiggtNeYwJ5D77H4PeLXXeBXZZ-MjWvwjYuv_1dwni4kFmBvxEJHUcEAWeIIS8W9jz0P22oCUyUi16KPTwTYGysbU02s1XttCa2Ye1Egkm9j444fkaIPn42ZGq3dNo8oF82MD"><h1 class="font-h3 text-h3 text-ink tracking-tight truncate pl-1">Create Work Order</h1></div><div class="flex items-center gap-2 flex-shrink-0"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 bg-canvas pb-safe"><div class="flex flex-col w-full">
+<!-- Interactive Form Container -->
+<form class="flex flex-col w-full px-4 pt-3 pb-36 space-y-5" id="createCustomerForm" onsubmit="event.preventDefault();">
+<!-- Header Context & Tone Bar -->
+<div class="bg-surface rounded-xl p-4 shadow-sm">
+<div class="flex items-start justify-between gap-3">
+<div class="space-y-1">
+<div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-accent-soft text-accent text-label font-label">
+<span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
+            Aera Onboarding Dispatch
+          </div>
+<p class="text-body-sm font-body-sm text-ink-soft leading-relaxed pt-1">
+            Add residential or commercial account for immediate job booking and quoting.
+          </p>
+</div>
+<button aria-label="Cancel onboarding" class="w-9 h-9 rounded-lg bg-surface-subtle text-ink-soft flex items-center justify-center hover:bg-secondary-container transition-colors shrink-0" onclick="window.history.back()" type="button">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<!-- Quick Progress Stepper Pill -->
+<div class="mt-4 pt-3 bg-surface-container-low rounded-lg px-3 py-2 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-accent text-[18px]" style="font-variation-settings: 'FILL' 1;">speed</span>
+<span class="text-label font-label text-ink">Fast Registration</span>
+</div>
+<span class="text-label-md font-label-md text-ink-soft">Takes ~45s in field</span>
+</div>
+</div>
+<!-- Section 1: Account Classification -->
+<div class="bg-surface rounded-xl p-4 shadow-sm space-y-3">
+<div class="flex items-center justify-between">
+<label class="text-label-md font-label-md text-ink-soft">ACCOUNT CLASSIFICATION</label>
+<span class="text-label font-label text-accent bg-accent-soft px-2 py-0.5 rounded-full" id="classificationBadge">Standard Tier</span>
+</div>
+<!-- Segmented Toggle Component -->
+<div aria-label="Account Classification" class="grid grid-cols-2 p-1 bg-surface-subtle rounded-xl gap-1" role="radiogroup">
+<button class="h-11 rounded-lg flex items-center justify-center gap-2 bg-surface text-accent shadow-sm font-label-md text-label-md transition-all" id="btnResidential" onclick="selectClassification('residential')" type="button">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">home</span>
+<span>Residential</span>
+</button>
+<button class="h-11 rounded-lg flex items-center justify-center gap-2 text-ink-soft hover:text-ink font-label-md text-label-md transition-all" id="btnCommercial" onclick="selectClassification('commercial')" type="button">
+<span class="material-symbols-outlined text-[18px]">corporate_fare</span>
+<span>Commercial</span>
+</button>
+</div>
+<input id="accountType" name="accountType" type="hidden" value="residential">
+</div>
+<!-- Section 2: Primary Contact -->
+<div class="bg-surface rounded-xl p-4 shadow-sm space-y-4">
+<div class="flex items-center gap-2 pb-1">
+<div class="w-7 h-7 rounded-lg bg-accent-soft flex items-center justify-center text-accent">
+<span class="material-symbols-outlined text-[17px]">person</span>
+</div>
+<h2 class="font-h3 text-headline-sm text-ink">Primary Contact</h2>
+</div>
+<!-- Full Name -->
+<div class="space-y-1.5">
+<label class="block font-label-md text-label-md text-ink-soft" for="customerName">
+          Full Customer / Entity Name <span class="text-danger">*</span>
+</label>
+<div class="relative">
+<input class="w-full h-[52px] px-4 rounded-lg bg-surface-container-low text-ink font-body-md text-body-md placeholder:text-outline focus:outline-none focus:bg-surface focus:shadow-[0_0_0_2px_#1E5A58] transition-all" id="customerName" name="customerName" placeholder="e.g., Sarah Khan" required="" type="text">
+<span class="material-symbols-outlined absolute right-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px] pointer-events-none">badge</span>
+</div>
+</div>
+<!-- Mobile Number & SMS Notice -->
+<div class="space-y-1.5">
+<label class="block font-label-md text-label-md text-ink-soft" for="primaryPhone">
+          Primary Mobile Number <span class="text-danger">*</span>
+</label>
+<div class="relative">
+<input class="w-full h-[52px] px-4 rounded-lg bg-surface-container-low text-ink font-body-md text-body-md placeholder:text-outline focus:outline-none focus:bg-surface focus:shadow-[0_0_0_2px_#1E5A58] transition-all" id="primaryPhone" name="primaryPhone" placeholder="+92 (300) 000-0000" required="" type="tel" value="+92 (300) 238-9041">
+<span class="material-symbols-outlined absolute right-3.5 top-1/2 -translate-y-1/2 text-accent text-[20px]">phone_iphone</span>
+</div>
+<!-- SMS Dispatch Pill Indicator -->
+<div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-success-soft text-success text-body-sm font-body-sm">
+<span class="material-symbols-outlined text-[18px] shrink-0" style="font-variation-settings: 'FILL' 1;">mark_chat_read</span>
+<span class="text-[13px] font-medium leading-tight">Receives real-time SMS technician ETA updates</span>
+</div>
+</div>
+<!-- Email Address -->
+<div class="space-y-1.5">
+<div class="flex items-center justify-between">
+<label class="block font-label-md text-label-md text-ink-soft" for="contactEmail">
+            Contact Email Address
+          </label>
+<span class="text-label text-outline">For digital quotes</span>
+</div>
+<div class="relative">
+<input class="w-full h-[52px] px-4 rounded-lg bg-surface-container-low text-ink font-body-md text-body-md placeholder:text-outline focus:outline-none focus:bg-surface focus:shadow-[0_0_0_2px_#1E5A58] transition-all" id="contactEmail" name="contactEmail" placeholder="sarah.k@gmail.com" type="email">
+<span class="material-symbols-outlined absolute right-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px] pointer-events-none">mail</span>
+</div>
+</div>
+</div>
+<!-- Section 3: Service Property Location -->
+<div class="bg-surface rounded-xl p-4 shadow-sm space-y-4">
+<div class="flex items-center gap-2 pb-1">
+<div class="w-7 h-7 rounded-lg bg-accent-soft flex items-center justify-center text-accent">
+<span class="material-symbols-outlined text-[17px]">location_on</span>
+</div>
+<h2 class="font-h3 text-headline-sm text-ink">Service Property Location</h2>
+</div>
+<!-- Street Address -->
+<div class="space-y-1.5">
+<label class="block font-label-md text-label-md text-ink-soft" for="streetAddress">
+          Service Street Address <span class="text-danger">*</span>
+</label>
+<div class="relative">
+<input class="w-full h-[52px] px-4 rounded-lg bg-surface-container-low text-ink font-body-md text-body-md placeholder:text-outline focus:outline-none focus:bg-surface focus:shadow-[0_0_0_2px_#1E5A58] transition-all" id="streetAddress" name="streetAddress" placeholder="e.g., House 42-B, Block K" required="" type="text" value="House 42-B, Block K">
+<span class="material-symbols-outlined absolute right-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px] pointer-events-none">signpost</span>
+</div>
+</div>
+<!-- Area / City -->
+<div class="space-y-1.5">
+<label class="block font-label-md text-label-md text-ink-soft" for="areaSectorCity">
+          Area / Sector / City <span class="text-danger">*</span>
+</label>
+<div class="relative">
+<input class="w-full h-[52px] px-4 rounded-lg bg-surface-container-low text-ink font-body-md text-body-md placeholder:text-outline focus:outline-none focus:bg-surface focus:shadow-[0_0_0_2px_#1E5A58] transition-all" id="areaSectorCity" name="areaSectorCity" placeholder="e.g., Gulberg III, Lahore" required="" type="text" value="Gulberg III, Lahore">
+<span class="material-symbols-outlined absolute right-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px] pointer-events-none">pin_drop</span>
+</div>
+</div>
+<!-- Territory Auto-Detection Pill & Mini Visualizer -->
+<div class="p-3 bg-surface-container-low rounded-xl space-y-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2 text-accent">
+<span class="material-symbols-outlined text-[19px]">share_location</span>
+<span class="text-label-md font-label-md">Territory Auto-Detected</span>
+</div>
+<span class="inline-flex items-center gap-1 text-label font-label text-success bg-success-soft px-2 py-0.5 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+            Active Corridor
+          </span>
+</div>
+<p class="text-body-sm font-body-sm text-ink">
+<span class="font-medium text-ink">Zone: Gulberg Central</span> (35 km dispatch perimeter)
+        </p>
+<!-- Dispatch ETA Sparkline / Coverage Preview -->
+<div class="pt-1 flex items-center justify-between text-body-sm font-body-sm text-ink-soft">
+<span class="flex items-center gap-1 text-[13px]">
+<span class="material-symbols-outlined text-[16px] text-accent">near_me</span>
+            Depot Distance: 4.8 km
+          </span>
+<span class="text-[13px] font-medium text-accent">Est. Travel: 14 min</span>
+</div>
+</div>
+</div>
+<!-- Section 4: Equipment & Site Access Notes -->
+<div class="bg-surface rounded-xl p-4 shadow-sm space-y-4">
+<div class="flex items-center gap-2 pb-1">
+<div class="w-7 h-7 rounded-lg bg-accent-soft flex items-center justify-center text-accent">
+<span class="material-symbols-outlined text-[17px]">build_circle</span>
+</div>
+<h2 class="font-h3 text-headline-sm text-ink">Equipment &amp; Site Access</h2>
+</div>
+<!-- Operational Access Notes -->
+<div class="space-y-1.5">
+<div class="flex items-center justify-between">
+<label class="block font-label-md text-label-md text-ink-soft" for="accessNotes">
+            Operational Access Notes
+          </label>
+<span class="text-label text-outline">Visible to Tech</span>
+</div>
+<textarea class="w-full p-3 rounded-lg bg-surface-container-low text-ink font-body-md text-body-md placeholder:text-outline focus:outline-none focus:bg-surface focus:shadow-[0_0_0_2px_#1E5A58] transition-all resize-none leading-relaxed" id="accessNotes" name="accessNotes" placeholder="e.g., Ring bell twice; dog in side yard. Rooftop unit accessible via external spiral staircase." rows="3">Ring bell twice; dog in side yard. Rooftop unit accessible via external spiral staircase.</textarea>
+</div>
+<!-- Installed HVAC Equipment Quick Tag Picker -->
+<div class="space-y-2">
+<div class="flex items-center justify-between">
+<label class="block font-label-md text-label-md text-ink-soft">
+            Installed HVAC Equipment (Quick Select)
+          </label>
+<span class="text-label text-outline">Optional</span>
+</div>
+<div class="flex flex-wrap gap-2" id="equipmentTagList">
+<button class="px-3 py-2 rounded-lg text-body-sm font-body-sm transition-all bg-accent text-on-primary shadow-sm flex items-center gap-1.5" data-selected="true" onclick="toggleEquipmentTag(this, 'Carrier 4-Ton Split')" type="button">
+<span class="material-symbols-outlined text-[16px]">check_circle</span>
+            Carrier 4-Ton Split
+          </button>
+<button class="px-3 py-2 rounded-lg text-body-sm font-body-sm transition-all bg-surface-container text-ink-soft hover:text-ink flex items-center gap-1.5" data-selected="false" onclick="toggleEquipmentTag(this, 'Daikin 2-Ton Inverter')" type="button">
+<span class="material-symbols-outlined text-[16px] text-outline">add_circle</span>
+            Daikin 2-Ton Inverter
+          </button>
+<button class="px-3 py-2 rounded-lg text-body-sm font-body-sm transition-all bg-surface-container text-ink-soft hover:text-ink flex items-center gap-1.5" data-selected="false" onclick="toggleEquipmentTag(this, 'Gree Floor Standing 4-Ton')" type="button">
+<span class="material-symbols-outlined text-[16px] text-outline">add_circle</span>
+            Gree Floor Standing 4-Ton
+          </button>
+<button class="px-3 py-2 rounded-lg text-body-sm font-body-sm transition-all bg-surface-container text-ink-soft hover:text-ink flex items-center gap-1.5" data-selected="false" onclick="toggleEquipmentTag(this, 'Mitsubishi VRF Master Unit')" type="button">
+<span class="material-symbols-outlined text-[16px] text-outline">add_circle</span>
+            Mitsubishi VRF
+          </button>
+</div>
+</div>
+</div>
+<!-- Onboarding Field Hint & Delight Microcard -->
+<div class="p-3.5 rounded-xl bg-accent-soft text-accent flex items-start gap-3">
+<span class="material-symbols-outlined text-[22px] shrink-0 mt-0.5">verified_user</span>
+<div class="space-y-0.5">
+<p class="font-label-md text-label-md text-accent-deep">Aera Guaranteed Dispatch Readiness</p>
+<p class="text-body-sm font-body-sm text-ink-soft">
+          Once created, this customer is instantly sync'd across field tablets, enabling live route optimization and instant WhatsApp/SMS quote generation.
+        </p>
+</div>
+</div>
+<!-- Sticky Bottom Action Footer -->
+<div class="fixed bottom-0 left-0 right-0 z-40 bg-surface/95 backdrop-blur-md px-4 py-3 pb-safe shadow-[0_-4px_20px_rgba(21,25,23,0.06)]">
+<div class="max-w-md mx-auto flex flex-col gap-2">
+<!-- Primary Action CTA -->
+<button class="w-full h-[52px] rounded-lg bg-accent text-on-primary font-headline-sm text-headline-sm flex items-center justify-center gap-2 hover:bg-accent-deep active:scale-[0.99] transition-all shadow-sm" id="btnPrimarySubmit" onclick="handleAction('create_and_book')" type="button">
+<span class="material-symbols-outlined text-[20px]">calendar_add_on</span>
+<span>Create Customer &amp; Book Job</span>
+</button>
+<!-- Secondary Action CTA -->
+<button class="w-full h-11 rounded-lg bg-surface-subtle text-ink font-label-md text-label-md flex items-center justify-center gap-2 hover:bg-surface-container active:scale-[0.99] transition-all" onclick="handleAction('save_only')" type="button">
+<span class="material-symbols-outlined text-[18px] text-ink-soft">save</span>
+<span>Save Customer Only</span>
+</button>
+</div>
+</div>
+<!-- Toast Notification Overlay for Instant Feedback -->
+<div class="fixed top-20 left-4 right-4 z-50 transform -translate-y-28 opacity-0 pointer-events-none transition-all duration-300 ease-out flex justify-center" id="toastNotification">
+<div class="bg-primary text-on-primary px-4 py-3 rounded-xl shadow-lg flex items-center gap-2.5 max-w-sm w-full">
+<span class="material-symbols-outlined text-[22px] text-accent-soft" style="font-variation-settings: 'FILL' 1;">task_alt</span>
+<div class="flex-1">
+<p class="text-label-md font-label-md leading-tight text-white" id="toastTitle">Customer Created</p>
+<p class="text-body-sm font-body-sm text-primary-fixed leading-tight" id="toastMessage">Redirecting to dispatch schedule...</p>
+</div>
+</div>
+</div>
+</form>
+</div>
+<script>
+  function selectClassification(type) {
+    const hiddenInput = document.getElementById('accountType');
+    const btnRes = document.getElementById('btnResidential');
+    const btnCom = document.getElementById('btnCommercial');
+    const badge = document.getElementById('classificationBadge');
+    const nameInput = document.getElementById('customerName');
+
+    hiddenInput.value = type;
+
+    if (type === 'residential') {
+      btnRes.className = 'h-11 rounded-lg flex items-center justify-center gap-2 bg-surface text-accent shadow-sm font-label-md text-label-md transition-all';
+      btnCom.className = 'h-11 rounded-lg flex items-center justify-center gap-2 text-ink-soft hover:text-ink font-label-md text-label-md transition-all';
+      badge.innerText = 'Residential Tier';
+      if (!nameInput.value || nameInput.value.includes('Apex')) {
+        nameInput.placeholder = 'e.g., Sarah Khan';
+        nameInput.value = 'Sarah Khan';
+      }
+    } else {
+      btnCom.className = 'h-11 rounded-lg flex items-center justify-center gap-2 bg-surface text-accent shadow-sm font-label-md text-label-md transition-all';
+      btnRes.className = 'h-11 rounded-lg flex items-center justify-center gap-2 text-ink-soft hover:text-ink font-label-md text-label-md transition-all';
+      badge.innerText = 'Corporate SLA Tier';
+      nameInput.placeholder = 'e.g., Apex Cold Storage';
+      nameInput.value = 'Apex Logistics Lahore';
+    }
+  }
+
+  function toggleEquipmentTag(button, tagName) {
+    const isSelected = button.getAttribute('data-selected') === 'true';
+    const icon = button.querySelector('.material-symbols-outlined');
+
+    if (isSelected) {
+      button.setAttribute('data-selected', 'false');
+      button.className = 'px-3 py-2 rounded-lg text-body-sm font-body-sm transition-all bg-surface-container text-ink-soft hover:text-ink flex items-center gap-1.5';
+      icon.innerText = 'add_circle';
+      icon.className = 'material-symbols-outlined text-[16px] text-outline';
+    } else {
+      button.setAttribute('data-selected', 'true');
+      button.className = 'px-3 py-2 rounded-lg text-body-sm font-body-sm transition-all bg-accent text-on-primary shadow-sm flex items-center gap-1.5';
+      icon.innerText = 'check_circle';
+      icon.className = 'material-symbols-outlined text-[16px]';
+    }
+  }
+
+  function handleAction(action) {
+    const form = document.getElementById('createCustomerForm');
+    const toast = document.getElementById('toastNotification');
+    const toastTitle = document.getElementById('toastTitle');
+    const toastMsg = document.getElementById('toastMessage');
+
+    const customerName = document.getElementById('customerName').value || 'Customer';
+
+    if (action === 'create_and_book') {
+      toastTitle.innerText = 'Customer Created & Ready';
+      toastMsg.innerText = `Opening job booking calendar for ${customerName}...`;
+    } else {
+      toastTitle.innerText = 'Customer Saved';
+      toastMsg.innerText = `${customerName} stored in dispatch directory.`;
+    }
+
+    toast.classList.remove('-translate-y-28', 'opacity-0', 'pointer-events-none');
+    toast.classList.add('translate-y-0', 'opacity-100');
+
+    setTimeout(() => {
+      toast.classList.add('-translate-y-28', 'opacity-0', 'pointer-events-none');
+      toast.classList.remove('translate-y-0', 'opacity-100');
+    }, 2800);
+  }
+</script></main></body></html>

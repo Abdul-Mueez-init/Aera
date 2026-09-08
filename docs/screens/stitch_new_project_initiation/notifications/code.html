@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;620;650&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "inverse-primary": "#97d1ce", "success": "#2F7D5A", "ink": "#151917", "surface-variant": "#e0e3e0", "on-primary-fixed-variant": "#0e4f4d", "accent": "#1E5A58", "warning": "#9A6A22", "primary-fixed-dim": "#97d1ce", "error": "#ba1a1a", "on-surface": "#181c1a", "success-soft": "#E5F2EA", "inverse-on-surface": "#eef2ee", "tertiary-fixed": "#ffdbcc", "outline-variant": "#bfc8c7", "inverse-surface": "#2d312f", "warning-soft": "#F8EEDB", "on-secondary-fixed": "#161d1a", "secondary-fixed": "#dde4de", "on-secondary-container": "#5d6460", "background": "#f7faf6", "tertiary": "#5a2f19", "secondary": "#59605b", "surface-dim": "#d8dbd7", "surface-container-lowest": "#ffffff", "surface-container": "#ecefeb", "line": "#DCE0DB", "secondary-container": "#dae1db", "outline": "#707978", "danger-soft": "#F7E8E7", "on-tertiary-fixed-variant": "#693b25", "surface-container-highest": "#e0e3e0", "accent-deep": "#12403F", "surface-subtle": "#EEF0EC", "on-primary-container": "#96cfcc", "on-tertiary": "#ffffff", "on-tertiary-container": "#f7b598", "on-secondary-fixed-variant": "#414844", "surface": "#FFFFFF", "danger": "#A84A46", "on-error-container": "#93000a", "primary-fixed": "#b3edea", "scrim": "#151917", "accent-soft": "#E0EEEB", "tertiary-container": "#75452e", "error-container": "#ffdad6", "surface-bright": "#f7faf6", "info": "#4D6882", "secondary-fixed-dim": "#c1c8c3", "surface-tint": "#2d6765", "on-primary-fixed": "#00201f", "on-error": "#ffffff", "tertiary-fixed-dim": "#fab79a", "on-background": "#181c1a", "surface-container-high": "#e6e9e5", "info-soft": "#E9EFF5", "canvas": "#F6F5F1", "primary-container": "#1e5a58", "ink-soft": "#343B37", "on-tertiary-fixed": "#341101", "on-surface-variant": "#404848", "on-secondary": "#ffffff", "primary": "#004240", "on-primary": "#ffffff", "surface-container-low": "#f1f4f1" }, borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, spacing: { "1": "4px", "2": "8px", "3": "12px", "4": "16px", "5": "20px", "6": "24px", "7": "28px", "8": "32px", "10": "40px", "12": "48px", "16": "64px" }, fontFamily: { "headline-md": ["Inter"], "h1": ["Inter"], "h2": ["Inter"], "body-sm": ["Inter"], "body": ["Inter"], "body-md": ["Inter"], "display": ["Inter"], "h3": ["Inter"], "body-lg": ["Inter"], "label-md": ["Inter"], "headline-sm": ["Inter"], "headline-lg": ["Inter"], "money": ["Inter"], "label": ["Inter"] }, fontSize: { "headline-md": ["24px", { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "650" }], "h1": ["30px", { lineHeight: "1.12", letterSpacing: "-0.025em", fontWeight: "650" }], "h2": ["24px", { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "650" }], "body-sm": ["14px", { lineHeight: "1.45", fontWeight: "400" }], "body": ["16px", { lineHeight: "1.5", fontWeight: "400" }], "body-md": ["14px", { lineHeight: "1.45", fontWeight: "400" }], "display": ["36px", { lineHeight: "1.08", letterSpacing: "-0.03em", fontWeight: "650" }], "h3": ["18px", { lineHeight: "1.25", letterSpacing: "-0.01em", fontWeight: "620" }], "body-lg": ["16px", { lineHeight: "1.5", fontWeight: "400" }], "label-md": ["12px", { lineHeight: "1.25", letterSpacing: "0.01em", fontWeight: "650" }], "headline-sm": ["18px", { lineHeight: "1.25", letterSpacing: "-0.01em", fontWeight: "620" }], "headline-lg": ["30px", { lineHeight: "1.12", letterSpacing: "-0.025em", fontWeight: "650" }], "money": ["28px", { lineHeight: "1.05", letterSpacing: "-0.025em", fontWeight: "650" }], "label": ["12px", { lineHeight: "1.25", letterSpacing: "0.01em", fontWeight: "650" }] } } } };</script><style>@layer base { html, body { width: 100%; margin: 0; padding: 0; } body { overscroll-behavior-y: none; } .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); } .pt-safe { padding-top: env(safe-area-inset-top, 0px); } main > :first-child { margin-top: 0 !important; } main > :last-child { margin-bottom: 0 !important; } } ::-webkit-scrollbar { display: none; }</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-canvas text-ink font-body min-h-screen flex flex-col antialiased selection:bg-accent-soft selection:text-accent-deep"><header class="fixed top-0 w-full z-50 pt-safe bg-canvas/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(21,25,23,0.04)]"><div class="h-16 px-4 flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-accent text-surface flex items-center justify-center font-display text-h3 tracking-tight select-none shadow-[0_2px_8px_rgba(30,90,88,0.2)]">A</div><div class="flex flex-col"><span class="font-label-md text-label-md uppercase tracking-wider text-accent font-semibold leading-none">Aera OS</span><h1 class="font-headline-sm text-headline-sm text-ink leading-tight">Experience Hub</h1></div></div><div class="flex items-center gap-2"><button aria-label="Global Notifications" class="w-11 h-11 rounded-full flex items-center justify-center text-ink-soft hover:text-ink transition-colors"><span class="material-symbols-outlined text-[22px]">notifications</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-canvas"><div class="flex flex-col w-full px-4 pt-2 pb-8 space-y-6">
+<!-- Operational Overview & Health Ribbon -->
+<div class="flex items-center justify-between bg-surface shadow-sm rounded-xl p-4 transition-all">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-accent-soft text-accent flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[22px]" style="font-variation-settings: 'FILL' 1;">tune</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-ink">Notification Center</span>
+<span class="w-2 h-2 rounded-full bg-accent animate-pulse"></span>
+</div>
+<span class="font-body-sm text-body-sm text-ink-soft truncate">6 updates across dispatch &amp; accounts</span>
+</div>
+</div>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-subtle text-ink hover:bg-surface-variant transition-colors active:scale-95 text-left" id="quick-clear-btn">
+<span class="material-symbols-outlined text-[16px] text-ink-soft">done_all</span>
+<span class="font-label-md text-label-md">Clear</span>
+</button>
+</div>
+<!-- Categorization & Quiet Filter Chips -->
+<div class="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 no-scrollbar">
+<button class="filter-tab active-tab flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-accent text-surface shadow-sm transition-all font-label-md text-label-md" onclick="filterNotifications('all', this)">
+<span>All</span>
+<span class="px-1.5 py-0.5 rounded-full bg-surface/20 text-[11px] font-semibold">6</span>
+</button>
+<button class="filter-tab flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface text-ink-soft hover:text-ink shadow-sm transition-all font-label-md text-label-md" onclick="filterNotifications('dispatch', this)">
+<span>Dispatch &amp; Jobs</span>
+<span class="px-1.5 py-0.5 rounded-full bg-surface-subtle text-ink text-[11px] font-semibold">3</span>
+</button>
+<button class="filter-tab flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface text-ink-soft hover:text-ink shadow-sm transition-all font-label-md text-label-md" onclick="filterNotifications('commercial', this)">
+<span>Commercial</span>
+<span class="px-1.5 py-0.5 rounded-full bg-surface-subtle text-ink text-[11px] font-semibold">2</span>
+</button>
+<button class="filter-tab flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface text-ink-soft hover:text-ink shadow-sm transition-all font-label-md text-label-md" onclick="filterNotifications('system', this)">
+<span>System</span>
+<span class="px-1.5 py-0.5 rounded-full bg-surface-subtle text-ink text-[11px] font-semibold">1</span>
+</button>
+</div>
+<!-- SECTION: TODAY -->
+<div class="flex flex-col space-y-3" data-section="today">
+<div class="flex items-center justify-between px-1">
+<div class="flex items-center gap-2">
+<span class="font-label-md text-label-md uppercase tracking-wider text-ink-soft font-semibold">Today</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-subtle text-ink text-[11px] font-label-md">4 items</span>
+</div>
+<span class="font-body-sm text-body-sm text-secondary">Synchronized</span>
+</div>
+<!-- Notification 1: Commercial / Quote Approved -->
+<div class="notification-card bg-surface rounded-xl p-4 shadow-sm relative overflow-hidden transition-all duration-200 hover:shadow-md flex flex-col gap-3" data-category="commercial">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-start gap-3 min-w-0">
+<div class="w-9 h-9 rounded-lg bg-success-soft text-success flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">task_alt</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="font-headline-sm text-headline-sm text-ink truncate">Quote Approved</span>
+<span class="px-2 py-0.5 rounded-full bg-success-soft text-success font-label-md text-label-md">QT-1048</span>
+</div>
+<span class="font-label-md text-label-md text-secondary mt-0.5">12 min ago • Client Portal</span>
+</div>
+</div>
+<div class="w-2 h-2 rounded-full bg-success flex-shrink-0 mt-2"></div>
+</div>
+<p class="font-body-sm text-body-sm text-ink-soft pl-12 leading-relaxed">
+        Sarah Khan approved <span class="font-semibold text-ink">AC Compressor Replacement</span> estimate for <span class="font-semibold text-ink">Rs 18,500</span> via Client Portal.
+      </p>
+<div class="pl-12 flex items-center justify-between pt-1">
+<a class="inline-flex items-center gap-1.5 text-accent hover:text-accent-deep font-label-md text-label-md group transition-colors" href="#">
+<span>View Quote &amp; Schedule</span>
+<span class="material-symbols-outlined text-[16px] group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
+</a>
+<button aria-label="Dismiss" class="text-secondary hover:text-ink transition-colors p-1" onclick="dismissCard(this)">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+</div>
+<!-- Notification 2: Operational / Alert - Warm Amber tag -->
+<div class="notification-card bg-surface rounded-xl p-4 shadow-sm relative overflow-hidden transition-all duration-200 hover:shadow-md flex flex-col gap-3" data-category="dispatch">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-start gap-3 min-w-0">
+<div class="w-9 h-9 rounded-lg bg-warning-soft text-warning flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">schedule</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="font-headline-sm text-headline-sm text-ink truncate">Technician Delay</span>
+<span class="px-2 py-0.5 rounded-full bg-warning-soft text-warning font-label-md text-label-md">Van #12</span>
+</div>
+<span class="font-label-md text-label-md text-secondary mt-0.5">28 min ago • Live Telemetry</span>
+</div>
+</div>
+<div class="w-2 h-2 rounded-full bg-warning flex-shrink-0 mt-2"></div>
+</div>
+<p class="font-body-sm text-body-sm text-ink-soft pl-12 leading-relaxed">
+<span class="font-semibold text-ink">Ahmed Raza</span> is running <span class="font-semibold text-warning">+28 min</span> behind schedule at Model Town dispatch route.
+      </p>
+<div class="pl-12 flex items-center justify-between pt-1">
+<a class="inline-flex items-center gap-1.5 text-accent hover:text-accent-deep font-label-md text-label-md group transition-colors" href="#">
+<span>Review Dispatch</span>
+<span class="material-symbols-outlined text-[16px] group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
+</a>
+<button aria-label="Dismiss" class="text-secondary hover:text-ink transition-colors p-1" onclick="dismissCard(this)">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+</div>
+<!-- Notification 3: Commercial / Paid - Forest Green tag -->
+<div class="notification-card bg-surface rounded-xl p-4 shadow-sm relative overflow-hidden transition-all duration-200 hover:shadow-md flex flex-col gap-3" data-category="commercial">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-start gap-3 min-w-0">
+<div class="w-9 h-9 rounded-lg bg-success-soft text-success flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="font-headline-sm text-headline-sm text-ink truncate">Payment Settled</span>
+<span class="px-2 py-0.5 rounded-full bg-success-soft text-success font-label-md text-label-md">INV-2380</span>
+</div>
+<span class="font-label-md text-label-md text-secondary mt-0.5">1h ago • Raast Instant</span>
+</div>
+</div>
+<div class="w-2 h-2 rounded-full bg-success flex-shrink-0 mt-2"></div>
+</div>
+<p class="font-body-sm text-body-sm text-ink-soft pl-12 leading-relaxed">
+<span class="font-semibold text-ink">Tariq Mansoor</span> settled invoice for <span class="font-semibold text-ink">Rs 6,200</span> via direct clearing.
+      </p>
+<div class="pl-12 flex items-center justify-between pt-1">
+<a class="inline-flex items-center gap-1.5 text-accent hover:text-accent-deep font-label-md text-label-md group transition-colors" href="#">
+<span>View Receipt</span>
+<span class="material-symbols-outlined text-[16px] group-hover:translate-x-0.5 transition-transform">receipt_long</span>
+</a>
+<button aria-label="Dismiss" class="text-secondary hover:text-ink transition-colors p-1" onclick="dismissCard(this)">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+</div>
+<!-- Notification 4: Field / Evidence - Subtle Slate tag -->
+<div class="notification-card bg-surface rounded-xl p-4 shadow-sm relative overflow-hidden transition-all duration-200 hover:shadow-md flex flex-col gap-3" data-category="dispatch">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-start gap-3 min-w-0">
+<div class="w-9 h-9 rounded-lg bg-surface-subtle text-ink-soft flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[20px]">photo_library</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="font-headline-sm text-headline-sm text-ink truncate">Diagnostic Photos Uploaded</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-subtle text-ink font-label-md text-label-md">JOB-4891</span>
+</div>
+<span class="font-label-md text-label-md text-secondary mt-0.5">2h ago • Field Camera</span>
+</div>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-ink-soft pl-12 leading-relaxed">
+<span class="font-semibold text-ink">James Miller</span> attached 4 verified site inspection photos to <span class="text-ink font-medium">M. Trading Co.</span> facility.
+      </p>
+<!-- Interactive Photo Mini-Strip -->
+<div class="pl-12 grid grid-cols-4 gap-2 pt-1">
+<div class="relative h-14 rounded-lg overflow-hidden bg-surface-subtle shadow-sm">
+<img class="w-full h-full object-cover" data-alt="Close up view of commercial air conditioning copper manifold valves with pressure gauges attached showing technician inspection readings on a bright industrial rooftop." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCb5MX8NPXk2woU10LqKoztLH2d0yD9Q0tbnYkYVt6umtLTJlyOA-AydMsOHHwexxFlYs-ysQ2zB_L6GLlWVreKCNVPyKLsk2VZQP74RbyxcV_VnNuBWVmIbvnuNlXeclH4Ufhsma4AC3-tMBBC3TjtrL5hCXxog0o9modvHRkLtzceLXPM_MHUVRaiUI_7UDOWv0oyS9-Iy3gRQS8zHj8jCdeHzuOTLC4W4H590x4Qzj4wIjlqI0L_Zw"/>
+</div>
+<div class="relative h-14 rounded-lg overflow-hidden bg-surface-subtle shadow-sm">
+<img class="w-full h-full object-cover" data-alt="Technical inspection of a rooftop electrical contactor relay circuit box with calibrated multimeter probes placed on terminal blocks." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0uY8RlF9Ud2ERFf2f6HY474ia8kDuwnflGNyvjpKmbX-kNChdnl8Hy2B9pLEADVEyUEYHY0w_Qji3HYqMmtSYXXMrDeZH-LgVR9t79Z8Taoh2Aek_AAhypIE6TCmb0JrlTGbK7KDRuTeA9dmYPlgIQKUrpV2tOlQ8uLrHquWXZXlCHZbRwOhkeATFz4o6qjdpUv1EuxA1QBO-qyShMfaW_NVv6pCTFTR0ToqpW_LgfUy-lk04uKCUaQ"/>
+</div>
+<div class="relative h-14 rounded-lg overflow-hidden bg-surface-subtle shadow-sm">
+<img class="w-full h-full object-cover" data-alt="Clean industrial HVAC air handler filter compartment showing newly replaced pleated filters in spotless aluminum frame." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA3D2QbahK5i6xnsKyuudyL0_S6EnJeFf9eN2hzbNsyqsvZj3rcbugFnc-aBjwxIETP8m8MAoX0VgYvISSIXXgdJcNsmlJ8TernwAX4YIh8FzWtqqqIHdjeGepNe7-Rn3cMROOmXxV4y9W-G73Or6l7gs9UCCgHg1mrheiWLIjTQxGZdFqh19M7RfWzSq2sX3x6d2YBE-3xR6VT0IYlwM4V1FZlQm1AUcOBeKuPeVEpy0aG2iCLzP1yng"/>
+</div>
+<div class="relative h-14 rounded-lg overflow-hidden bg-accent-soft text-accent-deep flex items-center justify-center font-label-md text-label-md font-semibold">
+          +1 more
+        </div>
+</div>
+</div>
+</div>
+<!-- SECTION: YESTERDAY -->
+<div class="flex flex-col space-y-3 pt-2" data-section="yesterday">
+<div class="flex items-center justify-between px-1">
+<span class="font-label-md text-label-md uppercase tracking-wider text-ink-soft font-semibold">Yesterday</span>
+<span class="font-body-sm text-body-sm text-secondary">Archived</span>
+</div>
+<!-- Notification 5: Job Completed -->
+<div class="notification-card bg-surface rounded-xl p-4 shadow-sm relative overflow-hidden transition-all duration-200 hover:shadow-md flex flex-col gap-3" data-category="dispatch">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-start gap-3 min-w-0">
+<div class="w-9 h-9 rounded-lg bg-surface-subtle text-ink-soft flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[20px]">assignment_turned_in</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="font-headline-sm text-headline-sm text-ink truncate">Job Completed</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-subtle text-ink font-label-md text-label-md">JOB-4888</span>
+</div>
+<span class="font-label-md text-label-md text-secondary mt-0.5">Yesterday, 17:45 • Dispatch Desk</span>
+</div>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-ink-soft pl-12 leading-relaxed">
+<span class="font-semibold text-ink">Apex Logistics Hub</span> ticket closed and ready for final commercial invoice generation.
+      </p>
+<div class="pl-12 flex items-center justify-between pt-1">
+<a class="inline-flex items-center gap-1.5 text-accent hover:text-accent-deep font-label-md text-label-md group transition-colors" href="#">
+<span>Generate Invoice</span>
+<span class="material-symbols-outlined text-[16px] group-hover:translate-x-0.5 transition-transform">receipt</span>
+</a>
+</div>
+</div>
+<!-- Notification 6: System Automated Backup -->
+<div class="notification-card bg-surface rounded-xl p-4 shadow-sm relative overflow-hidden transition-all duration-200 hover:shadow-md flex flex-col gap-3" data-category="system">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-start gap-3 min-w-0">
+<div class="w-9 h-9 rounded-lg bg-surface-subtle text-ink-soft flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[20px]">cloud_sync</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-ink truncate">Automated Backup Synced</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-subtle text-secondary font-label-md text-label-md">Cloud Vault</span>
+</div>
+<span class="font-label-md text-label-md text-secondary mt-0.5">Yesterday, 23:00 • Scheduled Service</span>
+</div>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-ink-soft pl-12 leading-relaxed">
+        All field customer signatures and job photo evidence safely mirrored with SHA-256 integrity seal.
+      </p>
+</div>
+</div>
+<!-- Bottom Actions & Settings Dock -->
+<div class="pt-4 flex flex-col gap-3">
+<button class="w-full py-3.5 px-4 rounded-xl bg-surface hover:bg-surface-subtle text-ink font-label-md text-label-md font-semibold shadow-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99]" id="mark-all-read-btn">
+<span class="material-symbols-outlined text-[20px] text-accent">checklist_rtl</span>
+<span>Mark all as read</span>
+</button>
+<button class="w-full py-3 px-4 rounded-xl bg-surface-subtle hover:bg-surface-variant text-ink-soft hover:text-ink font-label-md text-label-md font-medium flex items-center justify-between transition-colors">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px]">notifications_paused</span>
+<span>Configure Notification Channels</span>
+</div>
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+</div>
+<script>
+  function filterNotifications(category, element) {
+    const tabs = document.querySelectorAll('.filter-tab');
+    tabs.forEach(tab => {
+      tab.classList.remove('bg-accent', 'text-surface');
+      tab.classList.add('bg-surface', 'text-ink-soft');
+    });
+
+    element.classList.remove('bg-surface', 'text-ink-soft');
+    element.classList.add('bg-accent', 'text-surface');
+
+    const cards = document.querySelectorAll('.notification-card');
+    cards.forEach(card => {
+      if (category === 'all' || card.getAttribute('data-category') === category) {
+        card.style.display = 'flex';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  }
+
+  function dismissCard(button) {
+    const card = button.closest('.notification-card');
+    if (card) {
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(-6px)';
+      setTimeout(() => card.remove(), 200);
+    }
+  }
+
+  document.getElementById('mark-all-read-btn')?.addEventListener('click', function() {
+    const indicators = document.querySelectorAll('.bg-success.w-2, .bg-warning.w-2, .animate-pulse');
+    indicators.forEach(el => el.remove());
+    this.innerHTML = '<span class="material-symbols-outlined text-[20px] text-success">done_all</span><span>All notifications caught up</span>';
+    this.classList.add('text-success');
+  });
+
+  document.getElementById('quick-clear-btn')?.addEventListener('click', function() {
+    const indicators = document.querySelectorAll('.bg-success.w-2, .bg-warning.w-2');
+    indicators.forEach(el => el.remove());
+  });
+</script></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/90 backdrop-blur-xl shadow-[0_-2px_12px_rgba(21,25,23,0.04)]" data-active-classes="text-accent font-semibold"><div class="h-16 px-3 flex items-center justify-around"><a aria-current="page" class="flex flex-col items-center justify-center w-14 h-12 transition-colors gap-1 text-accent font-semibold" data-path="experience-hub" href="#"><span class="material-symbols-outlined text-[24px]">support_agent</span><span class="font-label-md text-label-md leading-none">CX Hub</span></a><a class="flex flex-col items-center justify-center w-14 h-12 text-ink-soft hover:text-ink transition-colors gap-1" data-path="customer-portal" href="#"><span class="material-symbols-outlined text-[24px]">group</span><span class="font-label-md text-label-md leading-none">Clients</span></a><a class="relative -top-2 flex flex-col items-center justify-center w-14 h-14 rounded-full bg-accent text-surface shadow-[0_8px_20px_rgba(30,90,88,0.35)] hover:bg-accent-deep transition-colors" data-path="ai-command-center" href="#"><span class="material-symbols-outlined text-[26px]">neurology</span></a><a class="flex flex-col items-center justify-center w-14 h-12 text-ink-soft hover:text-ink transition-colors gap-1" data-path="automation-logs" href="#"><span class="material-symbols-outlined text-[24px]">electric_bolt</span><span class="font-label-md text-label-md leading-none">Actions</span></a><a class="flex flex-col items-center justify-center w-14 h-12 text-ink-soft hover:text-ink transition-colors gap-1" data-path="company-settings" href="#"><span class="material-symbols-outlined text-[24px]">corporate_fare</span><span class="font-label-md text-label-md leading-none">Company</span></a></div></nav></body></html>

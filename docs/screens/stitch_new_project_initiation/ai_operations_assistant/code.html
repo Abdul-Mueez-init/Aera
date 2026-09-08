@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;620;650&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "inverse-primary": "#97d1ce", "success": "#2F7D5A", "ink": "#151917", "surface-variant": "#e0e3e0", "on-primary-fixed-variant": "#0e4f4d", "accent": "#1E5A58", "warning": "#9A6A22", "primary-fixed-dim": "#97d1ce", "error": "#ba1a1a", "on-surface": "#181c1a", "success-soft": "#E5F2EA", "inverse-on-surface": "#eef2ee", "tertiary-fixed": "#ffdbcc", "outline-variant": "#bfc8c7", "inverse-surface": "#2d312f", "warning-soft": "#F8EEDB", "on-secondary-fixed": "#161d1a", "secondary-fixed": "#dde4de", "on-secondary-container": "#5d6460", "background": "#f7faf6", "tertiary": "#5a2f19", "secondary": "#59605b", "surface-dim": "#d8dbd7", "surface-container-lowest": "#ffffff", "surface-container": "#ecefeb", "line": "#DCE0DB", "secondary-container": "#dae1db", "outline": "#707978", "danger-soft": "#F7E8E7", "on-tertiary-fixed-variant": "#693b25", "surface-container-highest": "#e0e3e0", "accent-deep": "#12403F", "surface-subtle": "#EEF0EC", "on-primary-container": "#96cfcc", "on-tertiary": "#ffffff", "on-tertiary-container": "#f7b598", "on-secondary-fixed-variant": "#414844", "surface": "#FFFFFF", "danger": "#A84A46", "on-error-container": "#93000a", "primary-fixed": "#b3edea", "scrim": "#151917", "accent-soft": "#E0EEEB", "tertiary-container": "#75452e", "error-container": "#ffdad6", "surface-bright": "#f7faf6", "info": "#4D6882", "secondary-fixed-dim": "#c1c8c3", "surface-tint": "#2d6765", "on-primary-fixed": "#00201f", "on-error": "#ffffff", "tertiary-fixed-dim": "#fab79a", "on-background": "#181c1a", "surface-container-high": "#e6e9e5", "info-soft": "#E9EFF5", "canvas": "#F6F5F1", "primary-container": "#1e5a58", "ink-soft": "#343B37", "on-tertiary-fixed": "#341101", "on-surface-variant": "#404848", "on-secondary": "#ffffff", "primary": "#004240", "on-primary": "#ffffff", "surface-container-low": "#f1f4f1" }, borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, spacing: { "1": "4px", "2": "8px", "3": "12px", "4": "16px", "5": "20px", "6": "24px", "7": "28px", "8": "32px", "10": "40px", "12": "48px", "16": "64px" }, fontFamily: { "headline-md": ["Inter"], "h1": ["Inter"], "h2": ["Inter"], "body-sm": ["Inter"], "body": ["Inter"], "body-md": ["Inter"], "display": ["Inter"], "h3": ["Inter"], "body-lg": ["Inter"], "label-md": ["Inter"], "headline-sm": ["Inter"], "headline-lg": ["Inter"], "money": ["Inter"], "label": ["Inter"] }, fontSize: { "headline-md": ["24px", { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "650" }], "h1": ["30px", { lineHeight: "1.12", letterSpacing: "-0.025em", fontWeight: "650" }], "h2": ["24px", { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "650" }], "body-sm": ["14px", { lineHeight: "1.45", fontWeight: "400" }], "body": ["16px", { lineHeight: "1.5", fontWeight: "400" }], "body-md": ["14px", { lineHeight: "1.45", fontWeight: "400" }], "display": ["36px", { lineHeight: "1.08", letterSpacing: "-0.03em", fontWeight: "650" }], "h3": ["18px", { lineHeight: "1.25", letterSpacing: "-0.01em", fontWeight: "620" }], "body-lg": ["16px", { lineHeight: "1.5", fontWeight: "400" }], "label-md": ["12px", { lineHeight: "1.25", letterSpacing: "0.01em", fontWeight: "650" }], "headline-sm": ["18px", { lineHeight: "1.25", letterSpacing: "-0.01em", fontWeight: "620" }], "headline-lg": ["30px", { lineHeight: "1.12", letterSpacing: "-0.025em", fontWeight: "650" }], "money": ["28px", { lineHeight: "1.05", letterSpacing: "-0.025em", fontWeight: "650" }], "label": ["12px", { lineHeight: "1.25", letterSpacing: "0.01em", fontWeight: "650" }] } } } };</script><style>@layer base { html, body { width: 100%; margin: 0; padding: 0; } body { overscroll-behavior-y: none; } .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); } .pt-safe { padding-top: env(safe-area-inset-top, 0px); } main > :first-child { margin-top: 0 !important; } main > :last-child { margin-bottom: 0 !important; } } ::-webkit-scrollbar { display: none; }</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-canvas text-ink font-body min-h-screen flex flex-col antialiased selection:bg-accent-soft selection:text-accent-deep"><header class="fixed top-0 w-full z-50 pt-safe bg-canvas/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(21,25,23,0.04)]"><div class="h-16 px-4 flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-accent text-surface flex items-center justify-center font-display text-h3 tracking-tight select-none shadow-[0_2px_8px_rgba(30,90,88,0.2)]">A</div><div class="flex flex-col"><span class="font-label-md text-label-md uppercase tracking-wider text-accent font-semibold leading-none">Aera OS</span><h1 class="font-headline-sm text-headline-sm text-ink leading-tight">Ai Command Center</h1></div></div><div class="flex items-center gap-2"><button aria-label="Global Notifications" class="w-11 h-11 rounded-full flex items-center justify-center text-ink-soft hover:text-ink transition-colors"><span class="material-symbols-outlined text-[22px]">notifications</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-canvas"><div class="flex flex-col w-full px-4 pt-2 pb-6 space-y-5">
+<!-- Operational Overview Header & Live Status -->
+<div class="flex flex-col space-y-2">
+<div class="flex items-center justify-between">
+<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success-soft text-success font-label-md text-label-md">
+<span class="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span>
+<span>Dispatch telemetry synced · 09:42 AM</span>
+</div>
+<span class="font-label-md text-label-md text-secondary tracking-wide uppercase">Marcus Vance Console</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-ink tracking-tight">Aera Intelligence</h2>
+<p class="font-body-md text-body-md text-ink-soft">Your operations, understood through live field telemetry.</p>
+</div>
+</div>
+<!-- Operational Metric Snapshot -->
+<div class="grid grid-cols-3 gap-2 p-3 bg-surface rounded-xl shadow-sm">
+<div class="flex flex-col space-y-0.5">
+<span class="font-label-md text-label-md text-secondary">Active Vans</span>
+<span class="font-h3 text-h3 text-ink">4 <span class="font-body-sm text-body-sm text-ink-soft">/ 4</span></span>
+</div>
+<div class="flex flex-col space-y-0.5">
+<span class="font-label-md text-label-md text-secondary">Jobs Today</span>
+<span class="font-h3 text-h3 text-ink">18</span>
+</div>
+<div class="flex flex-col space-y-0.5">
+<span class="font-label-md text-label-md text-warning">Interventions</span>
+<span class="font-h3 text-h3 text-warning">2 Pending</span>
+</div>
+</div>
+<!-- Prompt Selection Carousel -->
+<div class="flex flex-col space-y-2">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md uppercase tracking-wider text-secondary">Operational Diagnostics</span>
+<span class="font-label-md text-label-md text-accent">Presets</span>
+</div>
+<div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar -mx-4 px-4">
+<button class="shrink-0 px-3.5 py-2 rounded-xl bg-accent text-surface font-label-md text-label-md flex items-center gap-1.5 shadow-sm transition-transform active:scale-95" onclick="setQuery('Which jobs are at risk today?')">
+<span class="material-symbols-outlined text-[16px]">warning</span>
+<span>Which jobs are at risk today?</span>
+</button>
+<button class="shrink-0 px-3.5 py-2 rounded-xl bg-surface text-ink hover:bg-surface-subtle font-label-md text-label-md flex items-center gap-1.5 shadow-sm transition-transform active:scale-95" onclick="setQuery('Who is running behind schedule?')">
+<span class="material-symbols-outlined text-[16px] text-secondary">schedule</span>
+<span>Who is running behind schedule?</span>
+</button>
+<button class="shrink-0 px-3.5 py-2 rounded-xl bg-surface text-ink hover:bg-surface-subtle font-label-md text-label-md flex items-center gap-1.5 shadow-sm transition-transform active:scale-95" onclick="setQuery('What invoices are overdue?')">
+<span class="material-symbols-outlined text-[16px] text-secondary">receipt_long</span>
+<span>What invoices are overdue?</span>
+</button>
+<button class="shrink-0 px-3.5 py-2 rounded-xl bg-surface text-ink hover:bg-surface-subtle font-label-md text-label-md flex items-center gap-1.5 shadow-sm transition-transform active:scale-95" onclick="setQuery('Which customers need follow-up?')">
+<span class="material-symbols-outlined text-[16px] text-secondary">contact_support</span>
+<span>Which customers need follow-up?</span>
+</button>
+</div>
+</div>
+<!-- Interaction Thread -->
+<div class="flex flex-col space-y-4">
+<!-- User Query Row -->
+<div class="flex items-start justify-end gap-2.5">
+<div class="max-w-[85%] p-3.5 rounded-2xl rounded-tr-sm bg-surface-subtle shadow-sm">
+<div class="flex items-center gap-1.5 mb-1">
+<span class="font-label-md text-label-md text-secondary">Marcus Vance</span>
+<span class="font-label-md text-label-md text-outline">· 09:41 AM</span>
+</div>
+<p class="font-body text-body text-ink font-medium" id="currentQueryText">Which jobs are at risk today?</p>
+</div>
+<div class="w-7 h-7 rounded-full bg-surface-container-high flex items-center justify-center shrink-0 text-ink-soft">
+<span class="material-symbols-outlined text-[18px]">person</span>
+</div>
+</div>
+<!-- Aera Synthesized Response Container -->
+<div class="flex items-start gap-2.5">
+<div class="w-7 h-7 rounded-lg bg-accent text-surface flex items-center justify-center font-display text-[15px] font-semibold shrink-0 shadow-sm">
+        A
+      </div>
+<div class="flex-1 flex flex-col space-y-3.5">
+<!-- Conclusion Banner -->
+<div class="p-3.5 rounded-2xl rounded-tl-sm bg-warning-soft text-ink flex items-start gap-3 shadow-sm">
+<span class="material-symbols-outlined text-warning text-[22px] shrink-0 mt-0.5">priority_high</span>
+<div class="flex flex-col space-y-0.5">
+<span class="font-label-md text-label-md uppercase tracking-wider text-warning font-semibold">Operational Hazard Detected</span>
+<p class="font-h3 text-h3 text-ink leading-snug">2 jobs require dispatch intervention before 14:00.</p>
+</div>
+</div>
+<!-- Grounded Evidence Card -->
+<div class="p-4 rounded-xl bg-surface shadow-sm flex flex-col space-y-3">
+<div class="flex items-center justify-between pb-2">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary text-[18px]">fact_check</span>
+<span class="font-label-md text-label-md uppercase tracking-wider text-secondary">Verified Evidence Feed</span>
+</div>
+<span class="font-label-md text-label-md px-2 py-0.5 rounded-full bg-surface-subtle text-ink-soft">2 Flagged Units</span>
+</div>
+<!-- Evidence Item 1 -->
+<div class="flex flex-col space-y-1.5 p-3 rounded-lg bg-surface-subtle">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="font-headline-sm text-headline-sm text-ink">Ahmed Raza</span>
+</div>
+<span class="font-label-md text-label-md px-2 py-0.5 rounded bg-danger-soft text-danger font-medium">+28m Delayed</span>
+</div>
+<p class="font-body-sm text-body-sm text-ink-soft leading-relaxed">
+              Delayed on site at Model Town. Next booked client <span class="text-ink font-medium">Sarah Khan</span> (DHA Phase 5, 17 km transit) scheduled strictly for <span class="text-ink font-medium">14:00</span>. Current arrival estimate is 14:32.
+            </p>
+<div class="flex items-center gap-3 pt-1 text-secondary font-label-md text-label-md">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">near_me</span> Van #02</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">traffic</span> Congested on Ferozepur Rd</span>
+</div>
+</div>
+<!-- Evidence Item 2 -->
+<div class="flex flex-col space-y-1.5 p-3 rounded-lg bg-surface-subtle">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-warning"></span>
+<span class="font-headline-sm text-headline-sm text-ink">Omar Khan</span>
+</div>
+<span class="font-label-md text-label-md px-2 py-0.5 rounded bg-warning-soft text-warning font-medium">10m Buffer Alert</span>
+</div>
+<p class="font-body-sm text-body-sm text-ink-soft leading-relaxed">
+              Scheduled for DHA Phase 6 appointment at 13:45. Buffer compressed following mandatory fuel stop at Main Boulevard.
+            </p>
+<div class="flex items-center gap-3 pt-1 text-secondary font-label-md text-label-md">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">near_me</span> Van #04</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">local_gas_station</span> Completed</span>
+</div>
+</div>
+</div>
+<!-- Prescribed Action Card -->
+<div class="p-4 rounded-xl bg-surface shadow-sm flex flex-col space-y-3.5">
+<div class="flex items-center gap-1.5 pb-1">
+<span class="material-symbols-outlined text-accent text-[20px]">smart_toy</span>
+<span class="font-label-md text-label-md uppercase tracking-wider text-accent font-semibold">Recommended Dispatch Resolution</span>
+</div>
+<div class="p-3 rounded-lg bg-accent-soft text-accent-deep font-body-sm text-body-sm leading-relaxed">
+<span class="font-semibold text-accent-deep">Optimal Action:</span> Reassign Sarah Khan to <span class="font-semibold">Omar Khan</span> (currently 4.2 km away, ready at 13:50) <span class="opacity-70">OR</span> shift appointment window to 15:00 and trigger client auto-dispatch notice.
+          </div>
+<!-- Direct Execution Buttons -->
+<div class="flex flex-col sm:flex-row gap-2 pt-1" id="actionButtonContainer">
+<button class="flex-1 h-11 px-4 rounded-xl bg-accent hover:bg-accent-deep text-surface font-label-md text-label-md flex items-center justify-center gap-2 shadow-sm transition-colors active:scale-[0.98]" id="reassignBtn" onclick="executeReassignment()">
+<span class="material-symbols-outlined text-[18px]">swap_horiz</span>
+<span>Reassign to Omar (1-Tap)</span>
+</button>
+<button class="h-11 px-4 rounded-xl bg-surface-subtle text-ink font-label-md text-label-md flex items-center justify-center gap-1.5 transition-colors active:scale-[0.98]">
+<span>Open Schedule Detail</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+<!-- Dynamic Action Feedback Alert (Hidden Initially) -->
+<div class="hidden p-3 rounded-lg bg-success-soft text-success font-body-sm text-body-sm items-center gap-2" id="actionFeedback">
+<span class="material-symbols-outlined text-[20px]">check_circle</span>
+<span>Reassigned to Omar Khan. Automated SMS alert dispatched to Sarah Khan (+92 300 8451120).</span>
+</div>
+</div>
+<!-- Context Grounding Attribution Card -->
+<div class="p-3 rounded-lg bg-surface-container-high text-secondary flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px] text-ink-soft shrink-0">satellite_alt</span>
+<p class="font-label-md text-label-md text-ink-soft leading-snug">
+            Grounded in live GPS telemetry, job progress logs, and traffic conditions across 4 active technician vans.
+          </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Field Telemetry Fleet Mini-Strip -->
+<div class="flex flex-col space-y-2 pt-1">
+<span class="font-label-md text-label-md uppercase tracking-wider text-secondary">Active Units in Region</span>
+<div class="grid grid-cols-2 gap-2">
+<div class="p-2.5 rounded-xl bg-surface shadow-sm flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-lg bg-surface-subtle flex items-center justify-center text-ink">
+<span class="material-symbols-outlined text-[18px]">directions_car</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-sm text-headline-sm text-ink truncate">Van 04 · Omar</span>
+<span class="font-label-md text-label-md text-success truncate">Available in 12m</span>
+</div>
+</div>
+<div class="p-2.5 rounded-xl bg-surface shadow-sm flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-lg bg-surface-subtle flex items-center justify-center text-ink">
+<span class="material-symbols-outlined text-[18px]">engineering</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-sm text-headline-sm text-ink truncate">Van 02 · Ahmed</span>
+<span class="font-label-md text-label-md text-danger truncate">Running late (28m)</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Operational Input Dock -->
+<div class="sticky bottom-2 w-full pt-2">
+<div class="flex items-center gap-2 p-1.5 bg-surface rounded-2xl shadow-md">
+<div class="w-9 h-9 rounded-xl flex items-center justify-center text-secondary shrink-0">
+<span class="material-symbols-outlined text-[20px]">query_stats</span>
+</div>
+<input class="flex-1 bg-transparent border-0 outline-none text-ink placeholder:text-secondary font-body-sm text-body-sm py-2 px-1 focus:ring-0" id="aeraInput" onkeydown="if(event.key === 'Enter') handleInputSubmit()" placeholder="Ask Aera about schedule, invoices, technicians..." type="text"/>
+<button aria-label="Send Query" class="w-10 h-10 rounded-xl bg-accent text-surface flex items-center justify-center shrink-0 hover:bg-accent-deep transition-colors active:scale-95 shadow-sm" id="sendPromptBtn" onclick="handleInputSubmit()">
+<span class="material-symbols-outlined text-[20px]">arrow_upward</span>
+</button>
+</div>
+</div>
+</div>
+<script>
+  function setQuery(query) {
+    const input = document.getElementById('aeraInput');
+    const queryText = document.getElementById('currentQueryText');
+    if (input) input.value = query;
+    if (queryText) {
+      queryText.textContent = query;
+      queryText.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  function handleInputSubmit() {
+    const input = document.getElementById('aeraInput');
+    const queryText = document.getElementById('currentQueryText');
+    if (input && input.value.trim() !== '') {
+      if (queryText) queryText.textContent = input.value;
+      input.value = '';
+    }
+  }
+
+  function executeReassignment() {
+    const reassignBtn = document.getElementById('reassignBtn');
+    const actionFeedback = document.getElementById('actionFeedback');
+    if (reassignBtn && actionFeedback) {
+      reassignBtn.classList.add('opacity-50', 'pointer-events-none');
+      reassignBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">done</span><span>Reassigned</span>';
+      actionFeedback.classList.remove('hidden');
+      actionFeedback.classList.add('flex');
+    }
+  }
+</script></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/90 backdrop-blur-xl shadow-[0_-2px_12px_rgba(21,25,23,0.04)]" data-active-classes="text-accent font-semibold"><div class="h-16 px-3 flex items-center justify-around"><a class="flex flex-col items-center justify-center w-14 h-12 text-ink-soft hover:text-ink transition-colors gap-1" data-path="experience-hub" href="#"><span class="material-symbols-outlined text-[24px]">support_agent</span><span class="font-label-md text-label-md leading-none">CX Hub</span></a><a class="flex flex-col items-center justify-center w-14 h-12 text-ink-soft hover:text-ink transition-colors gap-1" data-path="customer-portal" href="#"><span class="material-symbols-outlined text-[24px]">group</span><span class="font-label-md text-label-md leading-none">Clients</span></a><a aria-current="page" class="relative -top-2 flex flex-col items-center justify-center w-14 h-14 rounded-full bg-accent shadow-[0_8px_20px_rgba(30,90,88,0.35)] hover:bg-accent-deep transition-colors text-accent font-semibold" data-path="ai-command-center" href="#"><span class="material-symbols-outlined text-[26px]">neurology</span></a><a class="flex flex-col items-center justify-center w-14 h-12 text-ink-soft hover:text-ink transition-colors gap-1" data-path="automation-logs" href="#"><span class="material-symbols-outlined text-[24px]">electric_bolt</span><span class="font-label-md text-label-md leading-none">Actions</span></a><a class="flex flex-col items-center justify-center w-14 h-12 text-ink-soft hover:text-ink transition-colors gap-1" data-path="company-settings" href="#"><span class="material-symbols-outlined text-[24px]">corporate_fare</span><span class="font-label-md text-label-md leading-none">Company</span></a></div></nav></body></html>

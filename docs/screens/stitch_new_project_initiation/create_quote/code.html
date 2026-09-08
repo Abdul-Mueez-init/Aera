@@ -1,0 +1,370 @@
+<!DOCTYPE html><html class="h-full" lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;620;650;700&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{width:100vw;min-height:100%;margin:0;padding:0;background-color:#F6F5F1;}body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "primary-container": "#1e5a58", "accent-deep": "#12403F", "error-container": "#ffdad6", "on-secondary": "#ffffff", "secondary": "#59605b", "accent": "#1E5A58", "canvas": "#F6F5F1", "on-surface-variant": "#404848", "surface-container": "#ecefeb", "inverse-on-surface": "#eef2ee", "on-surface": "#181c1a", "inverse-primary": "#97d1ce", "primary-fixed-dim": "#97d1ce", "tertiary-fixed": "#ffdbcc", "error": "#ba1a1a", "inverse-surface": "#2d312f", "surface-bright": "#f7faf6", "primary": "#004240", "danger-soft": "#F7E8E7", "secondary-container": "#dae1db", "surface-tint": "#2d6765", "on-tertiary-container": "#f7b598", "on-tertiary-fixed-variant": "#693b25", "secondary-fixed-dim": "#c1c8c3", "outline-variant": "#bfc8c7", "info": "#4D6882", "on-primary-fixed": "#00201f", "surface-dim": "#d8dbd7", "ink": "#151917", "on-tertiary-fixed": "#341101", "primary-fixed": "#b3edea", "on-error-container": "#93000a", "danger": "#A84A46", "success": "#2F7D5A", "on-primary-fixed-variant": "#0e4f4d", "warning-soft": "#F8EEDB", "on-secondary-fixed": "#161d1a", "success-soft": "#E5F2EA", "tertiary-fixed-dim": "#fab79a", "on-secondary-container": "#5d6460", "info-soft": "#E9EFF5", "warning": "#9A6A22", "on-primary-container": "#96cfcc", "ink-soft": "#343B37", "surface-subtle": "#EEF0EC", "surface": "#FFFFFF", "surface-container-lowest": "#ffffff", "on-background": "#181c1a", "surface-variant": "#e0e3e0", "tertiary-container": "#75452e", "secondary-fixed": "#dde4de", "on-primary": "#ffffff", "background": "#f7faf6", "line": "#DCE0DB", "on-secondary-fixed-variant": "#414844", "surface-container-low": "#f1f4f1", "accent-soft": "#E0EEEB", "tertiary": "#5a2f19", "scrim": "#151917", "surface-container-high": "#e6e9e5", "surface-container-highest": "#e0e3e0", "outline": "#707978", "on-error": "#ffffff", "on-tertiary": "#ffffff" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "4": "16px", "2": "8px", "6": "24px", "16": "64px", "10": "40px", "3": "12px", "1": "4px", "5": "20px", "12": "48px", "8": "32px", "7": "28px" }, "fontFamily": { "h2": ["Inter"], "h3": ["Inter"], "headline-sm": ["Inter"], "body-lg": ["Inter"], "money": ["Inter"], "headline-lg": ["Inter"], "display": ["Inter"], "h1": ["Inter"], "label": ["Inter"], "label-md": ["Inter"], "body-md": ["Inter"], "body": ["Inter"], "headline-md": ["Inter"], "body-sm": ["Inter"] }, "fontSize": { "h2": ["24px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "650" }], "h3": ["18px", { "lineHeight": "1.25", "letterSpacing": "-0.01em", "fontWeight": "620" }], "headline-sm": ["18px", { "lineHeight": "1.25", "letterSpacing": "-0.01em", "fontWeight": "620" }], "body-lg": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }], "money": ["28px", { "lineHeight": "1.05", "letterSpacing": "-0.025em", "fontWeight": "650" }], "headline-lg": ["30px", { "lineHeight": "1.12", "letterSpacing": "-0.025em", "fontWeight": "650" }], "display": ["36px", { "lineHeight": "1.08", "letterSpacing": "-0.03em", "fontWeight": "650" }], "h1": ["30px", { "lineHeight": "1.12", "letterSpacing": "-0.025em", "fontWeight": "650" }], "label": ["12px", { "lineHeight": "1.25", "letterSpacing": "0.01em", "fontWeight": "650" }], "label-md": ["12px", { "lineHeight": "1.25", "letterSpacing": "0.01em", "fontWeight": "650" }], "body-md": ["14px", { "lineHeight": "1.45", "fontWeight": "400" }], "body": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }], "headline-md": ["24px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "650" }], "body-sm": ["14px", { "lineHeight": "1.45", "fontWeight": "400" }] } } } };</script></head><body class="bg-canvas text-ink font-body min-h-screen flex flex-col antialiased selection:bg-accent-soft selection:text-accent"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(21,25,23,0.04)]"><div class="h-16 px-3 flex items-center justify-between gap-2"><div class="flex items-center gap-2 min-w-0"><button aria-label="Back" class="w-11 h-11 flex items-center justify-center rounded-lg text-ink hover:bg-surface-subtle transition-colors" onclick="history.back()"><span class="material-symbols-outlined text-[22px]">arrow_back</span></button><img alt="Brand logo. - Primary color: #1e5a58
+- Font: inter
+- Mode: light
+- Roundness: rounded-md
+" class="h-7 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1Ug1XXBcmGJZGypd8313L8OujNOteYVBV1sN9Cy69PaYPEpLyKbzsP7p2kqAukd2flRYBYvKzHUea2XCwBn4oNWpgmKA4oVlnFclxOMyvR8gEQhi2_vJc8XiggtNeYwJ5D77H4PeLXXeBXZZ-MjWvwjYuv_1dwni4kFmBvxEJHUcEAWeIIS8W9jz0P22oCUyUi16KPTwTYGysbU02s1XttCa2Ye1Egkm9j444fkaIPn42ZGq3dNo8oF82MD"><h1 class="font-h3 text-h3 text-ink tracking-tight truncate pl-1">Invoice Summary</h1></div><div class="flex items-center gap-2 flex-shrink-0"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 bg-canvas pb-safe"><div class="flex flex-col w-full pb-8">
+<!-- Interactive Top Action Sub-header / Job Context Banner -->
+<section class="px-4 pt-4 pb-2">
+<div class="bg-surface rounded-xl p-4 shadow-sm flex flex-col gap-2 relative overflow-hidden">
+<div class="absolute -right-6 -bottom-6 w-24 h-24 bg-accent-soft/60 rounded-full blur-xl pointer-events-none"></div>
+<div class="flex items-center justify-between">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-accent-soft text-accent text-label font-label">
+<span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
+          Drafting Estimate
+        </span>
+<span class="text-secondary text-label font-label">Ref: EST-9024</span>
+</div>
+<div class="flex items-start gap-3 mt-1">
+<div class="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-accent flex-shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[20px]">hvac</span>
+</div>
+<div class="min-w-0 flex-1">
+<h2 class="text-ink font-h3 text-h3 truncate leading-snug">AC Compressor Breakdown</h2>
+<p class="text-ink-soft text-body-sm font-body-sm flex items-center gap-1.5 mt-0.5 flex-wrap">
+<span class="font-medium text-ink">Sarah Khan</span>
+<span class="text-outline-variant">•</span>
+<span class="text-secondary">Job #JOB-8492</span>
+</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 1: Line Items Builder -->
+<section class="px-4 mt-3">
+<div class="flex items-center justify-between mb-3 px-1">
+<div>
+<h3 class="text-ink font-headline-sm text-headline-sm">Scope &amp; Parts</h3>
+<p class="text-ink-soft text-body-sm font-body-sm">3 items staged for approval</p>
+</div>
+<span class="text-label font-label bg-surface-subtle text-ink-soft px-2.5 py-1 rounded-full">
+        Pricebook v4.2
+      </span>
+</div>
+<!-- Items List Container -->
+<div class="flex flex-col gap-3" id="line-items-container">
+<!-- Item 1 Card -->
+<div class="bg-surface rounded-xl p-4 shadow-sm transition-all duration-200 hover:shadow-md relative group">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-start gap-3 min-w-0">
+<div class="w-9 h-9 rounded-lg bg-surface-container-low text-accent flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[18px]">memory</span>
+</div>
+<div class="min-w-0">
+<span class="text-label font-label text-secondary uppercase tracking-wider">OEM Component</span>
+<h4 class="text-ink font-body-lg text-body-lg font-medium leading-snug break-words">4-Ton Inverter Scroll Compressor (OEM Carrier)</h4>
+<p class="text-ink-soft text-body-sm font-body-sm mt-1">Direct factory replacement • 3-stage rotary valve</p>
+</div>
+</div>
+<div class="flex items-center gap-1 flex-shrink-0">
+<button aria-label="Edit item" class="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:bg-surface-subtle transition-colors">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+<button aria-label="Remove item" class="w-8 h-8 rounded-lg flex items-center justify-center text-danger hover:bg-danger-soft transition-colors">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+<div class="mt-3 pt-3 flex items-center justify-between bg-surface-container-low/60 rounded-lg px-3 py-2">
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 text-body-sm font-body-sm text-ink-soft">
+<span class="text-secondary text-label font-label">QTY:</span>
+<span class="font-medium text-ink bg-surface px-2 py-0.5 rounded shadow-sm">1</span>
+</div>
+<span class="text-outline-variant">•</span>
+<div class="text-body-sm font-body-sm text-ink-soft">
+<span class="text-secondary text-label font-label">UNIT:</span> Rs 12,500
+            </div>
+</div>
+<div class="text-ink font-headline-sm text-headline-sm tracking-tight text-right">
+            Rs 12,500
+          </div>
+</div>
+</div>
+<!-- Item 2 Card -->
+<div class="bg-surface rounded-xl p-4 shadow-sm transition-all duration-200 hover:shadow-md relative group">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-start gap-3 min-w-0">
+<div class="w-9 h-9 rounded-lg bg-surface-container-low text-accent flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[18px]">build</span>
+</div>
+<div class="min-w-0">
+<span class="text-label font-label text-secondary uppercase tracking-wider">Field Labor</span>
+<h4 class="text-ink font-body-lg text-body-lg font-medium leading-snug break-words">Nitrogen Flush &amp; Triple Vacuum Dehydration</h4>
+<p class="text-ink-soft text-body-sm font-body-sm mt-1">Deep evacuation to sub-500 microns with micron gauge</p>
+</div>
+</div>
+<div class="flex items-center gap-1 flex-shrink-0">
+<button aria-label="Edit item" class="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:bg-surface-subtle transition-colors">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+<button aria-label="Remove item" class="w-8 h-8 rounded-lg flex items-center justify-center text-danger hover:bg-danger-soft transition-colors">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+<div class="mt-3 pt-3 flex items-center justify-between bg-surface-container-low/60 rounded-lg px-3 py-2">
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 text-body-sm font-body-sm text-ink-soft">
+<span class="text-secondary text-label font-label">QTY:</span>
+<span class="font-medium text-ink bg-surface px-2 py-0.5 rounded shadow-sm">1 svc</span>
+</div>
+<span class="text-outline-variant">•</span>
+<div class="text-body-sm font-body-sm text-ink-soft">
+<span class="text-secondary text-label font-label">UNIT:</span> Rs 2,500
+            </div>
+</div>
+<div class="text-ink font-headline-sm text-headline-sm tracking-tight text-right">
+            Rs 2,500
+          </div>
+</div>
+</div>
+<!-- Item 3 Card -->
+<div class="bg-surface rounded-xl p-4 shadow-sm transition-all duration-200 hover:shadow-md relative group">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-start gap-3 min-w-0">
+<div class="w-9 h-9 rounded-lg bg-surface-container-low text-accent flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[18px]">propane_tank</span>
+</div>
+<div class="min-w-0">
+<span class="text-label font-label text-secondary uppercase tracking-wider">Consumable</span>
+<h4 class="text-ink font-body-lg text-body-lg font-medium leading-snug break-words">R-410A Virgin Refrigerant Top-Up</h4>
+<p class="text-ink-soft text-body-sm font-body-sm mt-1">Sealed factory-grade cylinder charge calibrated to ambient scale</p>
+</div>
+</div>
+<div class="flex items-center gap-1 flex-shrink-0">
+<button aria-label="Edit item" class="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:bg-surface-subtle transition-colors">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+<button aria-label="Remove item" class="w-8 h-8 rounded-lg flex items-center justify-center text-danger hover:bg-danger-soft transition-colors">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+<div class="mt-3 pt-3 flex items-center justify-between bg-surface-container-low/60 rounded-lg px-3 py-2">
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 text-body-sm font-body-sm text-ink-soft">
+<span class="text-secondary text-label font-label">QTY:</span>
+<span class="font-medium text-ink bg-surface px-2 py-0.5 rounded shadow-sm">4.2 lbs</span>
+</div>
+<span class="text-outline-variant">•</span>
+<div class="text-body-sm font-body-sm text-ink-soft">
+<span class="text-secondary text-label font-label">RATE:</span> Rs 3,500
+            </div>
+</div>
+<div class="text-ink font-headline-sm text-headline-sm tracking-tight text-right">
+            Rs 3,500
+          </div>
+</div>
+</div>
+</div>
+<!-- Quick Add Part Button -->
+<button class="w-full mt-3 h-12 bg-surface-subtle hover:bg-surface-container transition-colors rounded-xl text-accent font-body-md text-body-md font-medium flex items-center justify-center gap-2 shadow-sm active:scale-[0.99]">
+<span class="material-symbols-outlined text-[20px]">add_circle</span>
+      Add Service or Part from Pricebook
+    </button>
+</section>
+<!-- Technical Spec & Diagnostics Visual Strip -->
+<section class="px-4 mt-5">
+<div class="bg-surface rounded-xl p-4 shadow-sm">
+<div class="flex items-center justify-between mb-3">
+<span class="text-ink font-h3 text-h3">Diagnostic Readings</span>
+<span class="text-label font-label text-success bg-success-soft px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">check_circle</span> Verified Field Test
+        </span>
+</div>
+<div class="grid grid-cols-3 gap-2">
+<div class="bg-surface-subtle rounded-lg p-2.5 flex flex-col">
+<span class="text-secondary text-label font-label">Suction PSI</span>
+<span class="text-ink font-headline-sm text-headline-sm mt-0.5">38 <span class="text-danger text-body-sm font-normal">Low</span></span>
+</div>
+<div class="bg-surface-subtle rounded-lg p-2.5 flex flex-col">
+<span class="text-secondary text-label font-label">Liquid PSI</span>
+<span class="text-ink font-headline-sm text-headline-sm mt-0.5">240 <span class="text-warning text-body-sm font-normal">Warn</span></span>
+</div>
+<div class="bg-surface-subtle rounded-lg p-2.5 flex flex-col">
+<span class="text-secondary text-label font-label">Target Vacuum</span>
+<span class="text-ink font-headline-sm text-headline-sm mt-0.5">480 μ</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 2: Financial Totals -->
+<section class="px-4 mt-5">
+<div class="bg-surface rounded-xl p-4 shadow-sm flex flex-col gap-3">
+<div class="flex items-center justify-between pb-2">
+<h3 class="text-ink font-headline-sm text-headline-sm">Financial Summary</h3>
+<span class="text-label font-label text-secondary">Currency: PKR (Rs)</span>
+</div>
+<div class="flex flex-col gap-2.5 text-body-md font-body-md">
+<div class="flex items-center justify-between text-ink-soft">
+<span>Subtotal</span>
+<span class="font-medium text-ink">Rs 18,500</span>
+</div>
+<div class="flex items-center justify-between text-ink-soft">
+<div class="flex items-center gap-1.5">
+<span>Residential Tax Exemption (0%)</span>
+<span class="material-symbols-outlined text-secondary text-[16px]">info</span>
+</div>
+<span class="font-medium text-ink">Rs 0</span>
+</div>
+<div class="flex items-center justify-between text-ink-soft">
+<div class="flex items-center gap-1.5">
+<span>Promotional / Courtesy Discount</span>
+<span class="text-label font-label text-accent bg-accent-soft px-1.5 py-0.2 rounded">Summer Care</span>
+</div>
+<span class="font-medium text-success">-Rs 0</span>
+</div>
+</div>
+<div class="mt-2 pt-3 bg-surface-subtle/80 rounded-xl p-3.5 flex items-center justify-between">
+<div>
+<span class="text-secondary text-label font-label block uppercase tracking-wider">Total Estimate</span>
+<span class="text-secondary text-body-sm font-body-sm">All taxes &amp; labor inclusive</span>
+</div>
+<div class="text-right">
+<div class="text-ink font-money text-money">
+            Rs 18,500
+          </div>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 3: Scope of Work & Warranty Note -->
+<section class="px-4 mt-5">
+<div class="bg-surface rounded-xl p-4 shadow-sm flex flex-col gap-2.5">
+<div class="flex items-center justify-between">
+<label class="text-ink font-headline-sm text-headline-sm flex items-center gap-2" for="scope-notes">
+<span class="material-symbols-outlined text-accent text-[20px]">verified</span>
+          Scope of Work &amp; Warranty Note
+        </label>
+<span class="text-label font-label text-success bg-success-soft px-2 py-0.5 rounded-full font-medium">Customer Facing</span>
+</div>
+<p class="text-ink-soft text-body-sm font-body-sm">This text will be prominently framed on the client approval portal and printed PDF voucher.</p>
+<div class="relative mt-1">
+<textarea class="w-full bg-surface-subtle rounded-xl p-3.5 text-body-md font-body-md text-ink outline-none resize-none leading-relaxed transition-all focus:bg-surface focus:shadow-inner" id="scope-notes" placeholder="Specify explicit terms, replacements, and warranties..." rows="4">Quote includes OEM Copeland scroll compressor, replacement of liquid-line filter drier, nitrogen pressure test, and 1-year labor &amp; parts warranty.</textarea>
+<div class="absolute bottom-2.5 right-3 text-secondary text-label font-label">
+          142 chars
+        </div>
+</div>
+<!-- Quick Warranty Badge Pill -->
+<div class="flex items-center gap-2 mt-1 bg-surface-container-low rounded-lg p-2.5">
+<span class="material-symbols-outlined text-accent text-[20px]">shield_with_heart</span>
+<div class="min-w-0">
+<p class="text-ink font-body-sm font-medium">Aera Standard HVAC Warranty Protection</p>
+<p class="text-secondary text-label font-label">365-day compressor replacement + 90-day cold cycle guarantee</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 4: Customer Delivery Options -->
+<section class="px-4 mt-5">
+<div class="bg-surface rounded-xl p-4 shadow-sm flex flex-col gap-3">
+<h3 class="text-ink font-headline-sm text-headline-sm">Customer Delivery Channels</h3>
+<div class="flex flex-col gap-2.5">
+<!-- Toggle 1: WhatsApp SMS -->
+<label class="flex items-center justify-between p-3 rounded-xl bg-surface-subtle cursor-pointer transition-colors hover:bg-surface-container-low select-none">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-lg bg-success-soft text-success flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[20px]">chat</span>
+</div>
+<div>
+<div class="text-ink font-body-md font-medium">Send via SMS WhatsApp Link</div>
+<div class="text-ink-soft text-body-sm font-body-sm">+92 300 4819022 (Instant tap to approve)</div>
+</div>
+</div>
+<input checked="" class="w-5 h-5 rounded accent-accent text-accent cursor-pointer flex-shrink-0" type="checkbox">
+</label>
+<!-- Toggle 2: Email PDF -->
+<label class="flex items-center justify-between p-3 rounded-xl bg-surface-subtle cursor-pointer transition-colors hover:bg-surface-container-low select-none">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-lg bg-info-soft text-info flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[20px]">mark_email_read</span>
+</div>
+<div>
+<div class="text-ink font-body-md font-medium">Email PDF Estimate</div>
+<div class="text-ink-soft text-body-sm font-body-sm">sarah.khan@example.com (Itemized record)</div>
+</div>
+</div>
+<input checked="" class="w-5 h-5 rounded accent-accent text-accent cursor-pointer flex-shrink-0" type="checkbox">
+</label>
+</div>
+</div>
+</section>
+<!-- Technician / Site Photo Confirmation Snapshot -->
+<section class="px-4 mt-5">
+<div class="bg-surface rounded-xl p-4 shadow-sm flex flex-col gap-2.5">
+<div class="flex items-center justify-between">
+<span class="text-ink font-headline-sm text-headline-sm">Field Evidence Attached</span>
+<span class="text-label font-label text-accent bg-accent-soft px-2 py-0.5 rounded-full">2 Snapshots</span>
+</div>
+<div class="grid grid-cols-2 gap-3 mt-1">
+<div class="relative rounded-xl overflow-hidden aspect-[4/3] bg-surface-container shadow-sm">
+<img class="w-full h-full object-cover" data-alt="Close up photograph of a damaged HVAC residential outdoor condensing unit compressor valve showing refrigerant oil leakage and scorched electrical wiring contacts, photographed under direct daylight." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBd8lctf8V0YuYoIcVJaoz5cyl44yqVoZ7bxx3rPSBWDTZCZdZ29SzdsmJsiF9qiUCirKXbmDyNZ_5jkAZjfJmnU_8kk5mHS057fLGfiaEfZqJ_d1UCRd1uRlv9c-Us8pqwewKzcSeW69KqI47jRivO_TG-pLdO8lFdVoz1U6hePxvshAik9vXFzB1KKmmknGpr3rEiwqiCv6dBEYblmVBDz89lLEQbH8D1gOowlBrKAw7BNGKcp8PVvw">
+<div class="absolute inset-0 bg-gradient-to-t from-scrim/80 via-transparent to-transparent flex items-end p-2">
+<span class="text-on-primary text-label font-label drop-shadow">Burnt Terminals</span>
+</div>
+</div>
+<div class="relative rounded-xl overflow-hidden aspect-[4/3] bg-surface-container shadow-sm">
+<img class="w-full h-full object-cover" data-alt="High precision digital manifold HVAC pressure gauge reading low suction pressure connected to condenser service valve in residential backyard garden setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVu1i-5X6kim2AbZM0fGdZSj3IWtcSs5-q1fGkuDRpIrOzJfD64hKMz_7gdJI-372lSV7wNYIVoO1IctuClSaSrxqt77bcy3MohEdKONKdqyO8CGhsDQPdA1PJjKJL7P-bGK-7Df8cIS0M051iUy9S6WTTJaGpBaNTDfv21mAEYVtosMMDrbVH_0WW34emz-FPDotoihet21uuI6IHwu2Yc2OUxWqZ4L5_uiYwJeRcaTwYWG7g7iUnKg">
+<div class="absolute inset-0 bg-gradient-to-t from-scrim/80 via-transparent to-transparent flex items-end p-2">
+<span class="text-on-primary text-label font-label drop-shadow">Pressure Test Low</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom Sticky Action Bar -->
+<section class="sticky bottom-0 z-40 px-4 pt-3 pb-safe bg-surface/95 backdrop-blur-md mt-6 shadow-[0_-4px_20px_rgba(21,25,23,0.06)]">
+<div class="flex flex-col gap-2.5 max-w-lg mx-auto pb-3">
+<button class="w-full h-12 rounded-xl bg-accent hover:bg-accent-deep active:scale-[0.99] text-surface font-body-lg text-body-lg font-medium flex items-center justify-center gap-2 shadow-md transition-all" id="btn-send-estimate">
+<span>Save &amp; Send Quote to Client</span>
+<span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+<button class="w-full h-11 rounded-xl bg-surface-subtle hover:bg-surface-container text-ink font-body-md text-body-md font-medium flex items-center justify-center gap-1.5 transition-colors">
+<span class="material-symbols-outlined text-[18px]">bookmark_border</span>
+<span>Save as Draft Estimate</span>
+</button>
+</div>
+</section>
+<!-- Interactive Feedback Overlay Modal (Triggered on Send) -->
+<div class="fixed inset-0 z-50 bg-scrim/40 backdrop-blur-sm hidden flex items-center justify-center p-4" id="sent-dialog">
+<div class="bg-surface rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-200">
+<div class="w-14 h-14 rounded-full bg-success-soft text-success flex items-center justify-center mb-3">
+<span class="material-symbols-outlined text-[32px]">send</span>
+</div>
+<h3 class="text-ink font-h2 text-h2">Quote Dispatched!</h3>
+<p class="text-ink-soft text-body-md font-body-md mt-1.5">
+        Estimate of <span class="font-semibold text-ink">Rs 18,500</span> has been transmitted to Sarah Khan via WhatsApp and Email PDF.
+      </p>
+<div class="w-full bg-surface-subtle rounded-xl p-3 mt-4 text-left flex items-center gap-3">
+<span class="material-symbols-outlined text-accent text-[22px]">notifications_active</span>
+<div class="min-w-0 flex-1">
+<p class="text-ink font-body-sm font-medium truncate">Client Tracking Activated</p>
+<p class="text-secondary text-label font-label">You'll be notified immediately upon approval.</p>
+</div>
+</div>
+<button class="w-full h-11 bg-accent text-surface rounded-xl font-body-md text-body-md font-medium mt-5 hover:bg-accent-deep transition-colors" id="btn-close-dialog">
+        Done &amp; Return to Job
+      </button>
+</div>
+</div>
+</div>
+<script>
+  (function() {
+    const sendBtn = document.getElementById('btn-send-estimate');
+    const dialog = document.getElementById('sent-dialog');
+    const closeBtn = document.getElementById('btn-close-dialog');
+
+    if (sendBtn && dialog) {
+      sendBtn.addEventListener('click', () => {
+        dialog.classList.remove('hidden');
+      });
+    }
+
+    if (closeBtn && dialog) {
+      closeBtn.addEventListener('click', () => {
+        dialog.classList.add('hidden');
+      });
+    }
+  })();
+</script></main></body></html>

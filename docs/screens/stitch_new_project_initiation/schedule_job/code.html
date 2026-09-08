@@ -1,0 +1,381 @@
+<!DOCTYPE html><html class="h-full" lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;620;650;700&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{width:100vw;min-height:100%;margin:0;padding:0;background-color:#F6F5F1;}body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "primary-container": "#1e5a58", "accent-deep": "#12403F", "error-container": "#ffdad6", "on-secondary": "#ffffff", "secondary": "#59605b", "accent": "#1E5A58", "canvas": "#F6F5F1", "on-surface-variant": "#404848", "surface-container": "#ecefeb", "inverse-on-surface": "#eef2ee", "on-surface": "#181c1a", "inverse-primary": "#97d1ce", "primary-fixed-dim": "#97d1ce", "tertiary-fixed": "#ffdbcc", "error": "#ba1a1a", "inverse-surface": "#2d312f", "surface-bright": "#f7faf6", "primary": "#004240", "danger-soft": "#F7E8E7", "secondary-container": "#dae1db", "surface-tint": "#2d6765", "on-tertiary-container": "#f7b598", "on-tertiary-fixed-variant": "#693b25", "secondary-fixed-dim": "#c1c8c3", "outline-variant": "#bfc8c7", "info": "#4D6882", "on-primary-fixed": "#00201f", "surface-dim": "#d8dbd7", "ink": "#151917", "on-tertiary-fixed": "#341101", "primary-fixed": "#b3edea", "on-error-container": "#93000a", "danger": "#A84A46", "success": "#2F7D5A", "on-primary-fixed-variant": "#0e4f4d", "warning-soft": "#F8EEDB", "on-secondary-fixed": "#161d1a", "success-soft": "#E5F2EA", "tertiary-fixed-dim": "#fab79a", "on-secondary-container": "#5d6460", "info-soft": "#E9EFF5", "warning": "#9A6A22", "on-primary-container": "#96cfcc", "ink-soft": "#343B37", "surface-subtle": "#EEF0EC", "surface": "#FFFFFF", "surface-container-lowest": "#ffffff", "on-background": "#181c1a", "surface-variant": "#e0e3e0", "tertiary-container": "#75452e", "secondary-fixed": "#dde4de", "on-primary": "#ffffff", "background": "#f7faf6", "line": "#DCE0DB", "on-secondary-fixed-variant": "#414844", "surface-container-low": "#f1f4f1", "accent-soft": "#E0EEEB", "tertiary": "#5a2f19", "scrim": "#151917", "surface-container-high": "#e6e9e5", "surface-container-highest": "#e0e3e0", "outline": "#707978", "on-error": "#ffffff", "on-tertiary": "#ffffff" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "4": "16px", "2": "8px", "6": "24px", "16": "64px", "10": "40px", "3": "12px", "1": "4px", "5": "20px", "12": "48px", "8": "32px", "7": "28px" }, "fontFamily": { "h2": ["Inter"], "h3": ["Inter"], "headline-sm": ["Inter"], "body-lg": ["Inter"], "money": ["Inter"], "headline-lg": ["Inter"], "display": ["Inter"], "h1": ["Inter"], "label": ["Inter"], "label-md": ["Inter"], "body-md": ["Inter"], "body": ["Inter"], "headline-md": ["Inter"], "body-sm": ["Inter"] }, "fontSize": { "h2": ["24px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "650" }], "h3": ["18px", { "lineHeight": "1.25", "letterSpacing": "-0.01em", "fontWeight": "620" }], "headline-sm": ["18px", { "lineHeight": "1.25", "letterSpacing": "-0.01em", "fontWeight": "620" }], "body-lg": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }], "money": ["28px", { "lineHeight": "1.05", "letterSpacing": "-0.025em", "fontWeight": "650" }], "headline-lg": ["30px", { "lineHeight": "1.12", "letterSpacing": "-0.025em", "fontWeight": "650" }], "display": ["36px", { "lineHeight": "1.08", "letterSpacing": "-0.03em", "fontWeight": "650" }], "h1": ["30px", { "lineHeight": "1.12", "letterSpacing": "-0.025em", "fontWeight": "650" }], "label": ["12px", { "lineHeight": "1.25", "letterSpacing": "0.01em", "fontWeight": "650" }], "label-md": ["12px", { "lineHeight": "1.25", "letterSpacing": "0.01em", "fontWeight": "650" }], "body-md": ["14px", { "lineHeight": "1.45", "fontWeight": "400" }], "body": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }], "headline-md": ["24px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "650" }], "body-sm": ["14px", { "lineHeight": "1.45", "fontWeight": "400" }] } } } };</script></head><body class="bg-canvas text-ink font-body min-h-screen flex flex-col antialiased selection:bg-accent-soft selection:text-accent"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(21,25,23,0.04)]"><div class="h-16 px-3 flex items-center justify-between gap-2"><div class="flex items-center gap-2 min-w-0"><button aria-label="Back" class="w-11 h-11 flex items-center justify-center rounded-lg text-ink hover:bg-surface-subtle transition-colors" onclick="history.back()"><span class="material-symbols-outlined text-[22px]">arrow_back</span></button><img alt="Brand logo. - Primary color: #1e5a58
+- Font: inter
+- Mode: light
+- Roundness: rounded-md
+" class="h-7 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1Ug1XXBcmGJZGypd8313L8OujNOteYVBV1sN9Cy69PaYPEpLyKbzsP7p2kqAukd2flRYBYvKzHUea2XCwBn4oNWpgmKA4oVlnFclxOMyvR8gEQhi2_vJc8XiggtNeYwJ5D77H4PeLXXeBXZZ-MjWvwjYuv_1dwni4kFmBvxEJHUcEAWeIIS8W9jz0P22oCUyUi16KPTwTYGysbU02s1XttCa2Ye1Egkm9j444fkaIPn42ZGq3dNo8oF82MD"><h1 class="font-h3 text-h3 text-ink tracking-tight truncate pl-1">Create Work Order</h1></div><div class="flex items-center gap-2 flex-shrink-0"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 bg-canvas pb-safe"><div class="flex flex-col w-full pb-8">
+<!-- Top Dismiss Bar / Quick Header Context -->
+<div class="px-4 pt-3 pb-2 flex items-center justify-between">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-soft text-accent text-label font-label font-semibold tracking-wide">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">bolt</span>
+      SMART DISPATCH
+    </span>
+<button aria-label="Close scheduler" class="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-ink-soft hover:bg-surface-subtle transition-colors" onclick="history.back()" type="button">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<!-- Job Context Ribbon Banner -->
+<div class="px-4 mb-4">
+<div class="p-4 rounded-xl bg-surface shadow-sm flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-lg bg-surface-subtle flex items-center justify-center text-accent">
+<span class="material-symbols-outlined text-[18px]">hvac</span>
+</div>
+<div>
+<h2 class="font-h3 text-h3 text-ink leading-tight">Sarah Khan</h2>
+<p class="font-body-sm text-body-sm text-secondary">Gulberg III · Order #AER-9241</p>
+</div>
+</div>
+<span class="px-2.5 py-1 rounded-full bg-warning-soft text-warning font-label-md text-label-md font-semibold">
+          High Priority
+        </span>
+</div>
+<div class="flex items-center gap-2 pt-2 border-none">
+<span class="material-symbols-outlined text-[16px] text-ink-soft">mode_fan</span>
+<span class="font-body-sm text-body-sm text-ink-soft">AC Not Cooling · 4-Ton Carrier Split System</span>
+</div>
+</div>
+</div>
+<!-- Step 1: Date Selection (Horizontal Ribbon Strip) -->
+<div class="mb-5">
+<div class="px-4 flex items-center justify-between mb-2.5">
+<div class="flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-primary text-on-primary font-label text-label flex items-center justify-center">1</span>
+<span class="font-headline-sm text-headline-sm text-ink">Select Service Date</span>
+</div>
+<div class="flex items-center gap-1 text-ink-soft font-body-sm text-body-sm">
+<span class="material-symbols-outlined text-[16px]">calendar_today</span>
+<span class="font-medium">Sep 2025</span>
+</div>
+</div>
+<!-- Date Strip Scrollable -->
+<div class="flex items-center gap-2.5 px-4 overflow-x-auto no-scrollbar py-1">
+<!-- Mon 7 (Selected) -->
+<button class="date-chip flex-shrink-0 w-16 py-3 rounded-xl bg-primary text-on-primary shadow-sm flex flex-col items-center justify-center transition-transform active:scale-95 text-center" type="button">
+<span class="font-label-md text-label-md tracking-wider opacity-80 uppercase">Mon</span>
+<span class="font-headline-md text-headline-md font-bold mt-0.5">7</span>
+<span class="w-1.5 h-1.5 rounded-full bg-primary-fixed mt-1"></span>
+</button>
+<!-- Tue 8 -->
+<button class="date-chip flex-shrink-0 w-16 py-3 rounded-xl bg-surface text-ink hover:bg-surface-subtle shadow-sm flex flex-col items-center justify-center transition-transform active:scale-95 text-center" type="button">
+<span class="font-label-md text-label-md text-secondary tracking-wider uppercase">Tue</span>
+<span class="font-headline-md text-headline-md font-semibold text-ink mt-0.5">8</span>
+<span class="w-1.5 h-1.5 rounded-full bg-transparent mt-1"></span>
+</button>
+<!-- Wed 9 -->
+<button class="date-chip flex-shrink-0 w-16 py-3 rounded-xl bg-surface text-ink hover:bg-surface-subtle shadow-sm flex flex-col items-center justify-center transition-transform active:scale-95 text-center" type="button">
+<span class="font-label-md text-label-md text-secondary tracking-wider uppercase">Wed</span>
+<span class="font-headline-md text-headline-md font-semibold text-ink mt-0.5">9</span>
+<span class="w-1.5 h-1.5 rounded-full bg-transparent mt-1"></span>
+</button>
+<!-- Thu 10 -->
+<button class="date-chip flex-shrink-0 w-16 py-3 rounded-xl bg-surface text-ink hover:bg-surface-subtle shadow-sm flex flex-col items-center justify-center transition-transform active:scale-95 text-center" type="button">
+<span class="font-label-md text-label-md text-secondary tracking-wider uppercase">Thu</span>
+<span class="font-headline-md text-headline-md font-semibold text-ink mt-0.5">10</span>
+<span class="w-1.5 h-1.5 rounded-full bg-transparent mt-1"></span>
+</button>
+<!-- Fri 11 -->
+<button class="date-chip flex-shrink-0 w-16 py-3 rounded-xl bg-surface text-ink hover:bg-surface-subtle shadow-sm flex flex-col items-center justify-center transition-transform active:scale-95 text-center" type="button">
+<span class="font-label-md text-label-md text-secondary tracking-wider uppercase">Fri</span>
+<span class="font-headline-md text-headline-md font-semibold text-ink mt-0.5">11</span>
+<span class="w-1.5 h-1.5 rounded-full bg-transparent mt-1"></span>
+</button>
+<!-- Sat 12 -->
+<button class="date-chip flex-shrink-0 w-16 py-3 rounded-xl bg-surface text-ink hover:bg-surface-subtle shadow-sm flex flex-col items-center justify-center transition-transform active:scale-95 text-center" type="button">
+<span class="font-label-md text-label-md text-secondary tracking-wider uppercase">Sat</span>
+<span class="font-headline-md text-headline-md font-semibold text-ink mt-0.5">12</span>
+<span class="w-1.5 h-1.5 rounded-full bg-transparent mt-1"></span>
+</button>
+</div>
+</div>
+<!-- Step 2: Time Window Selection -->
+<div class="px-4 mb-5">
+<div class="flex items-center justify-between mb-2.5">
+<div class="flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-primary text-on-primary font-label text-label flex items-center justify-center">2</span>
+<span class="font-headline-sm text-headline-sm text-ink">Dispatch Slot</span>
+</div>
+<div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-subtle text-ink-soft font-body-sm text-body-sm">
+<span class="material-symbols-outlined text-[15px] text-accent">timer</span>
+<span>Est. 1.5 hrs</span>
+</div>
+</div>
+<!-- 2-column Slot Grid -->
+<div class="grid grid-cols-2 gap-2.5">
+<!-- Slot 1 (Selected) -->
+<button class="time-slot-btn p-3 rounded-xl bg-primary text-on-primary shadow-sm flex items-center justify-between text-left transition-all" type="button">
+<div class="min-w-0">
+<span class="font-body-md text-body-md font-semibold block leading-tight">09:00 - 10:30</span>
+<span class="font-label-md text-label-md text-primary-fixed block mt-0.5">Optimal Window</span>
+</div>
+<span class="material-symbols-outlined text-[20px] text-primary-fixed flex-shrink-0" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</button>
+<!-- Slot 2 -->
+<button class="time-slot-btn p-3 rounded-xl bg-surface text-ink hover:bg-surface-subtle shadow-sm flex items-center justify-between text-left transition-all" type="button">
+<div class="min-w-0">
+<span class="font-body-md text-body-md font-semibold block leading-tight text-ink">11:30 - 13:00</span>
+<span class="font-label-md text-label-md text-secondary block mt-0.5">High Traffic</span>
+</div>
+<span class="material-symbols-outlined text-[20px] text-outline-variant flex-shrink-0">radio_button_unchecked</span>
+</button>
+<!-- Slot 3 -->
+<button class="time-slot-btn p-3 rounded-xl bg-surface text-ink hover:bg-surface-subtle shadow-sm flex items-center justify-between text-left transition-all" type="button">
+<div class="min-w-0">
+<span class="font-body-md text-body-md font-semibold block leading-tight text-ink">14:00 - 15:30</span>
+<span class="font-label-md text-label-md text-secondary block mt-0.5">2 Techs Free</span>
+</div>
+<span class="material-symbols-outlined text-[20px] text-outline-variant flex-shrink-0">radio_button_unchecked</span>
+</button>
+<!-- Slot 4 -->
+<button class="time-slot-btn p-3 rounded-xl bg-surface text-ink hover:bg-surface-subtle shadow-sm flex items-center justify-between text-left transition-all" type="button">
+<div class="min-w-0">
+<span class="font-body-md text-body-md font-semibold block leading-tight text-ink">16:30 - 18:00</span>
+<span class="font-label-md text-label-md text-secondary block mt-0.5">Late Shift</span>
+</div>
+<span class="material-symbols-outlined text-[20px] text-outline-variant flex-shrink-0">radio_button_unchecked</span>
+</button>
+</div>
+</div>
+<!-- Step 3: Technician Assignment with Intelligent Fleet Context -->
+<div class="px-4 mb-5">
+<div class="flex items-center justify-between mb-2.5">
+<div class="flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-primary text-on-primary font-label text-label flex items-center justify-center">3</span>
+<span class="font-headline-sm text-headline-sm text-ink">Assign Specialist</span>
+</div>
+<span class="font-label-md text-label-md text-secondary">3 active in zone</span>
+</div>
+<!-- Tech Stack Cards -->
+<div class="flex flex-col gap-2.5">
+<!-- Tech 1: Ahmed Raza (Selected) -->
+<div class="p-3.5 rounded-xl bg-surface shadow-md relative overflow-hidden transition-all">
+<!-- Visual Accent Indicator Strip -->
+<div class="absolute left-0 top-0 bottom-0 w-1.5 bg-accent"></div>
+<div class="pl-2 flex items-start justify-between gap-2">
+<div class="flex items-start gap-3 min-w-0">
+<div class="relative flex-shrink-0">
+<img class="w-12 h-12 rounded-xl object-cover" data-alt="A portrait of a male HVAC technician in his late thirties with a friendly smile, dressed in a professional charcoal utility uniform with crisp teal company patch, warm ambient morning light in an equipment depot." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDp9eJ_xVWPbh5N7qjVg2KY5ojCctBhbPEMcpbbQOnhy4g1Ks9rT_kXZSfQwJu0_FDIhwYQKYYgF9xUxx3cfRnbDtVhk-fhZ8-0ifcyAgm27oLjo-UOdAg02sSfiWIEfpmuDPvUNbStBo_sTjwZXnjK0o_5cCmxvgaTFMI0aOy1SHFJC9fUgVaqMutgmEAyu7JL9HvhOZb5oSjda_jLYABytI7MMJVnJds9ar7HdalrAouK17YvSk3dKQ">
+<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-success ring-2 ring-surface"></span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="font-h3 text-h3 text-ink font-semibold truncate">Ahmed Raza</span>
+<span class="px-2 py-0.5 rounded-full bg-accent-soft text-accent text-label-md font-label-md font-semibold">Lead Tech</span>
+</div>
+<p class="font-body-sm text-body-sm text-ink-soft mt-0.5 truncate">Van #12 · HVAC Specialist Cert III</p>
+<div class="flex items-center gap-3 mt-2 text-label-md font-label-md text-secondary flex-wrap">
+<span class="inline-flex items-center gap-1 text-success">
+<span class="material-symbols-outlined text-[14px]">near_me</span>
+                  4.2 km away
+                </span>
+<span class="inline-flex items-center gap-1 text-ink-soft">
+<span class="material-symbols-outlined text-[14px]">event_note</span>
+                  3 jobs today
+                </span>
+<span class="inline-flex items-center gap-1 text-ink-soft">
+<span class="material-symbols-outlined text-[14px] text-warning" style="font-variation-settings: 'FILL' 1;">star</span>
+                  4.9 (184)
+                </span>
+</div>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1 flex-shrink-0">
+<span class="w-6 h-6 rounded-full bg-accent flex items-center justify-center text-surface shadow-sm">
+<span class="material-symbols-outlined text-[16px]">check</span>
+</span>
+<span class="font-label-md text-label-md text-accent font-semibold">Assigned</span>
+</div>
+</div>
+</div>
+<!-- Tech 2: James Miller -->
+<div class="p-3.5 rounded-xl bg-surface shadow-sm relative overflow-hidden transition-all hover:bg-surface-subtle cursor-pointer">
+<div class="pl-2 flex items-start justify-between gap-2">
+<div class="flex items-start gap-3 min-w-0">
+<div class="relative flex-shrink-0">
+<img class="w-12 h-12 rounded-xl object-cover" data-alt="A portrait of a male field service specialist with styled hair and protective eyeglasses, wearing high-visibility branded technician apparel against clean industrial garage shelving, soft daylight." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCkUlANcdrwNuWK_9olKHafxNQrWFeLzfPcy8JrVyTwCclw6Bhd8GJO8xWqQhU6jvGePTjrceepU-7Q4nbrHhsx8VZcY_2QmvDgZrHf7fw3QqbyCzXVz6gH0uyTavnPvz8Wlgq_rlTzEQC7nf627jEz3G2a9Ob2yJMkKs8XApjkLpk660o1EUwzU9mPtMBsi75h5ZEV2ERLhobrGZDbTWZohlAksqMCqWaXhIdE97hIWbDJmXp0IzQDtQ">
+<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-success ring-2 ring-surface"></span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="font-h3 text-h3 text-ink font-semibold truncate">James Miller</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-subtle text-ink-soft text-label-md font-label-md">Commercial</span>
+</div>
+<p class="font-body-sm text-body-sm text-secondary mt-0.5 truncate">Van #08 · Carrier Certified</p>
+<div class="flex items-center gap-3 mt-2 text-label-md font-label-md text-secondary flex-wrap">
+<span class="inline-flex items-center gap-1 text-ink-soft">
+<span class="material-symbols-outlined text-[14px]">near_me</span>
+                  8.5 km away
+                </span>
+<span class="inline-flex items-center gap-1 text-ink-soft">
+<span class="material-symbols-outlined text-[14px]">event_note</span>
+                  2 jobs today
+                </span>
+</div>
+</div>
+</div>
+<button class="px-3 py-1.5 rounded-lg bg-surface-subtle text-ink font-label-md text-label-md font-semibold hover:bg-line transition-colors" type="button">
+            Select
+          </button>
+</div>
+</div>
+<!-- Tech 3: Omar Khan (Unavailable) -->
+<div class="p-3.5 rounded-xl bg-surface-container opacity-70 relative overflow-hidden">
+<div class="pl-2 flex items-start justify-between gap-2">
+<div class="flex items-start gap-3 min-w-0">
+<div class="relative flex-shrink-0">
+<img class="w-12 h-12 rounded-xl object-cover grayscale" data-alt="A male HVAC technician in deep thought checking digital diagnostics tablet inside a fully equipped service van, muted low-contrast industrial tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB5L83RmnBRFICd8svCxV4V02nOuEM5JOHET0UKuRoycxaRG4oANEuRgX70oX4IIXhFfT3_bPw011p03BRAyQnHxwGU0MrKJssMqUceyRxiJ3Mi9jYDOv2Vi5YFmV0CQfxQ-E2vfPbrdq1H1iwM3q6qqlpiItkvKKnAYta6jPL-oonOuSxv8NogMZnED9fovGFSAVTJHJ6xHuo3urQYlD5U2AFZLU1kV1n-RcmcGKvRi0mEl6pRGuluPA">
+<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-danger ring-2 ring-surface"></span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="font-h3 text-h3 text-ink font-medium truncate">Omar Khan</span>
+<span class="px-2 py-0.5 rounded-full bg-danger-soft text-danger text-label-md font-label-md font-semibold">Conflict</span>
+</div>
+<p class="font-body-sm text-body-sm text-danger mt-1">
+                Busy at DHA Phase 6 until 11:00
+              </p>
+<p class="font-label-md text-label-md text-secondary mt-0.5">Exceeds 45m travel buffer</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-secondary text-[20px] p-1">block</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Step 4: Intelligent Buffer & Travel Validation Card -->
+<div class="px-4 mb-5">
+<div class="p-3.5 rounded-xl bg-success-soft flex items-start gap-3">
+<div class="w-8 h-8 rounded-lg bg-success text-on-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[18px]">verified</span>
+</div>
+<div class="min-w-0">
+<h3 class="font-h3 text-h3 text-success font-semibold leading-tight">Optimized Route Verified</h3>
+<p class="font-body-sm text-body-sm text-ink-soft mt-1">
+          14 min travel buffer calculated from Depot. Guaranteed technician arrival window: <strong class="text-ink">09:00 - 09:15</strong>.
+        </p>
+<div class="flex items-center gap-3 mt-2 text-label-md font-label-md text-secondary">
+<span class="inline-flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-success">traffic</span> Light Gulberg traffic
+          </span>
+<span class="inline-flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-success">battery_charging_full</span> Van #12: 92% fuel
+          </span>
+</div>
+</div>
+</div>
+</div>
+<!-- Step 5: Appointment Confirmation Summary Card -->
+<div class="px-4 mb-6">
+<div class="p-4 rounded-xl bg-surface shadow-sm">
+<div class="flex items-center justify-between pb-3 border-none">
+<span class="font-label-md text-label-md uppercase tracking-wider text-secondary font-semibold">Dispatch Summary</span>
+<span class="px-2 py-0.5 rounded-full bg-accent-soft text-accent font-label-md text-label-md font-semibold">Ready to book</span>
+</div>
+<div class="grid grid-cols-2 gap-3 py-3 border-none">
+<div>
+<span class="font-label-md text-label-md text-secondary block">Client</span>
+<span class="font-body-md text-body-md font-semibold text-ink mt-0.5 block truncate">Sarah Khan</span>
+</div>
+<div>
+<span class="font-label-md text-label-md text-secondary block">Assigned Tech</span>
+<span class="font-body-md text-body-md font-semibold text-ink mt-0.5 block truncate">Ahmed Raza (Van 12)</span>
+</div>
+<div>
+<span class="font-label-md text-label-md text-secondary block">Scheduled Date</span>
+<span class="font-body-md text-body-md font-semibold text-ink mt-0.5 block">Monday, Sep 7</span>
+</div>
+<div>
+<span class="font-label-md text-label-md text-secondary block">Arrival Window</span>
+<span class="font-body-md text-body-md font-semibold text-accent mt-0.5 block">09:00 - 10:30</span>
+</div>
+</div>
+<div class="mt-2 p-2.5 rounded-lg bg-surface-subtle flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-accent text-[18px]">notifications_active</span>
+<span class="font-body-sm text-body-sm text-ink">Client SMS alerts active</span>
+</div>
+<span class="font-label-md text-label-md font-semibold text-secondary">Auto-sync</span>
+</div>
+</div>
+</div>
+<!-- Bottom Sticky Actions -->
+<div class="px-4 flex flex-col gap-2.5">
+<button class="w-full h-12 rounded-xl bg-accent hover:bg-accent-deep text-surface font-headline-sm text-headline-sm font-semibold flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.99]" id="confirmDispatchBtn" type="button">
+<span>Confirm &amp; Dispatch Job</span>
+<span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+<button class="w-full h-11 rounded-xl bg-surface-subtle text-ink font-body-md text-body-md font-medium flex items-center justify-center gap-2 hover:bg-line transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px] text-ink-soft">forward_to_inbox</span>
+<span>Send Calendar Invite to Client</span>
+</button>
+</div>
+</div>
+<script>
+  // Simple micro-interaction: Date pills selection
+  document.querySelectorAll('.date-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.date-chip').forEach(c => {
+        c.className = 'date-chip flex-shrink-0 w-16 py-3 rounded-xl bg-surface text-ink hover:bg-surface-subtle shadow-sm flex flex-col items-center justify-center transition-transform active:scale-95 text-center';
+        const dayLabel = c.querySelector('span:first-child');
+        const numLabel = c.querySelector('span:nth-child(2)');
+        const dot = c.querySelector('span:last-child');
+        if (dayLabel) dayLabel.className = 'font-label-md text-label-md text-secondary tracking-wider uppercase';
+        if (numLabel) numLabel.className = 'font-headline-md text-headline-md font-semibold text-ink mt-0.5';
+        if (dot) dot.className = 'w-1.5 h-1.5 rounded-full bg-transparent mt-1';
+      });
+      chip.className = 'date-chip flex-shrink-0 w-16 py-3 rounded-xl bg-primary text-on-primary shadow-sm flex flex-col items-center justify-center transition-transform active:scale-95 text-center';
+      const dayLabel = chip.querySelector('span:first-child');
+      const numLabel = chip.querySelector('span:nth-child(2)');
+      const dot = chip.querySelector('span:last-child');
+      if (dayLabel) dayLabel.className = 'font-label-md text-label-md tracking-wider opacity-80 uppercase';
+      if (numLabel) numLabel.className = 'font-headline-md text-headline-md font-bold mt-0.5';
+      if (dot) dot.className = 'w-1.5 h-1.5 rounded-full bg-primary-fixed mt-1';
+    });
+  });
+
+  // Simple micro-interaction: Slot pills selection
+  document.querySelectorAll('.time-slot-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.time-slot-btn').forEach(b => {
+        b.className = 'time-slot-btn p-3 rounded-xl bg-surface text-ink hover:bg-surface-subtle shadow-sm flex items-center justify-between text-left transition-all';
+        const sub = b.querySelector('.min-w-0 span:last-child');
+        const icon = b.querySelector('.material-symbols-outlined');
+        if (sub) sub.className = 'font-label-md text-label-md text-secondary block mt-0.5';
+        if (icon) {
+          icon.textContent = 'radio_button_unchecked';
+          icon.className = 'material-symbols-outlined text-[20px] text-outline-variant flex-shrink-0';
+          icon.style.fontVariationSettings = "'FILL' 0";
+        }
+      });
+      btn.className = 'time-slot-btn p-3 rounded-xl bg-primary text-on-primary shadow-sm flex items-center justify-between text-left transition-all';
+      const sub = btn.querySelector('.min-w-0 span:last-child');
+      const icon = btn.querySelector('.material-symbols-outlined');
+      if (sub) sub.className = 'font-label-md text-label-md text-primary-fixed block mt-0.5';
+      if (icon) {
+        icon.textContent = 'check_circle';
+        icon.className = 'material-symbols-outlined text-[20px] text-primary-fixed flex-shrink-0';
+        icon.style.fontVariationSettings = "'FILL' 1";
+      }
+    });
+  });
+
+  // Confirmation CTA feedback
+  const confirmBtn = document.getElementById('confirmDispatchBtn');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', () => {
+      confirmBtn.innerHTML = `
+        <span class="material-symbols-outlined text-[20px] animate-spin">progress_activity</span>
+        <span>Dispatching Van #12...</span>
+      `;
+      confirmBtn.classList.add('opacity-90');
+      setTimeout(() => {
+        confirmBtn.innerHTML = `
+          <span class="material-symbols-outlined text-[20px]">done_all</span>
+          <span>Job Dispatched Successfully!</span>
+        `;
+        confirmBtn.classList.replace('bg-accent', 'bg-success');
+      }, 900);
+    });
+  }
+</script></main></body></html>
