@@ -1,0 +1,7 @@
+dist/
+src/generated/prisma/
+node_modules/
+.agents/
+.claude/
+.cursor/
+.devin/

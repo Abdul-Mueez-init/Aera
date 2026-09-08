@@ -34,6 +34,7 @@ backend/.env.*
 # Prisma
 backend/prisma/*.db
 backend/prisma/*.db-journal
+backend/src/generated/prisma/
 
 
 # Flutter/Dart/Pub related

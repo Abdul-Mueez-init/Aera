@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "invoices_companyId_jobId_key" ON "invoices"("companyId", "jobId");
