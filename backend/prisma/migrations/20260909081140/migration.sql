@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "customer_portal_tokens_companyId_customerId_revokedAt_expiresAt" RENAME TO "customer_portal_tokens_companyId_customerId_revokedAt_expir_idx";

@@ -1,5 +1,7 @@
+import { randomBytes, createHash } from "node:crypto";
 import { AppError } from "../../common/errors.js";
 import type { AuthContext } from "../../common/auth/auth.types.js";
+import { hashPassword } from "../../common/auth/password.js";
 import { prisma } from "../../db/prisma.js";
 
 export interface InviteMemberInput {
@@ -7,6 +9,16 @@ export interface InviteMemberInput {
   firstName: string;
   lastName: string;
   role: "OWNER" | "DISPATCHER" | "TECHNICIAN";
+}
+
+const INVITATION_TTL_DAYS = 7;
+
+function createInvitationToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+function hashInvitationToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 export async function listMembers(context: AuthContext) {
@@ -75,12 +87,19 @@ export async function inviteMember(
       );
     }
 
+    const invitationToken = createInvitationToken();
+    const invitationTokenExpiresAt = new Date(
+      Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000,
+    );
+
     const member = await tx.companyMember.create({
       data: {
         companyId: context.companyId,
         userId: user.id,
         role: input.role,
         status: "INVITED",
+        invitationTokenHash: hashInvitationToken(invitationToken),
+        invitationTokenExpiresAt,
       },
       select: {
         id: true,
@@ -98,8 +117,56 @@ export async function inviteMember(
       },
     });
 
-    return member;
+    // NOTE: Notifications module (docs/architecture.md ADR-009) should send
+    // this token to the invited user's email instead of returning it in the
+    // API response once an email adapter is wired up. Returning it here is a
+    // deliberate, temporary stand-in so invitations are usable end-to-end
+    // before Phase 10 (Notifications) lands.
+    return { ...member, invitationToken };
   });
+}
+
+export async function acceptInvitation(
+  token: string,
+  password: string,
+): Promise<{ userId: string; companyId: string }> {
+  const tokenHash = hashInvitationToken(token);
+
+  const member = await prisma.companyMember.findUnique({
+    where: { invitationTokenHash: tokenHash },
+  });
+
+  if (
+    !member ||
+    member.status !== "INVITED" ||
+    !member.invitationTokenExpiresAt ||
+    member.invitationTokenExpiresAt <= new Date()
+  ) {
+    throw new AppError(
+      "INVITATION_INVALID_OR_EXPIRED",
+      "This invitation link is invalid or has expired",
+      400,
+    );
+  }
+
+  const passwordHash = await hashPassword(password);
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: member.userId },
+      data: { passwordHash, isActive: true },
+    }),
+    prisma.companyMember.update({
+      where: { id: member.id },
+      data: {
+        status: "ACTIVE",
+        invitationTokenHash: null,
+        invitationTokenExpiresAt: null,
+      },
+    }),
+  ]);
+
+  return { userId: member.userId, companyId: member.companyId };
 }
 
 export async function updateMemberRole(

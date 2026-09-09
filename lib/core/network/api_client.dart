@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'api_response.dart';
 
+typedef TokenRefreshCallback = Future<String?> Function();
+
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient();
 });
@@ -17,6 +19,8 @@ class ApiClient {
   final http.Client _client;
   final String baseUrl;
   String? _accessToken;
+  TokenRefreshCallback? _onTokenRefresh;
+  bool _refreshInFlight = false;
 
   static String _defaultBaseUrl() {
     if (kIsWeb) {
@@ -34,6 +38,10 @@ class ApiClient {
 
   void setAccessToken(String? token) {
     _accessToken = token;
+  }
+
+  void setTokenRefreshCallback(TokenRefreshCallback? callback) {
+    _onTokenRefresh = callback;
   }
 
   String? get accessToken => _accessToken;
@@ -97,13 +105,39 @@ class ApiClient {
     );
   }
 
+  Future<http.Response> _sendWithRefresh(
+    Future<http.Response> Function() request,
+  ) async {
+    var response = await request();
+    if (response.statusCode != 401 ||
+        _onTokenRefresh == null ||
+        _refreshInFlight) {
+      return response;
+    }
+
+    _refreshInFlight = true;
+    try {
+      final newToken = await _onTokenRefresh!();
+      if (newToken == null || newToken.isEmpty) {
+        return response;
+      }
+      _accessToken = newToken;
+      response = await request();
+    } finally {
+      _refreshInFlight = false;
+    }
+    return response;
+  }
+
   Future<dynamic> get(
     String path, {
     Map<String, String>? queryParameters,
     Map<String, String>? headers,
   }) async {
     final uri = _buildUri(path, queryParameters);
-    final response = await _client.get(uri, headers: _buildHeaders(headers));
+    final response = await _sendWithRefresh(
+      () => _client.get(uri, headers: _buildHeaders(headers)),
+    );
     return _processResponse(response);
   }
 
@@ -114,10 +148,12 @@ class ApiClient {
     Map<String, String>? queryParameters,
   }) async {
     final uri = _buildUri(path, queryParameters);
-    final response = await _client.post(
-      uri,
-      headers: _buildHeaders(headers),
-      body: body != null ? jsonEncode(body) : null,
+    final response = await _sendWithRefresh(
+      () => _client.post(
+        uri,
+        headers: _buildHeaders(headers),
+        body: body != null ? jsonEncode(body) : null,
+      ),
     );
     return _processResponse(response);
   }
@@ -128,10 +164,12 @@ class ApiClient {
     Map<String, String>? headers,
   }) async {
     final uri = _buildUri(path);
-    final response = await _client.patch(
-      uri,
-      headers: _buildHeaders(headers),
-      body: body != null ? jsonEncode(body) : null,
+    final response = await _sendWithRefresh(
+      () => _client.patch(
+        uri,
+        headers: _buildHeaders(headers),
+        body: body != null ? jsonEncode(body) : null,
+      ),
     );
     return _processResponse(response);
   }
@@ -141,7 +179,9 @@ class ApiClient {
     Map<String, String>? headers,
   }) async {
     final uri = _buildUri(path);
-    final response = await _client.delete(uri, headers: _buildHeaders(headers));
+    final response = await _sendWithRefresh(
+      () => _client.delete(uri, headers: _buildHeaders(headers)),
+    );
     return _processResponse(response);
   }
 }

@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../common/auth/auth.middleware.js";
+import { authRateLimiter, refreshRateLimiter } from "../../common/rateLimit.js";
 import {
+  acceptInvitationAndLogin,
   getCurrentUser,
   login,
   register,
@@ -29,6 +31,11 @@ const refreshSchema = z.object({
   refreshToken: z.string().min(1),
 });
 
+const acceptInvitationSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(12),
+});
+
 function validationError(error: z.ZodError) {
   return {
     error: {
@@ -38,7 +45,7 @@ function validationError(error: z.ZodError) {
   };
 }
 
-router.post("/register", async (request, response) => {
+router.post("/register", authRateLimiter, async (request, response) => {
   const parsed = registerSchema.safeParse(request.body);
   if (!parsed.success) {
     response.status(422).json(validationError(parsed.error));
@@ -49,7 +56,7 @@ router.post("/register", async (request, response) => {
   response.status(201).json({ data: result });
 });
 
-router.post("/login", async (request, response) => {
+router.post("/login", authRateLimiter, async (request, response) => {
   const parsed = loginSchema.safeParse(request.body);
   if (!parsed.success) {
     response.status(422).json(validationError(parsed.error));
@@ -60,7 +67,7 @@ router.post("/login", async (request, response) => {
   response.status(200).json({ data: result });
 });
 
-router.post("/refresh", async (request, response) => {
+router.post("/refresh", refreshRateLimiter, async (request, response) => {
   const parsed = refreshSchema.safeParse(request.body);
   if (!parsed.success) {
     response.status(422).json(validationError(parsed.error));
@@ -70,6 +77,24 @@ router.post("/refresh", async (request, response) => {
   const result = await rotateRefreshSession(parsed.data.refreshToken);
   response.status(200).json({ data: result });
 });
+
+router.post(
+  "/accept-invitation",
+  authRateLimiter,
+  async (request, response) => {
+    const parsed = acceptInvitationSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json(validationError(parsed.error));
+      return;
+    }
+
+    const result = await acceptInvitationAndLogin(
+      parsed.data.token,
+      parsed.data.password,
+    );
+    response.status(200).json({ data: result });
+  },
+);
 
 router.post("/logout", async (request, response) => {
   const parsed = refreshSchema.safeParse(request.body);

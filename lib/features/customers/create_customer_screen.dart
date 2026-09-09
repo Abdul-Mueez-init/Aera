@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
@@ -7,26 +9,31 @@ import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_text_field.dart';
+import 'data/customers_repository.dart';
+import 'providers/customers_provider.dart';
 
-class CreateCustomerScreen extends StatefulWidget {
+class CreateCustomerScreen extends ConsumerStatefulWidget {
   const CreateCustomerScreen({super.key});
 
   @override
-  State<CreateCustomerScreen> createState() => _CreateCustomerScreenState();
+  ConsumerState<CreateCustomerScreen> createState() =>
+      _CreateCustomerScreenState();
 }
 
-class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
-  String _classification = 'residential';
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController(text: '+92 (300) ');
+class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
   final _cityController = TextEditingController(text: 'Lahore');
   final _notesController = TextEditingController();
+  bool _saving = false;
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _addressController.dispose();
@@ -35,11 +42,62 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
     super.dispose();
   }
 
-  void _saveCustomer() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Customer account created successfully!')),
-    );
-    context.pop();
+  Future<void> _saveCustomer() async {
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
+    if (firstName.isEmpty || lastName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('First and last name are required')),
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      final repo = ref.read(customersRepositoryProvider);
+      final addressLine = _addressController.text.trim();
+      final city = _cityController.text.trim();
+
+      await repo.createCustomer(
+        CreateCustomerInput(
+          firstName: firstName,
+          lastName: lastName,
+          phone: _phoneController.text.trim(),
+          email: _emailController.text.trim(),
+          notes: _notesController.text.trim(),
+          address: addressLine.isNotEmpty && city.isNotEmpty
+              ? CreateAddressInput(
+                  label: 'Primary',
+                  line1: addressLine,
+                  city: city,
+                  countryCode: 'PK',
+                )
+              : null,
+        ),
+      );
+
+      ref.invalidate(customersListProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Customer account created successfully!')),
+        );
+        context.pop();
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not create customer')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -55,60 +113,6 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           children: [
-            // Header Context Card
-            AeraCard(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AeraColors.accentSoft,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.speed, color: AeraColors.accent, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Fast Client Registration', style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
-                        Text('Takes ~45s in field for immediate job booking and quoting.', style: AeraTypography.bodySm.copyWith(fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Account Classification
-            AeraCard(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('ACCOUNT CLASSIFICATION', style: AeraTypography.labelUpper.copyWith(fontSize: 10)),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _classPill('Residential', Icons.home, 'residential'),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _classPill('Commercial', Icons.corporate_fare, 'commercial'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Primary Contact Form
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -116,40 +120,43 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.person, size: 18, color: AeraColors.accent),
+                      const Icon(Icons.person,
+                          size: 18, color: AeraColors.accent),
                       const SizedBox(width: 8),
-                      Text('Primary Contact Information', style: AeraTypography.h3.copyWith(fontSize: 15)),
+                      Text('Primary Contact Information',
+                          style: AeraTypography.h3.copyWith(fontSize: 15)),
                     ],
                   ),
                   const SizedBox(height: 14),
                   AeraTextField(
-                    label: 'Full Customer / Entity Name *',
-                    hintText: 'e.g. Sarah Khan or Apex Holdings',
-                    controller: _nameController,
-                    prefixIcon: const Icon(Icons.badge_outlined, size: 20, color: AeraColors.outline),
+                    label: 'First Name *',
+                    hintText: 'Sarah',
+                    controller: _firstNameController,
                   ),
                   const SizedBox(height: 14),
                   AeraTextField(
-                    label: 'Primary Mobile Number *',
+                    label: 'Last Name *',
+                    hintText: 'Khan',
+                    controller: _lastNameController,
+                  ),
+                  const SizedBox(height: 14),
+                  AeraTextField(
+                    label: 'Primary Mobile Number',
                     hintText: '+92 (300) 000-0000',
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
-                    prefixIcon: const Icon(Icons.phone_iphone, size: 20, color: AeraColors.outline),
                   ),
                   const SizedBox(height: 14),
                   AeraTextField(
-                    label: 'Email Address (Quotes & Billing)',
+                    label: 'Email Address',
                     hintText: 'client@example.com',
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    prefixIcon: const Icon(Icons.mail_outline, size: 20, color: AeraColors.outline),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 14),
-
-            // Service Location
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -157,29 +164,29 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.location_on, size: 18, color: AeraColors.accent),
+                      const Icon(Icons.location_on,
+                          size: 18, color: AeraColors.accent),
                       const SizedBox(width: 8),
-                      Text('Primary Service Address', style: AeraTypography.h3.copyWith(fontSize: 15)),
+                      Text('Primary Service Address',
+                          style: AeraTypography.h3.copyWith(fontSize: 15)),
                     ],
                   ),
                   const SizedBox(height: 14),
                   AeraTextField(
-                    label: 'Street & House / Suite Number *',
-                    hintText: 'e.g. House 42-B, Block K, Gulberg III',
+                    label: 'Street & House / Suite Number',
+                    hintText: 'House 42-B, Block K, Gulberg III',
                     controller: _addressController,
-                    prefixIcon: const Icon(Icons.home_outlined, size: 20, color: AeraColors.outline),
                   ),
                   const SizedBox(height: 14),
                   AeraTextField(
-                    label: 'City / District *',
+                    label: 'City / District',
                     hintText: 'Lahore',
                     controller: _cityController,
-                    prefixIcon: const Icon(Icons.location_city, size: 20, color: AeraColors.outline),
                   ),
                   const SizedBox(height: 14),
                   AeraTextField(
-                    label: 'Site Access Notes / Gate Code',
-                    hintText: 'e.g. Gate code #4290, security guard on front porch',
+                    label: 'Site Access Notes',
+                    hintText: 'Gate code, parking instructions...',
                     controller: _notesController,
                     maxLines: 2,
                   ),
@@ -187,46 +194,14 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
               ),
             ),
             const SizedBox(height: 24),
-
             AeraButton(
-              text: 'Save Customer & Book Job',
-              icon: const Icon(Icons.check, size: 18, color: Colors.white),
-              onPressed: _saveCustomer,
+              text: _saving ? 'Saving...' : 'Save Customer',
+              icon: _saving
+                  ? null
+                  : const Icon(Icons.check, size: 18, color: Colors.white),
+              onPressed: _saving ? null : _saveCustomer,
             ),
             const SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _classPill(String title, IconData icon, String value) {
-    final isSelected = _classification == value;
-    return InkWell(
-      onTap: () => setState(() => _classification = value),
-      borderRadius: AeraRadii.borderMd,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? AeraColors.accentSoft : AeraColors.surfaceSubtle,
-          borderRadius: AeraRadii.borderMd,
-          border: Border.all(
-            color: isSelected ? AeraColors.accent : Colors.transparent,
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18, color: isSelected ? AeraColors.accent : AeraColors.inkSoft),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: AeraTypography.bodyMedium.copyWith(
-                fontWeight: FontWeight.w700,
-                color: isSelected ? AeraColors.accent : AeraColors.ink,
-              ),
-            ),
           ],
         ),
       ),

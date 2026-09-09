@@ -5,7 +5,9 @@ import '../../../core/network/api_client.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final client = ref.watch(apiClientProvider);
-  return AuthRepository(client);
+  final repo = AuthRepository(client);
+  client.setTokenRefreshCallback(repo.refreshAccessToken);
+  return repo;
 });
 
 class AuthUser {
@@ -129,14 +131,53 @@ class AuthRepository {
     return session;
   }
 
-  Future<void> logout() async {
+  Future<String?> refreshAccessToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_sessionKey);
+    if (raw == null) return null;
+
     try {
-      await _client.post('/api/v1/auth/logout');
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final refreshToken = json['refreshToken'] as String?;
+      if (refreshToken == null || refreshToken.isEmpty) return null;
+
+      final res = await _client.post(
+        '/api/v1/auth/refresh',
+        body: {'refreshToken': refreshToken},
+      );
+      final data = res as Map<String, dynamic>;
+      final newAccessToken = data['accessToken'] as String;
+      final newRefreshToken =
+          data['refreshToken'] as String? ?? refreshToken;
+
+      json['accessToken'] = newAccessToken;
+      json['refreshToken'] = newRefreshToken;
+      await prefs.setString(_sessionKey, jsonEncode(json));
+      _client.setAccessToken(newAccessToken);
+      return newAccessToken;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_sessionKey);
+    try {
+      if (raw != null) {
+        final json = jsonDecode(raw) as Map<String, dynamic>;
+        final refreshToken = json['refreshToken'] as String?;
+        if (refreshToken != null && refreshToken.isNotEmpty) {
+          await _client.post(
+            '/api/v1/auth/logout',
+            body: {'refreshToken': refreshToken},
+          );
+        }
+      }
     } catch (_) {
       // Best-effort remote logout
     }
     _client.setAccessToken(null);
-    final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_sessionKey);
   }
 

@@ -137,15 +137,17 @@ model Company {
 }
 
 model CompanyMember {
-  id        String              @id @default(uuid()) @db.Uuid
-  companyId String              @db.Uuid
-  userId    String              @db.Uuid
-  role      CompanyMemberRole
-  status    CompanyMemberStatus @default(INVITED)
-  company   Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
+  id                       String              @id @default(uuid()) @db.Uuid
+  companyId                String              @db.Uuid
+  userId                   String              @db.Uuid
+  role                     CompanyMemberRole
+  status                   CompanyMemberStatus @default(INVITED)
+  invitationTokenHash      String?             @unique
+  invitationTokenExpiresAt DateTime?
+  company                  Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user                     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
 
   @@unique([companyId, userId])
   @@index([companyId, role, status])

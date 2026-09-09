@@ -9,6 +9,7 @@ import {
   hashRefreshToken,
 } from "../../common/auth/tokens.js";
 import type { AuthContext } from "../../common/auth/auth.types.js";
+import { acceptInvitation } from "../companies/member.service.js";
 
 interface RegisterInput {
   email: string;
@@ -217,12 +218,40 @@ export async function rotateRefreshSession(
     include: { user: true, company: true },
   });
 
-  if (
-    !session ||
-    session.revokedAt ||
-    session.expiresAt <= new Date() ||
-    !session.user.isActive
-  ) {
+  if (!session) {
+    throw new AppError(
+      "AUTH_SESSION_EXPIRED",
+      "Refresh session has expired",
+      401,
+    );
+  }
+
+  // Reuse detection (docs/architecture.md section 6: "Revoke refresh session
+  // on suspicious reuse"). A refresh token is single-use: once rotated, the
+  // old token is marked revoked and replaced. If a *revoked* token is
+  // presented again, that token has leaked (device theft, log exposure,
+  // etc). The correct response is not just to reject this call, but to
+  // revoke the entire active session chain so the attacker's stolen token
+  // (and any session descended from it) stops working, forcing the
+  // legitimate user to log in again.
+  if (session.revokedAt) {
+    await prisma.refreshSession.updateMany({
+      where: {
+        userId: session.userId,
+        companyId: session.companyId,
+        revokedAt: null,
+      },
+      data: { revokedAt: new Date() },
+    });
+
+    throw new AppError(
+      "AUTH_SESSION_REUSE_DETECTED",
+      "This session has been revoked. Please log in again.",
+      401,
+    );
+  }
+
+  if (session.expiresAt <= new Date() || !session.user.isActive) {
     throw new AppError(
       "AUTH_SESSION_EXPIRED",
       "Refresh session has expired",
@@ -307,6 +336,41 @@ export async function revokeRefreshSession(
     },
     data: { revokedAt: new Date(), lastUsedAt: new Date() },
   });
+}
+
+export async function acceptInvitationAndLogin(
+  token: string,
+  password: string,
+): Promise<AuthResult> {
+  const { userId, companyId } = await acceptInvitation(token, password);
+
+  const [user, membership] = await Promise.all([
+    prisma.user.findUniqueOrThrow({ where: { id: userId } }),
+    prisma.companyMember.findUniqueOrThrow({
+      where: { companyId_userId: { companyId, userId } },
+      include: { company: true },
+    }),
+  ]);
+
+  return issueSession(
+    {
+      userId: user.id,
+      sessionId: randomUUID(),
+      companyId,
+      role: membership.role,
+    },
+    {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    },
+    {
+      id: membership.company.id,
+      name: membership.company.name,
+      slug: membership.company.slug,
+    },
+  );
 }
 
 export async function getCurrentUser(context: AuthContext) {

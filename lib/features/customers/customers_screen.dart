@@ -1,72 +1,54 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_card.dart';
+import 'data/customers_repository.dart';
+import 'providers/customers_provider.dart';
 
-class CustomersScreen extends StatefulWidget {
+class CustomersScreen extends ConsumerStatefulWidget {
   const CustomersScreen({super.key});
 
   @override
-  State<CustomersScreen> createState() => _CustomersScreenState();
+  ConsumerState<CustomersScreen> createState() => _CustomersScreenState();
 }
 
-class _CustomersScreenState extends State<CustomersScreen> {
-  String _activeTag = 'All';
+class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   final _searchController = TextEditingController();
+  String _debouncedSearch = '';
 
-  final List<_CustomerItem> _customers = const [
-    _CustomerItem(
-      id: 'CUST-1002',
-      name: 'Sarah Khan',
-      address: 'Gulberg III, Sector B, Lahore',
-      phone: '+92 (300) 489-2019',
-      activeJobs: 1,
-      type: 'Residential',
-      initials: 'SK',
-      balance: 'Rs 14,500',
-    ),
-    _CustomerItem(
-      id: 'CUST-1005',
-      name: 'Malik Textiles Head Office',
-      address: 'Ferozepur Road Industrial Zone',
-      phone: '+92 (42) 3589-1100',
-      activeJobs: 1,
-      type: 'Commercial',
-      initials: 'MT',
-      balance: 'Rs 88,000',
-    ),
-    _CustomerItem(
-      id: 'CUST-1011',
-      name: 'Dr. Tariq Parvez',
-      address: 'DHA Phase 6, Sector C, Lahore',
-      phone: '+92 (321) 902-3344',
-      activeJobs: 0,
-      type: 'Residential',
-      initials: 'TP',
-      balance: 'Paid Up',
-    ),
-    _CustomerItem(
-      id: 'CUST-1019',
-      name: 'Bhatti Medical Plaza',
-      address: 'Cantt Metro Road, Lahore',
-      phone: '+92 (42) 3662-8899',
-      activeJobs: 1,
-      type: 'Commercial',
-      initials: 'BM',
-      balance: 'Rs 42,000',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  void _onSearchChanged() {
+    final value = _searchController.text.trim();
+    if (value == _debouncedSearch) return;
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
+      if (!mounted || _searchController.text.trim() != value) return;
+      setState(() => _debouncedSearch = value);
+      ref.read(customersQueryProvider.notifier).state = CustomersQuery(
+        search: value,
+      );
+    });
+  }
 
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final customersAsync = ref.watch(customersListProvider);
+
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       appBar: AppBar(
@@ -89,15 +71,19 @@ class _CustomersScreenState extends State<CustomersScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('AERA HVAC', style: AeraTypography.labelUpper.copyWith(fontSize: 9)),
-                Text('Customers', style: AeraTypography.h3.copyWith(fontSize: 16, fontWeight: FontWeight.w700)),
+                Text('AERA HVAC',
+                    style: AeraTypography.labelUpper.copyWith(fontSize: 9)),
+                Text('Customers',
+                    style: AeraTypography.h3
+                        .copyWith(fontSize: 16, fontWeight: FontWeight.w700)),
               ],
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: AeraColors.ink, size: 22),
+            icon: const Icon(Icons.notifications_outlined,
+                color: AeraColors.ink, size: 22),
             onPressed: () => context.push('/notifications'),
           ),
           IconButton(
@@ -117,230 +103,256 @@ class _CustomersScreenState extends State<CustomersScreen> {
         icon: const Icon(Icons.person_add, size: 20),
         label: Text(
           'Add Customer',
-          style: AeraTypography.bodyMedium.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+          style: AeraTypography.bodyMedium
+              .copyWith(color: Colors.white, fontWeight: FontWeight.w700),
         ),
         onPressed: () => context.push('/create-customer'),
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          children: [
-            // Header Stats
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: customersAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => _ErrorState(
+            message: error is ApiException
+                ? error.message
+                : 'Could not load customers',
+            onRetry: () => ref.invalidate(customersListProvider),
+          ),
+          data: (page) => RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(customersListProvider);
+              await ref.read(customersListProvider.future);
+            },
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Customer Accounts', style: AeraTypography.display.copyWith(fontSize: 22)),
-                    Row(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(width: 6, height: 6, decoration: const BoxDecoration(color: AeraColors.success, shape: BoxShape.circle)),
-                        const SizedBox(width: 6),
-                        Text('148 Active HVAC Accounts', style: AeraTypography.bodySm),
+                        Text('Customer Accounts',
+                            style:
+                                AeraTypography.display.copyWith(fontSize: 22)),
+                        Row(
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: AeraColors.success,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text('${page.meta.total} Active Accounts',
+                                style: AeraTypography.bodySm),
+                          ],
+                        ),
                       ],
                     ),
                   ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Search Bar
-            Container(
-              decoration: BoxDecoration(
-                color: AeraColors.surface,
-                borderRadius: AeraRadii.borderMd,
-                border: Border.all(color: AeraColors.line),
-              ),
-              child: TextField(
-                controller: _searchController,
-                style: AeraTypography.bodySm.copyWith(color: AeraColors.ink),
-                decoration: InputDecoration(
-                  hintText: 'Search name, phone, address, serial...',
-                  hintStyle: AeraTypography.bodySm.copyWith(color: AeraColors.outline),
-                  prefixIcon: const Icon(Icons.search, size: 20, color: AeraColors.inkSoft),
-                  suffixIcon: const Icon(Icons.tune, size: 18, color: AeraColors.inkSoft),
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Filter Tags
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _tagChip('All', '148'),
-                  const SizedBox(width: 8),
-                  _tagChip('Residential', '116'),
-                  const SizedBox(width: 8),
-                  _tagChip('Commercial', '32'),
-                  const SizedBox(width: 8),
-                  _tagChip('Active Jobs', '4'),
-                  const SizedBox(width: 8),
-                  _tagChip('Overdue', '2', isWarning: true),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Customer Cards List
-            ..._customers.map((cust) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: AeraCard(
-                    padding: const EdgeInsets.all(16),
-                    onTap: () => context.push('/customers/${cust.id}'),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: AeraColors.surfaceSubtle,
-                                  child: Text(
-                                    cust.initials,
-                                    style: AeraTypography.h3.copyWith(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: AeraColors.accent,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Text(cust.name, style: AeraTypography.h3.copyWith(fontSize: 15)),
-                                        const SizedBox(width: 4),
-                                        const Icon(Icons.verified, size: 14, color: AeraColors.accent),
-                                      ],
-                                    ),
-                                    Text(cust.address, style: AeraTypography.bodySm.copyWith(fontSize: 11)),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            if (cust.activeJobs > 0)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: AeraColors.accentSoft,
-                                  borderRadius: AeraRadii.borderFull,
-                                ),
-                                child: Text(
-                                  '${cust.activeJobs} Active',
-                                  style: AeraTypography.label.copyWith(
-                                    color: AeraColors.accent,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        const Divider(color: AeraColors.line),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.phone_outlined, size: 14, color: AeraColors.inkSoft),
-                                const SizedBox(width: 4),
-                                Text(cust.phone, style: AeraTypography.bodySm.copyWith(fontSize: 11)),
-                              ],
-                            ),
-                            Text(
-                              cust.balance,
-                              style: AeraTypography.label.copyWith(
-                                color: cust.balance.contains('Paid') ? AeraColors.success : AeraColors.ink,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AeraColors.surface,
+                    borderRadius: AeraRadii.borderMd,
+                    border: Border.all(color: AeraColors.line),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    style: AeraTypography.bodySm.copyWith(color: AeraColors.ink),
+                    decoration: InputDecoration(
+                      hintText: 'Search name, phone, email...',
+                      hintStyle: AeraTypography.bodySm
+                          .copyWith(color: AeraColors.outline),
+                      prefixIcon: const Icon(Icons.search,
+                          size: 20, color: AeraColors.inkSoft),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
                     ),
                   ),
-                )),
-            const SizedBox(height: 60),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _tagChip(String title, String count, {bool isWarning = false}) {
-    final isSelected = _activeTag == title;
-
-    return InkWell(
-      onTap: () => setState(() => _activeTag = title),
-      borderRadius: AeraRadii.borderFull,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isWarning ? AeraColors.warning : AeraColors.accent)
-              : AeraColors.surface,
-          borderRadius: AeraRadii.borderFull,
-          border: Border.all(
-            color: isSelected ? Colors.transparent : AeraColors.line,
+                ),
+                const SizedBox(height: 14),
+                if (page.items.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          const Icon(Icons.people_outline,
+                              size: 48, color: AeraColors.outline),
+                          const SizedBox(height: 12),
+                          Text(
+                            _debouncedSearch.isEmpty
+                                ? 'No customers yet'
+                                : 'No matches found',
+                            style: AeraTypography.bodyMedium,
+                          ),
+                          if (_debouncedSearch.isEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text('Add your first customer to get started',
+                                style: AeraTypography.bodySm),
+                          ],
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  ...page.items.map(
+                    (cust) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _CustomerCard(customer: cust),
+                    ),
+                  ),
+                if (page.meta.pageCount > 1) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        onPressed: page.meta.page > 1
+                            ? () {
+                                ref.read(customersQueryProvider.notifier).state =
+                                    CustomersQuery(
+                                  page: page.meta.page - 1,
+                                  search: _debouncedSearch,
+                                );
+                              }
+                            : null,
+                        icon: const Icon(Icons.chevron_left),
+                      ),
+                      Text('Page ${page.meta.page} of ${page.meta.pageCount}',
+                          style: AeraTypography.bodySm),
+                      IconButton(
+                        onPressed: page.meta.page < page.meta.pageCount
+                            ? () {
+                                ref.read(customersQueryProvider.notifier).state =
+                                    CustomersQuery(
+                                  page: page.meta.page + 1,
+                                  search: _debouncedSearch,
+                                );
+                              }
+                            : null,
+                        icon: const Icon(Icons.chevron_right),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 60),
+              ],
+            ),
           ),
-        ),
-        child: Row(
-          children: [
-            Text(
-              title,
-              style: AeraTypography.label.copyWith(
-                color: isSelected ? Colors.white : AeraColors.ink,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              count,
-              style: AeraTypography.label.copyWith(
-                color: isSelected ? Colors.white70 : AeraColors.inkSoft,
-                fontSize: 10,
-              ),
-            ),
-          ],
         ),
       ),
     );
   }
 }
 
-class _CustomerItem {
-  const _CustomerItem({
-    required this.id,
-    required this.name,
-    required this.address,
-    required this.phone,
-    required this.activeJobs,
-    required this.type,
-    required this.initials,
-    required this.balance,
-  });
+class _CustomerCard extends StatelessWidget {
+  const _CustomerCard({required this.customer});
 
-  final String id;
-  final String name;
-  final String address;
-  final String phone;
-  final int activeJobs;
-  final String type;
-  final String initials;
-  final String balance;
+  final Customer customer;
+
+  @override
+  Widget build(BuildContext context) {
+    final address = customer.serviceAddresses.isNotEmpty
+        ? customer.serviceAddresses.first.formatted
+        : 'No address on file';
+
+    return AeraCard(
+      padding: const EdgeInsets.all(16),
+      onTap: () => context.push('/customers/${customer.id}'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: AeraColors.surfaceSubtle,
+                child: Text(
+                  customer.initials,
+                  style: AeraTypography.h3.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AeraColors.accent,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(customer.fullName,
+                        style: AeraTypography.h3.copyWith(fontSize: 15)),
+                    Text(address,
+                        style: AeraTypography.bodySm.copyWith(fontSize: 11),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (customer.phone != null || customer.email != null) ...[
+            const SizedBox(height: 12),
+            const Divider(color: AeraColors.line),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                if (customer.phone != null) ...[
+                  const Icon(Icons.phone_outlined,
+                      size: 14, color: AeraColors.inkSoft),
+                  const SizedBox(width: 4),
+                  Text(customer.phone!,
+                      style: AeraTypography.bodySm.copyWith(fontSize: 11)),
+                ],
+                const Spacer(),
+                if (customer.email != null)
+                  Flexible(
+                    child: Text(
+                      customer.email!,
+                      style: AeraTypography.bodySm.copyWith(fontSize: 11),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: AeraColors.warning),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
+        ),
+      ),
+    );
+  }
 }
