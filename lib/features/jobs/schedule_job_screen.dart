@@ -1,78 +1,237 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
+import 'data/jobs_repository.dart';
+import 'providers/jobs_provider.dart';
 
-class ScheduleJobScreen extends StatefulWidget {
+class _TimeSlot {
+  const _TimeSlot(
+    this.label,
+    this.startHour,
+    this.startMinute,
+    this.endHour,
+    this.endMinute,
+  );
+  final String label;
+  final int startHour;
+  final int startMinute;
+  final int endHour;
+  final int endMinute;
+}
+
+const _slots = <_TimeSlot>[
+  _TimeSlot('09:00 - 11:00', 9, 0, 11, 0),
+  _TimeSlot('14:00 - 16:00', 14, 0, 16, 0),
+  _TimeSlot('16:30 - 18:30', 16, 30, 18, 30),
+];
+
+class ScheduleJobScreen extends ConsumerStatefulWidget {
   const ScheduleJobScreen({super.key});
 
   @override
-  State<ScheduleJobScreen> createState() => _ScheduleJobScreenState();
+  ConsumerState<ScheduleJobScreen> createState() => _ScheduleJobScreenState();
 }
 
-class _ScheduleJobScreenState extends State<ScheduleJobScreen> {
+class _ScheduleJobScreenState extends ConsumerState<ScheduleJobScreen> {
   int _selectedDay = 0;
-  String _selectedSlot = '14:00 - 16:00';
-  String _selectedTech = 'Ahmed Raza';
+  int _selectedSlot = 1;
+  String? _selectedTechnicianId;
+  bool _initializedFromDraft = false;
+  bool _submitting = false;
 
-  final List<String> _slots = [
-    '09:00 - 11:00',
-    '14:00 - 16:00',
-    '16:30 - 18:30',
-  ];
+  late final List<DateTime> _days = List.generate(
+    5,
+    (i) => DateTime.now().add(Duration(days: i)),
+  );
+
+  Future<void> _confirm(Job job) async {
+    final day = _days[_selectedDay];
+    final slot = _slots[_selectedSlot];
+    final scheduledStart = DateTime(
+      day.year,
+      day.month,
+      day.day,
+      slot.startHour,
+      slot.startMinute,
+    );
+    final scheduledEnd = DateTime(
+      day.year,
+      day.month,
+      day.day,
+      slot.endHour,
+      slot.endMinute,
+    );
+
+    setState(() => _submitting = true);
+    try {
+      final repo = ref.read(jobsRepositoryProvider);
+      final result = await repo.scheduleJob(
+        job.id,
+        scheduledStart: scheduledStart,
+        scheduledEnd: scheduledEnd,
+        reschedule: job.status == 'SCHEDULED',
+      );
+
+      if (_selectedTechnicianId != job.assignedTechnician?.id) {
+        await repo.assignTechnician(job.id, _selectedTechnicianId);
+      }
+
+      ref.invalidate(jobsListProvider);
+      ref.invalidate(jobDetailProvider(job.id));
+      ref.read(jobDraftProvider.notifier).state = null;
+
+      if (mounted) {
+        final warningText = result.warnings.isNotEmpty
+            ? ' — heads up: technician has ${result.warnings.length} overlapping job(s)'
+            : '';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Job dispatched$warningText')));
+        context.go('/dashboard');
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not schedule job')));
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final job = ref.watch(jobDraftProvider);
+    final techniciansAsync = ref.watch(techniciansProvider);
+
+    if (job == null) {
+      return Scaffold(
+        backgroundColor: AeraColors.canvas,
+        appBar: const AeraAppBar(title: 'Schedule Dispatch', showBrand: true),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.event_busy,
+                    size: 48,
+                    color: AeraColors.outline,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No job selected to schedule',
+                    style: AeraTypography.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Start from a job\'s detail screen or the create-job flow.',
+                    style: AeraTypography.bodySm,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  AeraButton(
+                    text: 'Back to Jobs',
+                    isFullWidth: false,
+                    onPressed: () => context.go('/jobs'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!_initializedFromDraft) {
+      _selectedTechnicianId = job.assignedTechnician?.id;
+      _initializedFromDraft = true;
+    }
+
     return Scaffold(
       backgroundColor: AeraColors.canvas,
-      appBar: const AeraAppBar(
+      appBar: AeraAppBar(
         title: 'Schedule Dispatch',
-        subtitle: 'Order #JOB-8492',
+        subtitle: 'Order #${job.jobNumber}',
         showBrand: true,
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           children: [
-            // Job Context Ribbon Banner
+            // Job Context Banner
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: AeraColors.accentSoft,
-                          borderRadius: BorderRadius.circular(8),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: AeraColors.accentSoft,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.hvac,
+                            color: AeraColors.accent,
+                            size: 22,
+                          ),
                         ),
-                        child: const Icon(Icons.hvac, color: AeraColors.accent, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Sarah Khan', style: AeraTypography.h3.copyWith(fontSize: 15)),
-                          Text('Gulberg III · AC Not Cooling', style: AeraTypography.bodySm.copyWith(fontSize: 11)),
-                        ],
-                      ),
-                    ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                job.customer.fullName,
+                                style: AeraTypography.h3.copyWith(fontSize: 15),
+                              ),
+                              Text(
+                                '${job.serviceAddress.city} · ${job.serviceType}',
+                                style: AeraTypography.bodySm.copyWith(
+                                  fontSize: 11,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: AeraColors.warningSoft,
                       borderRadius: AeraRadii.borderFull,
                     ),
                     child: Text(
-                      'High Priority',
+                      job.priority,
                       style: AeraTypography.label.copyWith(
                         color: AeraColors.warning,
                         fontSize: 10,
@@ -85,121 +244,79 @@ class _ScheduleJobScreenState extends State<ScheduleJobScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Step 1: Date Selection
+            // Step 1: Date
             Row(
               children: [
-                Container(
-                  width: 20,
-                  height: 20,
-                  decoration: const BoxDecoration(
-                    color: AeraColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: Text(
-                      '1',
-                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
+                _stepBadge('1'),
                 const SizedBox(width: 8),
-                Text('Select Service Date', style: AeraTypography.h3.copyWith(fontSize: 15)),
+                Text(
+                  'Select Service Date',
+                  style: AeraTypography.h3.copyWith(fontSize: 15),
+                ),
               ],
             ),
             const SizedBox(height: 10),
             Row(
-              children: [
-                _dayChip('MON', '7', 0),
-                const SizedBox(width: 8),
-                _dayChip('TUE', '8', 1),
-                const SizedBox(width: 8),
-                _dayChip('WED', '9', 2),
-                const SizedBox(width: 8),
-                _dayChip('THU', '10', 3),
-                const SizedBox(width: 8),
-                _dayChip('FRI', '11', 4),
-              ],
+              children: List.generate(_days.length, (index) {
+                final day = _days[index];
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      right: index == _days.length - 1 ? 0 : 8,
+                    ),
+                    child: _dayChip(day, index),
+                  ),
+                );
+              }),
             ),
             const SizedBox(height: 20),
 
-            // Step 2: Time Slot Window
+            // Step 2: Time slot
             Row(
               children: [
-                Container(
-                  width: 20,
-                  height: 20,
-                  decoration: const BoxDecoration(
-                    color: AeraColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: Text(
-                      '2',
-                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
+                _stepBadge('2'),
                 const SizedBox(width: 8),
-                Text('Arrival Window', style: AeraTypography.h3.copyWith(fontSize: 15)),
+                Text(
+                  'Arrival Window',
+                  style: AeraTypography.h3.copyWith(fontSize: 15),
+                ),
               ],
             ),
             const SizedBox(height: 10),
-            ..._slots.map((slot) {
-              final isSelected = _selectedSlot == slot;
-              final isRecommended = slot == '14:00 - 16:00';
-
+            ...List.generate(_slots.length, (index) {
+              final slot = _slots[index];
+              final isSelected = _selectedSlot == index;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: AeraCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  backgroundColor: isSelected ? AeraColors.accentSoft : AeraColors.surface,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  backgroundColor: isSelected
+                      ? AeraColors.accentSoft
+                      : AeraColors.surface,
                   borderColor: isSelected ? AeraColors.accent : AeraColors.line,
-                  onTap: () => setState(() => _selectedSlot = slot),
+                  onTap: () => setState(() => _selectedSlot = index),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.schedule,
-                            size: 18,
-                            color: isSelected ? AeraColors.accent : AeraColors.inkSoft,
-                          ),
-                          const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                slot,
-                                style: AeraTypography.bodyMedium.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: isSelected ? AeraColors.accent : AeraColors.ink,
-                                ),
-                              ),
-                              if (isRecommended)
-                                Text(
-                                  'Optimal: Shortest transit from Model Town',
-                                  style: AeraTypography.bodySm.copyWith(
-                                    fontSize: 11,
-                                    color: AeraColors.accent,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ],
+                      Icon(
+                        Icons.schedule,
+                        size: 18,
+                        color: isSelected
+                            ? AeraColors.accent
+                            : AeraColors.inkSoft,
                       ),
-                      if (isRecommended)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AeraColors.accent,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'RECOMMENDED',
-                            style: AeraTypography.labelUpper.copyWith(fontSize: 8, color: Colors.white),
-                          ),
+                      const SizedBox(width: 10),
+                      Text(
+                        slot.label,
+                        style: AeraTypography.bodyMedium.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: isSelected
+                              ? AeraColors.accent
+                              : AeraColors.ink,
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -207,45 +324,63 @@ class _ScheduleJobScreenState extends State<ScheduleJobScreen> {
             }),
             const SizedBox(height: 20),
 
-            // Step 3: Assign Technician
+            // Step 3: Technician
             Row(
               children: [
-                Container(
-                  width: 20,
-                  height: 20,
-                  decoration: const BoxDecoration(
-                    color: AeraColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: Text(
-                      '3',
-                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
+                _stepBadge('3'),
                 const SizedBox(width: 8),
-                Text('Assign Lead Technician', style: AeraTypography.h3.copyWith(fontSize: 15)),
+                Text(
+                  'Assign Lead Technician',
+                  style: AeraTypography.h3.copyWith(fontSize: 15),
+                ),
               ],
             ),
             const SizedBox(height: 10),
-
-            _techOption('Ahmed Raza', 'Lead Tech · Van #4', '3.4 km from site (12 min transit)', 'AR', true),
-            const SizedBox(height: 8),
-            _techOption('James Miller', 'Commercial Specialist · Van #2', '9.2 km away · Finish job at 13:30', 'JM', false),
-            const SizedBox(height: 8),
-            _techOption('Omar Khan', 'Field Tech · Standby Base', '4.5 km away · Ready now', 'OK', false),
+            techniciansAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              ),
+              error: (error, _) => Text(
+                error is ApiException
+                    ? error.message
+                    : 'Could not load technicians',
+                style: AeraTypography.bodySm.copyWith(color: AeraColors.danger),
+              ),
+              data: (technicians) {
+                if (technicians.isEmpty) {
+                  return Text(
+                    'No active technicians on this company yet',
+                    style: AeraTypography.bodySm,
+                  );
+                }
+                return Column(
+                  children: technicians
+                      .map(
+                        (tech) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _techOption(tech),
+                        ),
+                      )
+                      .toList(),
+                );
+              },
+            ),
             const SizedBox(height: 24),
 
             AeraButton(
-              text: 'Confirm Dispatch & Alert Crew',
-              icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Job dispatched to Ahmed Raza')),
-                );
-                context.go('/dashboard');
-              },
+              text: _submitting
+                  ? 'Dispatching...'
+                  : 'Confirm Dispatch & Alert Crew',
+              icon: _submitting
+                  ? null
+                  : const Icon(
+                      Icons.send_rounded,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+              isLoading: _submitting,
+              onPressed: _submitting ? null : () => _confirm(job),
             ),
             const SizedBox(height: 20),
           ],
@@ -254,50 +389,71 @@ class _ScheduleJobScreenState extends State<ScheduleJobScreen> {
     );
   }
 
-  Widget _dayChip(String day, String num, int index) {
-    final isSelected = _selectedDay == index;
-    return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => _selectedDay = index),
-        borderRadius: AeraRadii.borderMd,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? AeraColors.primary : AeraColors.surface,
-            borderRadius: AeraRadii.borderMd,
-            border: Border.all(color: isSelected ? Colors.transparent : AeraColors.line),
-          ),
-          child: Column(
-            children: [
-              Text(
-                day,
-                style: AeraTypography.label.copyWith(
-                  fontSize: 10,
-                  color: isSelected ? Colors.white70 : AeraColors.inkSoft,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                num,
-                style: AeraTypography.bodyMedium.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: isSelected ? Colors.white : AeraColors.ink,
-                ),
-              ),
-            ],
+  Widget _stepBadge(String number) {
+    return Container(
+      width: 20,
+      height: 20,
+      decoration: const BoxDecoration(
+        color: AeraColors.primary,
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          number,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
           ),
         ),
       ),
     );
   }
 
-  Widget _techOption(String name, String role, String eta, String initials, bool bestMatch) {
-    final isSelected = _selectedTech == name;
+  Widget _dayChip(DateTime day, int index) {
+    final isSelected = _selectedDay == index;
+    return InkWell(
+      onTap: () => setState(() => _selectedDay = index),
+      borderRadius: AeraRadii.borderMd,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AeraColors.primary : AeraColors.surface,
+          borderRadius: AeraRadii.borderMd,
+          border: Border.all(
+            color: isSelected ? Colors.transparent : AeraColors.line,
+          ),
+        ),
+        child: Column(
+          children: [
+            Text(
+              DateFormat('EEE').format(day).toUpperCase(),
+              style: AeraTypography.label.copyWith(
+                fontSize: 10,
+                color: isSelected ? Colors.white70 : AeraColors.inkSoft,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${day.day}',
+              style: AeraTypography.bodyMedium.copyWith(
+                fontWeight: FontWeight.w700,
+                color: isSelected ? Colors.white : AeraColors.ink,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _techOption(Technician tech) {
+    final isSelected = _selectedTechnicianId == tech.id;
     return AeraCard(
       padding: const EdgeInsets.all(12),
       backgroundColor: isSelected ? AeraColors.accentSoft : AeraColors.surface,
       borderColor: isSelected ? AeraColors.accent : AeraColors.line,
-      onTap: () => setState(() => _selectedTech = name),
+      onTap: () => setState(() => _selectedTechnicianId = tech.id),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -305,9 +461,11 @@ class _ScheduleJobScreenState extends State<ScheduleJobScreen> {
             children: [
               CircleAvatar(
                 radius: 18,
-                backgroundColor: isSelected ? AeraColors.accent : AeraColors.surfaceSubtle,
+                backgroundColor: isSelected
+                    ? AeraColors.accent
+                    : AeraColors.surfaceSubtle,
                 child: Text(
-                  initials,
+                  tech.initials,
                   style: TextStyle(
                     color: isSelected ? Colors.white : AeraColors.ink,
                     fontSize: 12,
@@ -319,36 +477,29 @@ class _ScheduleJobScreenState extends State<ScheduleJobScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(name, style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
-                      if (bestMatch) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: AeraColors.successSoft,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'BEST ROUTE',
-                            style: AeraTypography.labelUpper.copyWith(fontSize: 8, color: AeraColors.success),
-                          ),
-                        ),
-                      ],
-                    ],
+                  Text(
+                    tech.fullName,
+                    style: AeraTypography.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  Text(role, style: AeraTypography.label.copyWith(color: AeraColors.inkSoft, fontSize: 10)),
-                  Text(eta, style: AeraTypography.bodySm.copyWith(fontSize: 11, color: AeraColors.accent)),
+                  if (tech.email != null)
+                    Text(
+                      tech.email!,
+                      style: AeraTypography.label.copyWith(
+                        color: AeraColors.inkSoft,
+                        fontSize: 10,
+                      ),
+                    ),
                 ],
               ),
             ],
           ),
           Radio<String>(
-            value: name,
-            groupValue: _selectedTech,
+            value: tech.id,
+            groupValue: _selectedTechnicianId,
             activeColor: AeraColors.accent,
-            onChanged: (val) => setState(() => _selectedTech = val!),
+            onChanged: (val) => setState(() => _selectedTechnicianId = val),
           ),
         ],
       ),

@@ -101,8 +101,11 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const CreateJobScreen(),
     ),
     GoRoute(
-      path: '/schedule-job',
-      builder: (context, state) => const ScheduleJobScreen(),
+      path: '/schedule-job/:jobId',
+      builder: (context, state) {
+        final jobId = state.pathParameters['jobId'] ?? '';
+        return ScheduleJobScreen(jobId: jobId);
+      },
     ),
     GoRoute(
       path: '/create-quote',
