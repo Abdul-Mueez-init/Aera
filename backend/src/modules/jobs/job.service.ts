@@ -2,7 +2,9 @@ import { AppError } from "../../common/errors.js";
 import type { AuthContext } from "../../common/auth/auth.types.js";
 import { prisma } from "../../db/prisma.js";
 import { notificationPublisher } from "../notifications/notification.port.js";
-
+import { supabaseStorageAdapter } from "../../common/storage/supabase-storage.adapter.js";
+import type { SignedUploadResult } from "../../common/storage/storage.port.js";
+ 
 export type JobStatusValue =
   | "NEW"
   | "QUOTING"
@@ -15,7 +17,7 @@ export type JobStatusValue =
 export type JobPriorityValue = "LOW" | "NORMAL" | "HIGH" | "URGENT";
 export type NoteVisibilityValue = "INTERNAL" | "CUSTOMER";
 export type JobPhotoKindValue = "BEFORE" | "AFTER" | "OTHER";
-
+ 
 export interface JobInput {
   customerId: string;
   serviceAddressId: string;
@@ -23,14 +25,14 @@ export interface JobInput {
   problemDescription: string;
   priority?: JobPriorityValue;
 }
-
+ 
 export interface JobFilters {
   page: number;
   pageSize: number;
   status?: JobStatusValue;
   priority?: JobPriorityValue;
 }
-
+ 
 export interface JobPhotoInput {
   objectKey: string;
   mimeType: string;
@@ -38,14 +40,14 @@ export interface JobPhotoInput {
   kind: JobPhotoKindValue;
   caption?: string;
 }
-
+ 
 export interface JobPartInput {
   name: string;
   quantity: number;
   unitPriceMinor: number;
   currency: string;
 }
-
+ 
 const transitions: Record<JobStatusValue, readonly JobStatusValue[]> = {
   NEW: ["QUOTING", "SCHEDULED", "CANCELLED"],
   QUOTING: ["NEW", "SCHEDULED", "CANCELLED"],
@@ -56,7 +58,7 @@ const transitions: Record<JobStatusValue, readonly JobStatusValue[]> = {
   COMPLETED: [],
   CANCELLED: [],
 };
-
+ 
 function jsonSafe<T>(value: T): T {
   return JSON.parse(
     JSON.stringify(value, (_key, nestedValue: unknown) =>
@@ -64,7 +66,7 @@ function jsonSafe<T>(value: T): T {
     ),
   ) as T;
 }
-
+ 
 function jobAccessWhere(context: AuthContext) {
   return {
     companyId: context.companyId,
@@ -73,7 +75,7 @@ function jobAccessWhere(context: AuthContext) {
       : {}),
   };
 }
-
+ 
 function jobSelect() {
   return {
     id: true,
@@ -116,7 +118,7 @@ function jobSelect() {
     },
   } as const;
 }
-
+ 
 async function assertJobReferences(companyId: string, input: JobInput) {
   const address = await prisma.serviceAddress.findFirst({
     where: {
@@ -127,7 +129,7 @@ async function assertJobReferences(companyId: string, input: JobInput) {
     },
     select: { id: true },
   });
-
+ 
   if (!address) {
     throw new AppError(
       "JOB_INVALID_REFERENCES",
@@ -136,7 +138,7 @@ async function assertJobReferences(companyId: string, input: JobInput) {
     );
   }
 }
-
+ 
 export async function listJobs(context: AuthContext, filters: JobFilters) {
   const where = {
     ...jobAccessWhere(context),
@@ -154,7 +156,7 @@ export async function listJobs(context: AuthContext, filters: JobFilters) {
     }),
     prisma.job.count({ where }),
   ]);
-
+ 
   return {
     items,
     meta: {
@@ -165,10 +167,10 @@ export async function listJobs(context: AuthContext, filters: JobFilters) {
     },
   };
 }
-
+ 
 export async function createJob(context: AuthContext, input: JobInput) {
   await assertJobReferences(context.companyId, input);
-
+ 
   return prisma.$transaction(async (transaction) => {
     const maximum = await transaction.job.aggregate({
       where: { companyId: context.companyId },
@@ -198,7 +200,7 @@ export async function createJob(context: AuthContext, input: JobInput) {
     return job;
   });
 }
-
+ 
 export async function getJob(context: AuthContext, jobId: string) {
   const job = await prisma.job.findFirst({
     where: { id: jobId, ...jobAccessWhere(context) },
@@ -252,14 +254,14 @@ export async function getJob(context: AuthContext, jobId: string) {
       },
     },
   });
-
+ 
   if (!job) {
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
-
+ 
   return jsonSafe(job);
 }
-
+ 
 export async function updateJob(
   context: AuthContext,
   jobId: string,
@@ -279,7 +281,7 @@ export async function updateJob(
       409,
     );
   }
-
+ 
   const customerId = input.customerId ?? current.customerId;
   const serviceAddressId = input.serviceAddressId ?? current.serviceAddressId;
   if (input.customerId || input.serviceAddressId) {
@@ -290,7 +292,7 @@ export async function updateJob(
       problemDescription: input.problemDescription ?? "existing",
     });
   }
-
+ 
   const result = await prisma.job.updateMany({
     where: { id: jobId, companyId: context.companyId },
     data: {
@@ -308,7 +310,7 @@ export async function updateJob(
   }
   return getJob(context, jobId);
 }
-
+ 
 export async function assignJob(
   context: AuthContext,
   jobId: string,
@@ -329,7 +331,7 @@ export async function assignJob(
   if (job.status === "COMPLETED" || job.status === "CANCELLED") {
     throw new AppError("JOB_IMMUTABLE", "Final jobs cannot be assigned", 409);
   }
-
+ 
   if (technicianId) {
     const technician = await prisma.companyMember.findFirst({
       where: {
@@ -347,7 +349,7 @@ export async function assignJob(
       );
     }
   }
-
+ 
   const conflicts =
     technicianId && job.scheduledStart && job.scheduledEnd
       ? await prisma.job.findMany({
@@ -362,7 +364,7 @@ export async function assignJob(
           select: { id: true, jobNumber: true },
         })
       : [];
-
+ 
   await prisma.job.update({
     where: { id: jobId },
     data: { assignedTechnicianId: technicianId },
@@ -382,7 +384,7 @@ export async function assignJob(
     })),
   };
 }
-
+ 
 export async function transitionJob(
   context: AuthContext,
   jobId: string,
@@ -410,7 +412,7 @@ export async function transitionJob(
       422,
     );
   }
-
+ 
   const now = new Date();
   await prisma.$transaction(async (transaction) => {
     const result = await transaction.job.updateMany({
@@ -438,10 +440,10 @@ export async function transitionJob(
       },
     });
   });
-
+ 
   return getJob(context, jobId);
 }
-
+ 
 export async function listTechnicianToday(
   context: AuthContext,
   date: string,
@@ -452,7 +454,7 @@ export async function listTechnicianToday(
   }
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 1);
-
+ 
   const jobs = await prisma.job.findMany({
     where: {
       ...jobAccessWhere(context),
@@ -464,7 +466,7 @@ export async function listTechnicianToday(
   });
   return { date, jobs };
 }
-
+ 
 async function assertExecutableJob(context: AuthContext, jobId: string) {
   const job = await prisma.job.findFirst({
     where: { id: jobId, ...jobAccessWhere(context) },
@@ -478,7 +480,20 @@ async function assertExecutableJob(context: AuthContext, jobId: string) {
   }
   return job;
 }
-
+ 
+export async function presignJobPhoto(
+  context: AuthContext,
+  jobId: string,
+  mimeType: string,
+): Promise<SignedUploadResult> {
+  await assertExecutableJob(context, jobId);
+  return supabaseStorageAdapter.createSignedUploadUrl({
+    companyId: context.companyId,
+    jobId,
+    mimeType,
+  });
+}
+ 
 export async function addJobPhoto(
   context: AuthContext,
   jobId: string,
@@ -508,7 +523,7 @@ export async function addJobPhoto(
   });
   return jsonSafe(photo);
 }
-
+ 
 export async function addJobPart(
   context: AuthContext,
   jobId: string,
@@ -535,7 +550,7 @@ export async function addJobPart(
   });
   return jsonSafe(part);
 }
-
+ 
 export async function completeJob(
   context: AuthContext,
   jobId: string,
@@ -549,7 +564,7 @@ export async function completeJob(
       422,
     );
   }
-
+ 
   const now = new Date();
   await prisma.$transaction(async (transaction) => {
     const result = await transaction.job.updateMany({
@@ -572,7 +587,7 @@ export async function completeJob(
   });
   return getJob(context, jobId);
 }
-
+ 
 export async function addJobNote(
   context: AuthContext,
   jobId: string,
@@ -586,7 +601,7 @@ export async function addJobNote(
   if (!job) {
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
-
+ 
   return prisma.jobNote.create({
     data: {
       companyId: context.companyId,
@@ -604,7 +619,7 @@ export async function addJobNote(
     },
   });
 }
-
+ 
 export async function getJobHistory(context: AuthContext, jobId: string) {
   await getJob(context, jobId);
   return prisma.jobStatusHistory.findMany({

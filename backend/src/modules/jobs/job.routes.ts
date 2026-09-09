@@ -12,12 +12,13 @@ import {
   getJobHistory,
   listTechnicianToday,
   listJobs,
+  presignJobPhoto,
   transitionJob,
   updateJob,
   type JobStatusValue,
   type NoteVisibilityValue,
 } from "./job.service.js";
-
+ 
 const router = Router();
 const managerRoles = ["OWNER", "DISPATCHER"] as const;
 const statuses = [
@@ -33,7 +34,7 @@ const statuses = [
 const priorities = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
 const visibilities = ["INTERNAL", "CUSTOMER"] as const;
 const photoKinds = ["BEFORE", "AFTER", "OTHER"] as const;
-
+ 
 const jobSchema = z.object({
   customerId: z.string().uuid(),
   serviceAddressId: z.string().uuid(),
@@ -72,6 +73,9 @@ const photoSchema = z.object({
   kind: z.enum(photoKinds).default("OTHER"),
   caption: z.string().trim().max(500).optional(),
 });
+const presignPhotoSchema = z.object({
+  mimeType: z.string().regex(/^image\/(jpeg|png|webp)$/),
+});
 const partSchema = z.object({
   name: z.string().trim().min(1).max(160),
   quantity: z.number().positive().max(10_000),
@@ -81,7 +85,7 @@ const partSchema = z.object({
 const completionSchema = z.object({
   summary: z.string().trim().min(1).max(4000),
 });
-
+ 
 function sendValidationError(response: Response, error: z.ZodError) {
   response.status(422).json({
     error: {
@@ -90,11 +94,11 @@ function sendValidationError(response: Response, error: z.ZodError) {
     },
   });
 }
-
+ 
 function routeId(value: string | string[]): string {
   return Array.isArray(value) ? value[0] : value;
 }
-
+ 
 router.get("/", requireAuth, async (request, response) => {
   const parsed = listSchema.safeParse(request.query);
   if (!parsed.success) {
@@ -105,7 +109,7 @@ router.get("/", requireAuth, async (request, response) => {
     .status(200)
     .json({ data: await listJobs(request.auth!, parsed.data) });
 });
-
+ 
 router.get("/today", requireAuth, async (request, response) => {
   const parsed = todaySchema.safeParse(request.query);
   if (!parsed.success) {
@@ -116,7 +120,7 @@ router.get("/today", requireAuth, async (request, response) => {
     data: await listTechnicianToday(request.auth!, parsed.data.date),
   });
 });
-
+ 
 router.post(
   "/",
   requireAuth,
@@ -132,13 +136,13 @@ router.post(
     });
   },
 );
-
+ 
 router.get("/:jobId", requireAuth, async (request, response) => {
   response.status(200).json({
     data: await getJob(request.auth!, routeId(request.params.jobId)),
   });
 });
-
+ 
 router.patch(
   "/:jobId",
   requireAuth,
@@ -158,7 +162,7 @@ router.patch(
     });
   },
 );
-
+ 
 router.post(
   "/:jobId/assign",
   requireAuth,
@@ -178,7 +182,7 @@ router.post(
     });
   },
 );
-
+ 
 router.post("/:jobId/status", requireAuth, async (request, response) => {
   const parsed = statusSchema.safeParse(request.body);
   if (!parsed.success) {
@@ -194,7 +198,26 @@ router.post("/:jobId/status", requireAuth, async (request, response) => {
     ),
   });
 });
-
+ 
+router.post(
+  "/:jobId/photos/presign",
+  requireAuth,
+  async (request, response) => {
+    const parsed = presignPhotoSchema.safeParse(request.body);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    response.status(201).json({
+      data: await presignJobPhoto(
+        request.auth!,
+        routeId(request.params.jobId),
+        parsed.data.mimeType,
+      ),
+    });
+  },
+);
+ 
 router.post("/:jobId/photos", requireAuth, async (request, response) => {
   const parsed = photoSchema.safeParse(request.body);
   if (!parsed.success) {
@@ -209,7 +232,7 @@ router.post("/:jobId/photos", requireAuth, async (request, response) => {
     ),
   });
 });
-
+ 
 router.post("/:jobId/parts", requireAuth, async (request, response) => {
   const parsed = partSchema.safeParse(request.body);
   if (!parsed.success) {
@@ -224,7 +247,7 @@ router.post("/:jobId/parts", requireAuth, async (request, response) => {
     ),
   });
 });
-
+ 
 router.post("/:jobId/complete", requireAuth, async (request, response) => {
   const parsed = completionSchema.safeParse(request.body);
   if (!parsed.success) {
@@ -239,7 +262,7 @@ router.post("/:jobId/complete", requireAuth, async (request, response) => {
     ),
   });
 });
-
+ 
 router.post("/:jobId/notes", requireAuth, async (request, response) => {
   const parsed = noteSchema.safeParse(request.body);
   if (!parsed.success) {
@@ -255,11 +278,11 @@ router.post("/:jobId/notes", requireAuth, async (request, response) => {
     ),
   });
 });
-
+ 
 router.get("/:jobId/history", requireAuth, async (request, response) => {
   response.status(200).json({
     data: await getJobHistory(request.auth!, routeId(request.params.jobId)),
   });
 });
-
+ 
 export { router as jobRouter };
