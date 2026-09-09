@@ -21,6 +21,7 @@ import '../../features/jobs/job_detail_screen.dart';
 import '../../features/calendar/calendar_screen.dart';
 import '../../features/customers/customers_screen.dart';
 import '../../features/customers/customer_detail_screen.dart';
+import '../../features/customers/edit_customer_screen.dart';
 
 import '../../features/customers/create_customer_screen.dart';
 import '../../features/jobs/create_job_screen.dart';
@@ -49,18 +50,12 @@ final GoRouter appRouter = GoRouter(
   initialLocation: '/dashboard',
   routes: [
     // Auth Routes
-    GoRoute(
-      path: '/splash',
-      builder: (context, state) => const SplashScreen(),
-    ),
+    GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
     GoRoute(
       path: '/welcome',
       builder: (context, state) => const WelcomeScreen(),
     ),
-    GoRoute(
-      path: '/login',
-      builder: (context, state) => const LoginScreen(),
-    ),
+    GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
     GoRoute(
       path: '/sign-up',
       builder: (context, state) => const SignUpScreen(),
@@ -119,10 +114,7 @@ final GoRouter appRouter = GoRouter(
     ),
 
     // Commercial & Portals
-    GoRoute(
-      path: '/quotes',
-      builder: (context, state) => const QuotesScreen(),
-    ),
+    GoRoute(path: '/quotes', builder: (context, state) => const QuotesScreen()),
     GoRoute(
       path: '/quotes/:quoteId',
       builder: (context, state) {
@@ -185,6 +177,13 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final customerId = state.pathParameters['customerId'] ?? 'CUST-1002';
         return CustomerDetailScreen(customerId: customerId);
+      },
+    ),
+    GoRoute(
+      path: '/customers/:customerId/edit',
+      builder: (context, state) {
+        final customerId = state.pathParameters['customerId'] ?? '';
+        return EditCustomerScreen(customerId: customerId);
       },
     ),
 

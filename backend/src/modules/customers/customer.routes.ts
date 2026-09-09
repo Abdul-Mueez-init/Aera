@@ -6,6 +6,7 @@ import {
   createCustomer,
   createServiceAddress,
   getCustomer,
+  listCustomerJobs,
   listCustomers,
   updateCustomer,
 } from "./customer.service.js";
@@ -46,6 +47,11 @@ const listSchema = z.object({
   pageSize: z.coerce.number().int().positive().max(100).default(20),
   search: z.string().trim().max(100).optional(),
   includeArchived: z.coerce.boolean().default(false),
+});
+
+const customerJobsQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(20),
 });
 
 function sendValidationError(response: Response, error: z.ZodError) {
@@ -104,6 +110,30 @@ router.get(
       : request.params.customerId;
     response.status(200).json({
       data: await getCustomer(request.auth!.companyId, customerId),
+    });
+  },
+);
+
+router.get(
+  "/:customerId/jobs",
+  requireAuth,
+  requireRole(...manageCustomers),
+  async (request, response) => {
+    const parsed = customerJobsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+
+    const customerId = Array.isArray(request.params.customerId)
+      ? request.params.customerId[0]
+      : request.params.customerId;
+    response.status(200).json({
+      data: await listCustomerJobs(
+        request.auth!.companyId,
+        customerId,
+        parsed.data,
+      ),
     });
   },
 );

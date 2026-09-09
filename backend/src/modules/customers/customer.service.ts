@@ -29,6 +29,11 @@ export interface AddressInput {
   lng?: number;
 }
 
+export interface CustomerJobFilters {
+  page: number;
+  pageSize: number;
+}
+
 function cleanOptional(value: string | undefined): string | undefined {
   const cleaned = value?.trim();
   return cleaned || undefined;
@@ -69,6 +74,24 @@ function customerSelect() {
     status: true,
     createdAt: true,
     updatedAt: true,
+  } as const;
+}
+
+function customerJobSelect() {
+  return {
+    id: true,
+    jobNumber: true,
+    serviceType: true,
+    problemDescription: true,
+    priority: true,
+    status: true,
+    scheduledStart: true,
+    scheduledEnd: true,
+    completedAt: true,
+    createdAt: true,
+    assignedTechnician: {
+      select: { id: true, firstName: true, lastName: true },
+    },
   } as const;
 }
 
@@ -221,4 +244,42 @@ export async function createServiceAddress(
   return prisma.serviceAddress.create({
     data: { companyId, customerId, ...addressData(input) },
   });
+}
+
+export async function listCustomerJobs(
+  companyId: string,
+  customerId: string,
+  filters: CustomerJobFilters,
+) {
+  const customer = await prisma.customer.findFirst({
+    where: { companyId, id: customerId },
+    select: { id: true },
+  });
+
+  if (!customer) {
+    throw new AppError("RESOURCE_NOT_FOUND", "Customer not found", 404);
+  }
+
+  const where = { companyId, customerId };
+  const skip = (filters.page - 1) * filters.pageSize;
+  const [items, total] = await prisma.$transaction([
+    prisma.job.findMany({
+      where,
+      select: customerJobSelect(),
+      orderBy: [{ createdAt: "desc" }],
+      skip,
+      take: filters.pageSize,
+    }),
+    prisma.job.count({ where }),
+  ]);
+
+  return {
+    items,
+    meta: {
+      page: filters.page,
+      pageSize: filters.pageSize,
+      total,
+      pageCount: Math.ceil(total / filters.pageSize),
+    },
+  };
 }

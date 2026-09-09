@@ -24,8 +24,10 @@ final customersQueryProvider = StateProvider<CustomersQuery>(
   (ref) => const CustomersQuery(),
 );
 
-final customersListProvider =
-    FutureProvider.autoDispose<PaginatedCustomers>((ref) async {
+/// Not autoDispose: keeps the last-fetched page cached in memory so
+/// navigating away from and back to the customers tab shows data instantly
+/// instead of a fresh spinner. Mutations explicitly `ref.invalidate` this.
+final customersListProvider = FutureProvider<PaginatedCustomers>((ref) async {
   final query = ref.watch(customersQueryProvider);
   final repo = ref.watch(customersRepositoryProvider);
   return repo.listCustomers(
@@ -35,8 +37,21 @@ final customersListProvider =
   );
 });
 
-final customerDetailProvider = FutureProvider.autoDispose
-    .family<Customer, String>((ref, customerId) async {
+/// Not autoDispose: a customer detail viewed once stays cached for the rest
+/// of the session. Bounded by the number of distinct customers visited.
+final customerDetailProvider = FutureProvider.family<Customer, String>((
+  ref,
+  customerId,
+) async {
   final repo = ref.watch(customersRepositoryProvider);
   return repo.getCustomer(customerId);
 });
+
+final customerJobsProvider =
+    FutureProvider.family<PaginatedCustomerJobs, String>((
+      ref,
+      customerId,
+    ) async {
+      final repo = ref.watch(customersRepositoryProvider);
+      return repo.getCustomerJobs(customerId);
+    });
