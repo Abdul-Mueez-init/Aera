@@ -40,7 +40,7 @@ class _QuoteApprovalScreenState extends State<QuoteApprovalScreen> {
             ),
             const SizedBox(width: 8),
             Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('AERA CLIENT PORTAL', style: AeraTypography.labelUpper.copyWith(fontSize: 10)),
                 Text('Estimate Approval', style: AeraTypography.body.copyWith(fontWeight: FontWeight.w700)),
@@ -61,7 +61,7 @@ class _QuoteApprovalScreenState extends State<QuoteApprovalScreen> {
         children: [
           // Meta Header
           Row(
-            mainAxisAlignment: MainAxisAlignment.between,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -102,13 +102,13 @@ class _QuoteApprovalScreenState extends State<QuoteApprovalScreen> {
           AeraCard(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'ISSUED TO',
@@ -135,7 +135,7 @@ class _QuoteApprovalScreenState extends State<QuoteApprovalScreen> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Column(
-                    crossAxisAlignment: CrossAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'SCOPE OF WORK',
@@ -169,10 +169,10 @@ class _QuoteApprovalScreenState extends State<QuoteApprovalScreen> {
           AeraCard(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       'ITEMIZED BREAKDOWN',
@@ -216,7 +216,7 @@ class _QuoteApprovalScreenState extends State<QuoteApprovalScreen> {
                 ),
                 const Divider(color: AeraColors.line, height: 20),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       'Total Estimate',
@@ -241,7 +241,7 @@ class _QuoteApprovalScreenState extends State<QuoteApprovalScreen> {
           AeraCard(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'NORTHSTAR SERVICE GUARANTEE',
@@ -286,7 +286,7 @@ class _QuoteApprovalScreenState extends State<QuoteApprovalScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Assigned Lead Technician',
@@ -368,10 +368,10 @@ class _QuoteApprovalScreenState extends State<QuoteApprovalScreen> {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.between,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         'CONFIRM DIGITAL SIGNATURE',
@@ -424,7 +424,7 @@ class _QuoteApprovalScreenState extends State<QuoteApprovalScreen> {
                   const SizedBox(height: 12),
                   AeraButton(
                     text: 'Authorize & Complete (Rs 18,500)',
-                    icon: Icons.check,
+                    icon: const Icon(Icons.check, size: 18, color: Colors.white),
                     onPressed: _hasSigned
                         ? () {
                             setState(() {
@@ -440,7 +440,7 @@ class _QuoteApprovalScreenState extends State<QuoteApprovalScreen> {
           ] else ...[
             AeraButton(
               text: 'Approve Estimate (Rs 18,500)',
-              icon: Icons.draw,
+              icon: const Icon(Icons.draw, size: 18, color: Colors.white),
               onPressed: () => setState(() => _showSignaturePad = true),
             ),
             const SizedBox(height: 10),
@@ -480,10 +480,10 @@ class _QuoteApprovalScreenState extends State<QuoteApprovalScreen> {
 
   Widget _scopeItem(String title, String desc, String price, String tag) {
     return Column(
-      crossAxisAlignment: CrossAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.between,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Expanded(
               child: Text(title, style: AeraTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
@@ -513,7 +513,7 @@ class _QuoteApprovalScreenState extends State<QuoteApprovalScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
-        crossAxisAlignment: CrossAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.check_circle, size: 16, color: AeraColors.success),
           const SizedBox(width: 8),

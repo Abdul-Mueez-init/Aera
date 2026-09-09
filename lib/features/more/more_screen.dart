@@ -52,7 +52,7 @@ class MoreScreen extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
@@ -234,7 +234,7 @@ class MoreScreen extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(title, style: AeraTypography.bodySm.copyWith(fontWeight: FontWeight.w700)),
                     Text(subtitle, style: AeraTypography.label.copyWith(color: AeraColors.outline)),

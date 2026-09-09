@@ -55,7 +55,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('AC Compressor Breakdown', style: AeraTypography.h3.copyWith(fontSize: 15)),
                         Text('Sarah Khan • Job #JOB-8492', style: AeraTypography.bodySm.copyWith(fontSize: 11)),
@@ -91,7 +91,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                   child: AeraCard(
                     padding: const EdgeInsets.all(14),
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,

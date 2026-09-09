@@ -72,7 +72,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Fast Client Registration', style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
                         Text('Takes ~45s in field for immediate job booking and quoting.', style: AeraTypography.bodySm.copyWith(fontSize: 11)),
@@ -88,7 +88,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('ACCOUNT CLASSIFICATION', style: AeraTypography.labelUpper.copyWith(fontSize: 10)),
                   const SizedBox(height: 10),
@@ -112,7 +112,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
@@ -153,7 +153,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [

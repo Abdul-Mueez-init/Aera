@@ -48,7 +48,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -102,7 +102,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
                       ),
                       const SizedBox(width: 12),
                       Column(
-                        crossAxisAlignment: CrossAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
@@ -139,7 +139,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('What needs to be done?', style: AeraTypography.h3.copyWith(fontSize: 15)),
                   const SizedBox(height: 12),
@@ -178,7 +178,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -205,7 +205,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
                         const Icon(Icons.hvac, color: AeraColors.accent, size: 24),
                         const SizedBox(width: 12),
                         Column(
-                          crossAxisAlignment: CrossAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('Carrier Infinity 24 Heat Pump', style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
                             Text('Serial: CR-9824-2023 • R-410A', style: AeraTypography.bodySm.copyWith(fontSize: 11)),
@@ -223,7 +223,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Priority & Response Target', style: AeraTypography.h3.copyWith(fontSize: 15)),
                   const SizedBox(height: 10),

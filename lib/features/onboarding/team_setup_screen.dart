@@ -125,7 +125,7 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
                                 ),
                                 const SizedBox(width: 12),
                                 Column(
-                                  crossAxisAlignment: CrossAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       member.name,

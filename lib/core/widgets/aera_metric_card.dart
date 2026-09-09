@@ -35,7 +35,7 @@ class AeraMetricCard extends StatelessWidget {
       borderRadius: AeraRadii.borderMd,
       onTap: onTap,
       child: Column(
-        crossAxisAlignment: CrossAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
@@ -64,7 +64,7 @@ class AeraMetricCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Column(
-            crossAxisAlignment: CrossAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 value,

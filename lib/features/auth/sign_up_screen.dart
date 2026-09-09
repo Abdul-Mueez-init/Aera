@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
@@ -7,15 +9,16 @@ import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_text_field.dart';
+import 'providers/auth_provider.dart';
 
-class SignUpScreen extends StatefulWidget {
+class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
 
   @override
-  State<SignUpScreen> createState() => _SignUpScreenState();
+  ConsumerState<SignUpScreen> createState() => _SignUpScreenState();
 }
 
-class _SignUpScreenState extends State<SignUpScreen> {
+class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _nameController = TextEditingController(text: 'Marcus Vance');
   final _emailController = TextEditingController(text: 'marcus@apexheating.com');
   final _companyController =
@@ -23,6 +26,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _passwordController = TextEditingController(text: 'secret123');
   String _selectedTeamSize = '4-10';
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -31,6 +35,50 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _companyController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleSignUp() async {
+    final fullName = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final companyName = _companyController.text.trim();
+    final password = _passwordController.text;
+
+    if (fullName.isEmpty || email.isEmpty || companyName.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in all fields')),
+      );
+      return;
+    }
+
+    final parts = fullName.split(' ');
+    final firstName = parts.first;
+    final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : 'Owner';
+
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(authNotifierProvider.notifier).register(
+        email: email,
+        password: password,
+        firstName: firstName,
+        lastName: lastName,
+        companyName: companyName,
+      );
+      if (mounted) {
+        setState(() => _isLoading = false);
+        context.push('/onboarding/business-basics');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        final msg = e is ApiException ? e.message : 'Registration failed. Check details.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AeraColors.danger,
+            content: Text(msg),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -116,7 +164,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             AeraCard(
               padding: const EdgeInsets.all(20),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   AeraTextField(
                     label: 'Owner / Manager Name',
@@ -206,9 +254,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                   // Continue button
                   AeraButton(
-                    text: 'Continue to Business Basics',
-                    icon: const Icon(Icons.arrow_forward, size: 18, color: Colors.white),
-                    onPressed: () => context.push('/onboarding/business-basics'),
+                    text: _isLoading ? 'Creating Workspace...' : 'Continue to Business Basics',
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.arrow_forward, size: 18, color: Colors.white),
+                    onPressed: _isLoading ? null : _handleSignUp,
                   ),
                 ],
               ),

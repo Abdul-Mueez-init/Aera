@@ -86,7 +86,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
             ),
             const SizedBox(width: 10),
             Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text('AERA HVAC', style: AeraTypography.labelUpper.copyWith(fontSize: 9)),
@@ -130,7 +130,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Column(
-                  crossAxisAlignment: CrossAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Customer Accounts', style: AeraTypography.display.copyWith(fontSize: 22)),
                     Row(
@@ -196,7 +196,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     padding: const EdgeInsets.all(16),
                     onTap: () => context.push('/customers/${cust.id}'),
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -217,7 +217,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                 ),
                                 const SizedBox(width: 12),
                                 Column(
-                                  crossAxisAlignment: CrossAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
                                       children: [

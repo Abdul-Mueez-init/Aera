@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_card.dart';
@@ -39,7 +40,7 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
             ),
             const SizedBox(width: 8),
             Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('AERA CLIENT PORTAL', style: AeraTypography.labelUpper.copyWith(fontSize: 10)),
                 Text('Invoice Payment', style: AeraTypography.body.copyWith(fontWeight: FontWeight.w700)),
@@ -60,7 +61,7 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
         children: [
           // Breadcrumb
           Row(
-            mainAxisAlignment: MainAxisAlignment.between,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
@@ -84,13 +85,13 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
           AeraCard(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'BILL TO: SARAH KHAN',
@@ -141,7 +142,7 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
                   child: Column(
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.between,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text('Total Outstanding Due', style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft)),
                           Text(
@@ -155,7 +156,7 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
                       ),
                       const SizedBox(height: 4),
                       Row(
-                        crossAxisAlignment: CrossAlignment.baseline,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
                         textBaseline: TextBaseline.alphabetic,
                         children: [
                           Text(
@@ -209,10 +210,10 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
           AeraCard(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(
                       children: [
@@ -248,7 +249,7 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
                 _itemRow('R-410A Refrigerant Full Recharge', 'Pure virgin gas refill with digital scale calibration', 'Rs 3,500'),
                 const Divider(color: AeraColors.line, height: 20),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('Total Payable', style: AeraTypography.body.copyWith(fontWeight: FontWeight.w700)),
                     Text(
@@ -270,7 +271,7 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'SELECT PAYMENT CHANNEL',
@@ -293,10 +294,10 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.between,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Column(
-                            crossAxisAlignment: CrossAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('Raast ID / IBAN', style: AeraTypography.label.copyWith(color: AeraColors.inkSoft)),
                               Text(
@@ -354,7 +355,7 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
 
             AeraButton(
               text: 'Pay Rs 18,500 Securely',
-              icon: Icons.lock,
+              icon: const Icon(Icons.lock, size: 18, color: Colors.white),
               onPressed: () {
                 setState(() => _paymentCompleted = true);
               },
@@ -406,10 +407,10 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
 
   Widget _itemRow(String title, String desc, String price) {
     return Column(
-      crossAxisAlignment: CrossAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.between,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Expanded(
               child: Text(title, style: AeraTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
@@ -453,7 +454,7 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [

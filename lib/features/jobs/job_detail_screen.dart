@@ -104,7 +104,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                             ),
                             const SizedBox(width: 8),
                             Column(
-                              crossAxisAlignment: CrossAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   children: [
@@ -159,7 +159,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -179,7 +179,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                           ),
                           const SizedBox(width: 12),
                           Column(
-                            crossAxisAlignment: CrossAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
@@ -226,7 +226,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                             const Icon(Icons.location_on, size: 18, color: AeraColors.accent),
                             const SizedBox(width: 8),
                             Column(
-                              crossAxisAlignment: CrossAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text('House 42-B, Block K', style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
                                 Text('Gulberg III, Lahore, Punjab', style: AeraTypography.bodySm.copyWith(fontSize: 11)),
@@ -299,7 +299,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('HVAC System & Unit Specs', style: AeraTypography.h3.copyWith(fontSize: 15)),
                   const SizedBox(height: 10),
@@ -310,7 +310,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                       borderRadius: AeraRadii.borderMd,
                     ),
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Carrier Infinity 24 (4-Ton Split Heat Pump)', style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
                         const SizedBox(height: 8),
@@ -330,7 +330,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Reported Issue & Brief', style: AeraTypography.h3.copyWith(fontSize: 15)),
                   const SizedBox(height: 6),

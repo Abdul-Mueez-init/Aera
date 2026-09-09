@@ -98,7 +98,7 @@ class _JobsScreenState extends State<JobsScreen> {
             ),
             const SizedBox(width: 10),
             Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
@@ -287,7 +287,7 @@ class _JobsScreenState extends State<JobsScreen> {
                     padding: const EdgeInsets.all(16),
                     onTap: () => context.push('/jobs/${job.id}'),
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,

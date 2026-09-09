@@ -57,7 +57,7 @@ class _ScheduleJobScreenState extends State<ScheduleJobScreen> {
                       ),
                       const SizedBox(width: 12),
                       Column(
-                        crossAxisAlignment: CrossAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Sarah Khan', style: AeraTypography.h3.copyWith(fontSize: 15)),
                           Text('Gulberg III · AC Not Cooling', style: AeraTypography.bodySm.copyWith(fontSize: 11)),
@@ -167,7 +167,7 @@ class _ScheduleJobScreenState extends State<ScheduleJobScreen> {
                           ),
                           const SizedBox(width: 10),
                           Column(
-                            crossAxisAlignment: CrossAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 slot,
@@ -317,7 +317,7 @@ class _ScheduleJobScreenState extends State<ScheduleJobScreen> {
               ),
               const SizedBox(width: 10),
               Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [

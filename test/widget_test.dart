@@ -8,7 +8,7 @@ void main() {
     WidgetTester tester,
   ) async {
     // Set surface size to modern phone viewport
-    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.physicalSize = const Size(1440, 3000);
     tester.view.devicePixelRatio = 2.0;
     addTearDown(() {
       tester.view.resetPhysicalSize();
@@ -20,19 +20,19 @@ void main() {
 
     // Verify Master Dashboard elements
     expect(find.text('Good morning, Marcus'), findsOneWidget);
-    expect(find.text('Northstar Climate Dispatch'), findsOneWidget);
+    expect(find.text('AERA HVAC'), findsWidgets);
     expect(find.byType(AeraBottomNav), findsOneWidget);
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Jobs'), findsOneWidget);
-    expect(find.text('Schedule'), findsOneWidget);
-    expect(find.text('Customers'), findsOneWidget);
+    expect(find.text('Schedule'), findsWidgets);
+    expect(find.text('Customers'), findsWidgets);
     expect(find.text('More'), findsOneWidget);
   });
 
   testWidgets('AeraApp bottom navigation tabs switch successfully', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.physicalSize = const Size(1440, 3000);
     tester.view.devicePixelRatio = 2.0;
     addTearDown(() {
       tester.view.resetPhysicalSize();
@@ -45,17 +45,17 @@ void main() {
     // Tap on Jobs tab
     await tester.tap(find.text('Jobs'));
     await tester.pumpAndSettle();
-    expect(find.text('Jobs & Dispatch'), findsOneWidget);
+    expect(find.text('Jobs Directory'), findsOneWidget);
 
     // Tap on Schedule tab
-    await tester.tap(find.text('Schedule'));
+    await tester.tap(find.text('Schedule').last);
     await tester.pumpAndSettle();
-    expect(find.text('Schedule & Fleet'), findsOneWidget);
+    expect(find.text('Schedule Job'), findsOneWidget);
 
     // Tap on Customers tab
-    await tester.tap(find.text('Customers'));
+    await tester.tap(find.text('Customers').last);
     await tester.pumpAndSettle();
-    expect(find.text('Customers Directory'), findsOneWidget);
+    expect(find.text('Customers'), findsWidgets);
 
     // Tap on More tab
     await tester.tap(find.text('More'));

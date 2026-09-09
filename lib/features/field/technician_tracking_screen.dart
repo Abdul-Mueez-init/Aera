@@ -78,10 +78,10 @@ class TechnicianTrackingScreen extends StatelessWidget {
           AeraCard(
             padding: const EdgeInsets.all(18),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       'TECHNICIAN EN ROUTE',
@@ -104,7 +104,7 @@ class TechnicianTrackingScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Row(
-                  crossAxisAlignment: CrossAlignment.baseline,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
                     Text(
@@ -281,7 +281,7 @@ class TechnicianTrackingScreen extends StatelessWidget {
                                   ),
                                 ],
                               ),
-                              child: const Icon(Icons.home_pin, color: AeraColors.accent, size: 20),
+                              child: const Icon(Icons.pin_drop, color: AeraColors.accent, size: 20),
                             ),
                             const SizedBox(height: 2),
                             Container(
@@ -350,7 +350,7 @@ class TechnicianTrackingScreen extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'ROUTE CONDITION',
@@ -395,7 +395,7 @@ class TechnicianTrackingScreen extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
@@ -465,7 +465,7 @@ class TechnicianTrackingScreen extends StatelessWidget {
           AeraCard(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'TODAY\'S SERVICE PLAN',
@@ -489,7 +489,7 @@ class TechnicianTrackingScreen extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        crossAxisAlignment: CrossAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 24,
@@ -517,7 +517,7 @@ class TechnicianTrackingScreen extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,

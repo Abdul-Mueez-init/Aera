@@ -51,7 +51,7 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
             ),
             const SizedBox(width: 8),
             Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('AERA INTELLIGENCE', style: AeraTypography.labelUpper.copyWith(fontSize: 10)),
                 Text('AI Operations Assistant', style: AeraTypography.body.copyWith(fontWeight: FontWeight.w700)),
@@ -75,7 +75,7 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
               children: [
                 // Live Status Sync Ribbon
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -121,7 +121,7 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
                     children: [
                       Expanded(
                         child: Column(
-                          crossAxisAlignment: CrossAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('Active Vans', style: AeraTypography.label.copyWith(color: AeraColors.inkSoft)),
                             const SizedBox(height: 2),
@@ -148,7 +148,7 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
                         child: Padding(
                           padding: const EdgeInsets.only(left: 12),
                           child: Column(
-                            crossAxisAlignment: CrossAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('Jobs Today', style: AeraTypography.label.copyWith(color: AeraColors.inkSoft)),
                               const SizedBox(height: 2),
@@ -162,7 +162,7 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
                         child: Padding(
                           padding: const EdgeInsets.only(left: 12),
                           child: Column(
-                            crossAxisAlignment: CrossAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('Interventions', style: AeraTypography.label.copyWith(color: AeraColors.warning)),
                               const SizedBox(height: 2),
@@ -244,7 +244,7 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
                           border: Border.all(color: AeraColors.line),
                         ),
                         child: Column(
-                          crossAxisAlignment: CrossAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               'Marcus Vance · 09:41 AM',
@@ -271,7 +271,7 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
 
                 // Aera Synthesized Response
                 Row(
-                  crossAxisAlignment: CrossAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       width: 28,
@@ -293,7 +293,7 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Hazard Alert Card
                           Container(
@@ -304,13 +304,13 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
                               border: Border.all(color: AeraColors.warning.withOpacity(0.3)),
                             ),
                             child: Row(
-                              crossAxisAlignment: CrossAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Icon(Icons.priority_high, color: AeraColors.warning, size: 20),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         'OPERATIONAL HAZARD DETECTED',
@@ -339,10 +339,10 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
                           AeraCard(
                             padding: const EdgeInsets.all(14),
                             child: Column(
-                              crossAxisAlignment: CrossAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.between,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Row(
                                       children: [
@@ -398,7 +398,7 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
                               border: Border.all(color: AeraColors.line),
                             ),
                             child: Column(
-                              crossAxisAlignment: CrossAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   'RECOMMENDED AUTONOMOUS ACTION',
@@ -512,13 +512,13 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
     return InkWell(
       onTap: onTap,
       child: Row(
-        crossAxisAlignment: CrossAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, size: 18, color: color),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,

@@ -192,7 +192,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
@@ -223,7 +223,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                   ),
                 ),
                 Column(
-                  crossAxisAlignment: CrossAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text('Pending', style: AeraTypography.label.copyWith(color: AeraColors.inkSoft)),
                     Text(
@@ -278,10 +278,10 @@ class _QuotesScreenState extends State<QuotesScreen> {
                   child: AeraCard(
                     padding: const EdgeInsets.all(14),
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.between,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Row(
                               children: [
@@ -316,7 +316,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                         ),
                         const SizedBox(height: 8),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.between,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Expanded(
                               child: Text(
@@ -364,7 +364,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                         const Divider(color: AeraColors.line, height: 1),
                         const SizedBox(height: 8),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.between,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Row(
                               children: [

@@ -86,6 +86,85 @@ router.post(
   },
 );
 
+import {
+  listMembers,
+  inviteMember,
+  updateMemberRole,
+  removeMember,
+} from "./member.service.js";
+
+const inviteSchema = z.object({
+  email: z.string().trim().email(),
+  firstName: z.string().trim().min(1).max(60),
+  lastName: z.string().trim().min(1).max(60),
+  role: z.enum(["OWNER", "DISPATCHER", "TECHNICIAN"]),
+});
+
+const updateRoleSchema = z.object({
+  role: z.enum(["OWNER", "DISPATCHER", "TECHNICIAN"]),
+});
+
+router.get("/current/members", requireAuth, async (request, response) => {
+  const members = await listMembers(request.auth!);
+  response.status(200).json({ data: members });
+});
+
+router.post(
+  "/current/invitations",
+  requireAuth,
+  requireRole("OWNER"),
+  async (request, response) => {
+    const parsed = inviteSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: {
+          code: "VALIDATION_FAILED",
+          message: parsed.error.issues.map((i) => i.message).join(", "),
+        },
+      });
+      return;
+    }
+    const member = await inviteMember(request.auth!, parsed.data);
+    response.status(201).json({ data: member });
+  },
+);
+
+router.patch(
+  "/current/members/:memberId",
+  requireAuth,
+  requireRole("OWNER"),
+  async (request, response) => {
+    const parsed = updateRoleSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: {
+          code: "VALIDATION_FAILED",
+          message: parsed.error.issues.map((i) => i.message).join(", "),
+        },
+      });
+      return;
+    }
+    const memberId = Array.isArray(request.params.memberId)
+      ? request.params.memberId[0]
+      : request.params.memberId;
+    const member = await updateMemberRole(request.auth!, memberId, parsed.data.role);
+    response.status(200).json({ data: member });
+  },
+);
+
+router.delete(
+  "/current/members/:memberId",
+  requireAuth,
+  requireRole("OWNER"),
+  async (request, response) => {
+    const memberId = Array.isArray(request.params.memberId)
+      ? request.params.memberId[0]
+      : request.params.memberId;
+    const result = await removeMember(request.auth!, memberId);
+    response.status(200).json({ data: result });
+  },
+);
+
 router.get("/:companyId", requireAuth, async (request, response) => {
   const companyId = Array.isArray(request.params.companyId)
     ? request.params.companyId[0]
@@ -117,3 +196,4 @@ router.get("/:companyId", requireAuth, async (request, response) => {
 });
 
 export { router as companyRouter };
+

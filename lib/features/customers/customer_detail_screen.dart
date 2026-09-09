@@ -108,7 +108,7 @@ class CustomerDetailScreen extends StatelessWidget {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -138,7 +138,7 @@ class CustomerDetailScreen extends StatelessWidget {
                             const Icon(Icons.home, size: 18, color: AeraColors.accent),
                             const SizedBox(width: 10),
                             Column(
-                              crossAxisAlignment: CrossAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   children: [
@@ -183,7 +183,7 @@ class CustomerDetailScreen extends StatelessWidget {
                             const Icon(Icons.apartment, size: 18, color: AeraColors.inkSoft),
                             const SizedBox(width: 10),
                             Column(
-                              crossAxisAlignment: CrossAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text('Villa 18, Street 7', style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
                                 Text('DHA Phase 6, Lahore', style: AeraTypography.bodySm.copyWith(fontSize: 11)),
@@ -204,7 +204,7 @@ class CustomerDetailScreen extends StatelessWidget {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('HVAC Units on Record', style: AeraTypography.h3.copyWith(fontSize: 15)),
                   const SizedBox(height: 10),
@@ -264,7 +264,7 @@ class CustomerDetailScreen extends StatelessWidget {
               const Icon(Icons.hvac, size: 20, color: AeraColors.accent),
               const SizedBox(width: 10),
               Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(model, style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
                   Text('$type • $serial', style: AeraTypography.bodySm.copyWith(fontSize: 11)),

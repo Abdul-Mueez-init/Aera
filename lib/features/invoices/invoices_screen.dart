@@ -151,13 +151,13 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
           AeraCard(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
@@ -181,7 +181,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                         ),
                         const SizedBox(height: 4),
                         Row(
-                          crossAxisAlignment: CrossAlignment.baseline,
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
                           textBaseline: TextBaseline.alphabetic,
                           children: [
                             Text(
@@ -314,10 +314,10 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                   child: AeraCard(
                     padding: const EdgeInsets.all(14),
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.between,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Row(
                               children: [
@@ -333,7 +333,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                               ],
                             ),
                             Column(
-                              crossAxisAlignment: CrossAlignment.end,
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Text(
                                   inv['amount'],
@@ -363,7 +363,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.between,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Row(
                                 children: [
@@ -387,7 +387,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                         ),
                         const SizedBox(height: 8),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.between,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Row(
                               children: [

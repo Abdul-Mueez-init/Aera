@@ -30,7 +30,7 @@ class DashboardScreen extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
@@ -96,7 +96,7 @@ class DashboardScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Column(
-                  crossAxisAlignment: CrossAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'MONDAY, SEP 7 · LAHORE HUB',
@@ -248,7 +248,7 @@ class DashboardScreen extends StatelessWidget {
               ),
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -298,10 +298,10 @@ class DashboardScreen extends StatelessWidget {
                       borderRadius: AeraRadii.borderMd,
                     ),
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          crossAxisAlignment: CrossAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Icon(Icons.schedule, size: 16, color: AeraColors.warning),
                             const SizedBox(width: 8),
@@ -429,7 +429,7 @@ class DashboardScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Column(
-                  crossAxisAlignment: CrossAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       "Today's Dispatch Queue",
@@ -517,7 +517,7 @@ class DashboardScreen extends StatelessWidget {
         border: Border.all(color: AeraColors.line),
       ),
       child: Column(
-        crossAxisAlignment: CrossAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
@@ -533,7 +533,7 @@ class DashboardScreen extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(name, style: AeraTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AeraColors.ink), maxLines: 1),
                     Text(role, style: AeraTypography.label.copyWith(fontSize: 10, color: AeraColors.inkSoft), maxLines: 1),
@@ -576,7 +576,7 @@ class DashboardScreen extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       onTap: () => context.push('/jobs/JOB-8492'),
       child: Column(
-        crossAxisAlignment: CrossAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -44,7 +44,7 @@ class QuoteDetailScreen extends StatelessWidget {
               border: Border.all(color: AeraColors.line),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.between,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: [
@@ -86,13 +86,13 @@ class QuoteDetailScreen extends StatelessWidget {
           AeraCard(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'CURRENT STAGE',
@@ -125,7 +125,7 @@ class QuoteDetailScreen extends StatelessWidget {
                       ],
                     ),
                     Column(
-                      crossAxisAlignment: CrossAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
                           'DISPATCHED',
@@ -172,7 +172,7 @@ class QuoteDetailScreen extends StatelessWidget {
             child: Column(
               children: [
                 Row(
-                  crossAxisAlignment: CrossAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       width: 44,
@@ -186,7 +186,7 @@ class QuoteDetailScreen extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
@@ -258,7 +258,7 @@ class QuoteDetailScreen extends StatelessWidget {
           AeraCard(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'SYSTEM DETAILS',
@@ -283,10 +283,10 @@ class QuoteDetailScreen extends StatelessWidget {
           AeraCard(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       'ITEMIZED SCOPE BREAKDOWN',
@@ -340,7 +340,7 @@ class QuoteDetailScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.between,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text('Subtotal', style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft)),
                           Text('Rs 18,500', style: AeraTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
@@ -348,7 +348,7 @@ class QuoteDetailScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.between,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text('Sales Tax (PST 0% Surcharge Included)', style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft)),
                           Text('Rs 0', style: AeraTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
@@ -356,7 +356,7 @@ class QuoteDetailScreen extends StatelessWidget {
                       ),
                       const Divider(color: AeraColors.line, height: 16),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.between,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
                             'Total Estimate',
@@ -382,7 +382,7 @@ class QuoteDetailScreen extends StatelessWidget {
           // Action Buttons
           AeraButton(
             text: 'View Customer Approval Portal',
-            icon: Icons.draw,
+            icon: const Icon(Icons.draw, size: 18, color: Colors.white),
             onPressed: () => context.push('/quote-approval'),
           ),
           const SizedBox(height: 8),
@@ -455,11 +455,11 @@ class QuoteDetailScreen extends StatelessWidget {
 
   Widget _lineItem(String title, String desc, String amount, String tag) {
     return Column(
-      crossAxisAlignment: CrossAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.between,
-          crossAxisAlignment: CrossAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Text(

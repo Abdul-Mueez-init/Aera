@@ -55,7 +55,7 @@ class AeraAppBar extends StatelessWidget implements PreferredSizeWidget {
           ],
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (subtitle != null) ...[

@@ -125,7 +125,7 @@ class WelcomeScreen extends StatelessWidget {
               ),
               padding: const EdgeInsets.all(20),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
@@ -203,7 +203,7 @@ class WelcomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _FeatureRow(
-              icon: Icons.monitoring,
+              icon: Icons.insights,
               title: 'Real-Time Cash Flow',
               tag: 'Automated',
               tagColor: AeraColors.success,
@@ -273,7 +273,7 @@ class _FeatureRow extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       borderRadius: AeraRadii.borderMd,
       child: Row(
-        crossAxisAlignment: CrossAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 40,
@@ -287,7 +287,7 @@ class _FeatureRow extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,

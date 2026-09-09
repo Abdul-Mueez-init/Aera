@@ -44,7 +44,7 @@ class _AiInsightDetailScreenState extends State<AiInsightDetailScreen> {
               border: Border.all(color: AeraColors.danger.withOpacity(0.3)),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.between,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: [
@@ -79,10 +79,10 @@ class _AiInsightDetailScreenState extends State<AiInsightDetailScreen> {
           AeraCard(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       'AUTONOMOUS RECOMMENDATION',
@@ -213,7 +213,7 @@ class _AiInsightDetailScreenState extends State<AiInsightDetailScreen> {
           ] else ...[
             AeraButton(
               text: 'Execute Intervention (Option $_selectedOption)',
-              icon: Icons.bolt,
+              icon: const Icon(Icons.bolt, size: 18, color: Colors.white),
               onPressed: () {
                 setState(() => _isExecuted = true);
               },
@@ -239,11 +239,11 @@ class _AiInsightDetailScreenState extends State<AiInsightDetailScreen> {
     return AeraCard(
       padding: const EdgeInsets.all(10),
       child: Column(
-        crossAxisAlignment: CrossAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.between,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(label, style: AeraTypography.label.copyWith(color: AeraColors.inkSoft)),
               Icon(icon, size: 14, color: valColor),
@@ -282,7 +282,7 @@ class _AiInsightDetailScreenState extends State<AiInsightDetailScreen> {
           ),
         ),
         child: Row(
-          crossAxisAlignment: CrossAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Radio<String>(
               value: key,
@@ -295,10 +295,10 @@ class _AiInsightDetailScreenState extends State<AiInsightDetailScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.between,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
                         child: Text(

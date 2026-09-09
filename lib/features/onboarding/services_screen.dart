@@ -24,7 +24,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
   };
 
   final List<_ServiceItem> _services = const [
-    _ServiceItem('AC Repair', 'High Demand', Icons.mode_fan_outlined),
+    _ServiceItem('AC Repair', 'High Demand', Icons.toys_outlined),
     _ServiceItem('AC Installation', 'System Replacements', Icons.hvac),
     _ServiceItem('Preventive Maintenance', 'Annual Tune-ups', Icons.published_with_changes),
     _ServiceItem('Emergency Diagnostics', '24/7 Rapid Response', Icons.warning_amber),
@@ -199,7 +199,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                           ),
                           const SizedBox(width: 12),
                           Column(
-                            crossAxisAlignment: CrossAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 service.title,

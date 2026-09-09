@@ -39,7 +39,7 @@ class _ScreenCatalogDrawer extends StatelessWidget {
       backgroundColor: AeraColors.canvas,
       child: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
               padding: const EdgeInsets.all(16),

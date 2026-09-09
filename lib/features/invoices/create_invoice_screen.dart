@@ -57,7 +57,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Sarah Khan', style: AeraTypography.h3.copyWith(fontSize: 15)),
                         Text('Job #JOB-8492 · Completed Today', style: AeraTypography.bodySm.copyWith(fontSize: 11)),
@@ -93,7 +93,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                       children: [
                         Expanded(
                           child: Column(
-                            crossAxisAlignment: CrossAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(item.name, style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
                               Text(item.desc, style: AeraTypography.bodySm.copyWith(fontSize: 11, color: AeraColors.inkSoft)),
@@ -116,7 +116,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Payment Terms', style: AeraTypography.label.copyWith(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),

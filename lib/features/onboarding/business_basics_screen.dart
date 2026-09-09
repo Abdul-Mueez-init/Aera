@@ -139,7 +139,7 @@ class _BusinessBasicsScreenState extends State<BusinessBasicsScreen> {
             AeraCard(
               padding: const EdgeInsets.all(20),
               child: Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Logo/Emblem box
                   Text(
@@ -171,7 +171,7 @@ class _BusinessBasicsScreenState extends State<BusinessBasicsScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
-                            crossAxisAlignment: CrossAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [

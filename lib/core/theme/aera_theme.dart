@@ -49,7 +49,7 @@ abstract final class AeraTheme {
         iconTheme: const IconThemeData(color: AeraColors.ink),
         titleTextStyle: AeraTypography.h3,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AeraColors.surface,
         elevation: 0,
         margin: EdgeInsets.zero,

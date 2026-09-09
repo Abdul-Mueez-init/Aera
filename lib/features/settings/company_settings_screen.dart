@@ -42,13 +42,13 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
           AeraCard(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.between,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -109,7 +109,7 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
                     children: [
                       Expanded(
                         child: Column(
-                          crossAxisAlignment: CrossAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('Fleet Status', style: AeraTypography.label.copyWith(color: AeraColors.inkSoft)),
                             Text('4 Vans', style: AeraTypography.body.copyWith(fontWeight: FontWeight.w700)),
@@ -122,7 +122,7 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
                         child: Padding(
                           padding: const EdgeInsets.only(left: 10),
                           child: Column(
-                            crossAxisAlignment: CrossAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('Coverage', style: AeraTypography.label.copyWith(color: AeraColors.inkSoft)),
                               Text('35 km', style: AeraTypography.body.copyWith(fontWeight: FontWeight.w700)),
@@ -136,7 +136,7 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
                         child: Padding(
                           padding: const EdgeInsets.only(left: 10),
                           child: Column(
-                            crossAxisAlignment: CrossAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('Base Rate', style: AeraTypography.label.copyWith(color: AeraColors.inkSoft)),
                               Text('Rs 2,500', style: AeraTypography.body.copyWith(fontWeight: FontWeight.w700)),
@@ -251,7 +251,7 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
     return AeraCard(
       padding: const EdgeInsets.all(16),
       child: Column(
-        crossAxisAlignment: CrossAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -266,7 +266,7 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
               ),
               const SizedBox(width: 10),
               Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title, style: AeraTypography.bodySm.copyWith(fontWeight: FontWeight.w700)),
                   Text(subtitle, style: AeraTypography.label.copyWith(color: AeraColors.outline)),
@@ -287,7 +287,7 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.between,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft)),
           Flexible(
@@ -306,7 +306,7 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.between,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             children: [
@@ -323,7 +323,7 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
               ),
               const SizedBox(width: 10),
               Column(
-                crossAxisAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(name, style: AeraTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
                   Text(role, style: AeraTypography.label.copyWith(color: AeraColors.outline)),
