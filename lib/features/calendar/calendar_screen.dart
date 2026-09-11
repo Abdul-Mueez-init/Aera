@@ -1,25 +1,60 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_card.dart';
+import '../../core/widgets/aera_status_chip.dart';
+import 'data/calendar_repository.dart';
+import 'providers/calendar_provider.dart';
 
-class CalendarScreen extends StatefulWidget {
+AeraStatusType _jobStatusType(String status) {
+  switch (status) {
+    case 'COMPLETED':
+      return AeraStatusType.completed;
+    case 'CANCELLED':
+      return AeraStatusType.danger;
+    case 'IN_PROGRESS':
+    case 'EN_ROUTE':
+      return AeraStatusType.inProgress;
+    case 'WAITING_PARTS':
+      return AeraStatusType.warning;
+    case 'SCHEDULED':
+      return AeraStatusType.scheduled;
+    case 'QUOTING':
+      return AeraStatusType.info;
+    case 'NEW':
+    default:
+      return AeraStatusType.neutral;
+  }
+}
+
+bool _isSameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+DateTime _startOfWeek(DateTime date) =>
+    date.subtract(Duration(days: date.weekday - 1));
+
+class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
 
   @override
-  State<CalendarScreen> createState() => _CalendarScreenState();
+  ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
 }
 
-class _CalendarScreenState extends State<CalendarScreen> {
-  int _selectedDayIndex = 0;
+class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   String _selectedView = 'Timeline';
-
-  final List<String> _days = ['Mon 7', 'Tue 8', 'Wed 9', 'Thu 10', 'Fri 11', 'Sat 12'];
 
   @override
   Widget build(BuildContext context) {
+    final selectedDate = ref.watch(selectedScheduleDateProvider);
+    final scheduleAsync = ref.watch(dayScheduleProvider);
+    final weekStart = _startOfWeek(selectedDate);
+    final weekDays = List.generate(7, (i) => weekStart.add(Duration(days: i)));
+
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       appBar: AppBar(
@@ -42,15 +77,28 @@ class _CalendarScreenState extends State<CalendarScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('AERA HVAC', style: AeraTypography.labelUpper.copyWith(fontSize: 9)),
-                Text('Schedule', style: AeraTypography.h3.copyWith(fontSize: 16, fontWeight: FontWeight.w700)),
+                Text(
+                  'AERA HVAC',
+                  style: AeraTypography.labelUpper.copyWith(fontSize: 9),
+                ),
+                Text(
+                  'Schedule',
+                  style: AeraTypography.h3.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: AeraColors.ink, size: 22),
+            icon: const Icon(
+              Icons.notifications_outlined,
+              color: AeraColors.ink,
+              size: 22,
+            ),
             onPressed: () => context.push('/notifications'),
           ),
           IconButton(
@@ -69,182 +117,266 @@ class _CalendarScreenState extends State<CalendarScreen> {
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add, size: 20),
         label: Text(
-          'Schedule Job',
-          style: AeraTypography.bodyMedium.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+          'New Job',
+          style: AeraTypography.bodyMedium.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-        onPressed: () => context.push('/schedule-job'),
+        // '/schedule-job' now requires a :jobId (it schedules an
+        // existing job) — dispatch always starts from creating the
+        // job first, same flow as the Jobs tab's FAB.
+        onPressed: () => context.push('/create-job'),
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          children: [
-            // Date Navigator & View Switcher
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.chevron_left, color: AeraColors.inkSoft),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Sep 2025 · Week 37',
-                      style: AeraTypography.h3.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.chevron_right, color: AeraColors.inkSoft),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: AeraColors.surfaceSubtle,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
+        child: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(dayScheduleProvider);
+            ref.invalidate(workloadProvider);
+            await ref.read(dayScheduleProvider.future);
+          },
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            children: [
+              // Week Navigator & View Switcher
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
                     children: [
-                      _viewToggleOption('Lanes'),
-                      _viewToggleOption('Timeline'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            // Day Scroller Bar
-            Row(
-              children: List.generate(_days.length, (index) {
-                final isSelected = _selectedDayIndex == index;
-                final parts = _days[index].split(' ');
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    child: InkWell(
-                      onTap: () => setState(() => _selectedDayIndex = index),
-                      borderRadius: AeraRadii.borderMd,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isSelected ? AeraColors.accent : AeraColors.surface,
-                          borderRadius: AeraRadii.borderMd,
-                          border: Border.all(
-                            color: isSelected ? Colors.transparent : AeraColors.line,
-                          ),
+                      IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(
+                          Icons.chevron_left,
+                          color: AeraColors.inkSoft,
                         ),
-                        child: Column(
-                          children: [
-                            Text(
-                              parts[0].toUpperCase(),
-                              style: AeraTypography.label.copyWith(
-                                fontSize: 10,
-                                color: isSelected ? Colors.white70 : AeraColors.inkSoft,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              parts[1],
-                              style: AeraTypography.bodyMedium.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: isSelected ? Colors.white : AeraColors.ink,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              width: 4,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: isSelected ? AeraColors.successSoft : (index == 0 ? AeraColors.accent : Colors.transparent),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ],
+                        onPressed: () {
+                          ref
+                              .read(selectedScheduleDateProvider.notifier)
+                              .state = selectedDate.subtract(
+                            const Duration(days: 7),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        DateFormat('MMMM yyyy').format(selectedDate),
+                        style: AeraTypography.h3.copyWith(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(
+                          Icons.chevron_right,
+                          color: AeraColors.inkSoft,
+                        ),
+                        onPressed: () {
+                          ref
+                              .read(selectedScheduleDateProvider.notifier)
+                              .state = selectedDate.add(
+                            const Duration(days: 7),
+                          );
+                        },
+                      ),
+                    ],
                   ),
-                );
-              }),
-            ),
-            const SizedBox(height: 14),
-
-            // Smart Dispatch Helper Callout
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AeraColors.surfaceSubtle,
-                borderRadius: AeraRadii.borderMd,
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.auto_awesome, color: AeraColors.accent, size: 18),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: AeraColors.surfaceSubtle,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
                       children: [
-                        Text(
-                          'Intelligent Travel Buffers Active',
-                          style: AeraTypography.label.copyWith(fontWeight: FontWeight.w700, color: AeraColors.ink),
-                        ),
-                        Text(
-                          'Drag or tap appointments to reassign. Travel buffers update in real-time.',
-                          style: AeraTypography.bodySm.copyWith(fontSize: 11, color: AeraColors.inkSoft),
-                        ),
+                        _viewToggleOption('Lanes'),
+                        _viewToggleOption('Timeline'),
                       ],
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
-            // Hourly Timeline Entries
-            _timelineSlot('09:00', [
-              _appointmentCard(
-                title: 'Morning Briefing & Van Stock Audit',
-                time: '08:30 - 09:30',
-                tech: 'Central Hub Dispatch',
-                status: 'Completed',
-                color: AeraColors.success,
-                softColor: AeraColors.successSoft,
+              // Day Scroller Bar
+              Row(
+                children: weekDays.map((day) {
+                  final isSelected = _isSameDay(day, selectedDate);
+                  final isToday = _isSameDay(day, DateTime.now());
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: InkWell(
+                        onTap: () {
+                          ref
+                                  .read(selectedScheduleDateProvider.notifier)
+                                  .state =
+                              day;
+                        },
+                        borderRadius: AeraRadii.borderMd,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AeraColors.accent
+                                : AeraColors.surface,
+                            borderRadius: AeraRadii.borderMd,
+                            border: Border.all(
+                              color: isSelected
+                                  ? Colors.transparent
+                                  : AeraColors.line,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                DateFormat('EEE').format(day).toUpperCase(),
+                                style: AeraTypography.label.copyWith(
+                                  fontSize: 10,
+                                  color: isSelected
+                                      ? Colors.white70
+                                      : AeraColors.inkSoft,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${day.day}',
+                                style: AeraTypography.bodyMedium.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : AeraColors.ink,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                width: 4,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: isToday
+                                      ? (isSelected
+                                            ? AeraColors.successSoft
+                                            : AeraColors.accent)
+                                      : Colors.transparent,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
-            ]),
-            _travelBuffer('18 min transit · Gulberg ➔ Cantt'),
-            _timelineSlot('10:00', [
-              _appointmentCard(
-                title: 'Bhatti Medical Plaza (Chiller Maintenance)',
-                time: '10:00 - 12:30',
-                tech: 'James Miller • Van #2',
-                status: 'In Progress',
-                color: AeraColors.accent,
-                softColor: AeraColors.accentSoft,
+              const SizedBox(height: 16),
+
+              scheduleAsync.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 48),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (error, _) => _ErrorBlock(
+                  message: error is ApiException
+                      ? error.message
+                      : 'Could not load the schedule',
+                  onRetry: () => ref.invalidate(dayScheduleProvider),
+                ),
+                data: (day) {
+                  final unassignedCount = day.jobs
+                      .where((j) => j.assignedTechnician == null)
+                      .length;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Real day summary (replaces the old fabricated
+                      // "Intelligent Travel Buffers" AI copy — no
+                      // routing/ETA data exists in the backend).
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AeraColors.surfaceSubtle,
+                          borderRadius: AeraRadii.borderMd,
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.event_note_outlined,
+                              color: AeraColors.accent,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${day.jobs.length} job${day.jobs.length == 1 ? '' : 's'} scheduled',
+                                    style: AeraTypography.label.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: AeraColors.ink,
+                                    ),
+                                  ),
+                                  if (unassignedCount > 0)
+                                    Text(
+                                      '$unassignedCount unassigned',
+                                      style: AeraTypography.bodySm.copyWith(
+                                        fontSize: 11,
+                                        color: AeraColors.warning,
+                                      ),
+                                    )
+                                  else
+                                    Text(
+                                      'All jobs have a technician',
+                                      style: AeraTypography.bodySm.copyWith(
+                                        fontSize: 11,
+                                        color: AeraColors.inkSoft,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      if (day.jobs.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 32),
+                          child: Center(
+                            child: Column(
+                              children: [
+                                const Icon(
+                                  Icons.event_available,
+                                  size: 44,
+                                  color: AeraColors.outline,
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'Nothing scheduled for this day',
+                                  style: AeraTypography.bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else if (_selectedView == 'Timeline')
+                        _TimelineView(jobs: day.jobs)
+                      else
+                        _LanesView(jobs: day.jobs),
+
+                      const SizedBox(height: 60),
+                    ],
+                  );
+                },
               ),
-            ]),
-            _travelBuffer('22 min transit · Cantt ➔ DHA Phase 5'),
-            _timelineSlot('14:00', [
-              _appointmentCard(
-                title: 'Sarah Khan (AC Not Cooling)',
-                time: '14:00 - 15:30',
-                tech: 'Ahmed Raza • Van #4',
-                status: 'At Risk · +28m',
-                color: AeraColors.warning,
-                softColor: AeraColors.warningSoft,
-                onTap: () => context.push('/jobs/JOB-8492'),
-              ),
-            ]),
-            _travelBuffer('15 min transit · DHA Phase 5 ➔ Phase 6'),
-            _timelineSlot('16:00', [
-              _appointmentCard(
-                title: 'Dr. Tariq Parvez (Inverter PCB)',
-                time: '16:00 - 17:30',
-                tech: 'Omar Khan • Van #1',
-                status: 'Scheduled',
-                color: AeraColors.info,
-                softColor: AeraColors.infoSoft,
-              ),
-            ]),
-            const SizedBox(height: 60),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -259,7 +391,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
         decoration: BoxDecoration(
           color: isSelected ? AeraColors.surface : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
-          boxShadow: isSelected ? const [BoxShadow(color: Colors.black12, blurRadius: 2)] : null,
+          boxShadow: isSelected
+              ? const [BoxShadow(color: Colors.black12, blurRadius: 2)]
+              : null,
         ),
         child: Text(
           label,
@@ -271,8 +405,35 @@ class _CalendarScreenState extends State<CalendarScreen> {
       ),
     );
   }
+}
 
-  Widget _timelineSlot(String hour, List<Widget> items) {
+/// Groups the day's jobs by scheduled hour. Jobs already arrive sorted
+/// by `scheduledStart` from the backend, so a plain (insertion-ordered)
+/// map is enough — no re-sort needed.
+class _TimelineView extends StatelessWidget {
+  const _TimelineView({required this.jobs});
+
+  final List<ScheduledJob> jobs;
+
+  @override
+  Widget build(BuildContext context) {
+    final buckets = <String, List<ScheduledJob>>{};
+    for (final job in jobs) {
+      final start = job.scheduledStart?.toLocal();
+      final key = start != null
+          ? DateFormat('HH:00').format(start)
+          : 'Time TBD';
+      buckets.putIfAbsent(key, () => []).add(job);
+    }
+
+    return Column(
+      children: buckets.entries
+          .map((entry) => _timelineSlot(entry.key, entry.value))
+          .toList(),
+    );
+  }
+
+  Widget _timelineSlot(String hour, List<ScheduledJob> jobsAtHour) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
@@ -289,51 +450,178 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           ),
           Expanded(
-            child: Column(children: items),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _travelBuffer(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 44, top: 4, bottom: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 1,
-            color: AeraColors.outline,
-          ),
-          const SizedBox(width: 6),
-          const Icon(Icons.directions_car_outlined, size: 13, color: AeraColors.accent),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: AeraTypography.bodySm.copyWith(
-              fontSize: 10.5,
-              color: AeraColors.accent,
-              fontWeight: FontWeight.w600,
+            child: Column(
+              children: jobsAtHour
+                  .map(
+                    (job) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _ScheduledJobCard(job: job),
+                    ),
+                  )
+                  .toList(),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _appointmentCard({
+/// Groups by assigned technician using the real workload roster (so
+/// technicians with zero jobs today still get a lane), plus an
+/// "Unassigned" lane for jobs with no technician.
+class _LanesView extends ConsumerWidget {
+  const _LanesView({required this.jobs});
+
+  final List<ScheduledJob> jobs;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final workloadAsync = ref.watch(workloadProvider);
+
+    return workloadAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      ),
+      error: (error, _) => _ErrorBlock(
+        message: error is ApiException
+            ? error.message
+            : 'Could not load technician workload',
+        onRetry: () => ref.invalidate(workloadProvider),
+      ),
+      data: (workload) {
+        final unassigned = jobs
+            .where((j) => j.assignedTechnician == null)
+            .toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ...workload.entries.map((entry) {
+              final techJobs = jobs
+                  .where((j) => j.assignedTechnician?.id == entry.technician.id)
+                  .toList();
+              return _lane(
+                title: entry.technician.fullName,
+                subtitle:
+                    '${entry.jobCount} job${entry.jobCount == 1 ? '' : 's'} today',
+                avatarInitials: entry.technician.initials,
+                jobs: techJobs,
+              );
+            }),
+            if (unassigned.isNotEmpty)
+              _lane(
+                title: 'Unassigned',
+                subtitle:
+                    '${unassigned.length} job${unassigned.length == 1 ? '' : 's'} need a technician',
+                avatarInitials: '?',
+                jobs: unassigned,
+                isWarning: true,
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _lane({
     required String title,
-    required String time,
-    required String tech,
-    required String status,
-    required Color color,
-    required Color softColor,
-    VoidCallback? onTap,
+    required String subtitle,
+    required String avatarInitials,
+    required List<ScheduledJob> jobs,
+    bool isWarning = false,
   }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: isWarning
+                    ? AeraColors.warningSoft
+                    : AeraColors.accentSoft,
+                child: Text(
+                  avatarInitials,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: isWarning ? AeraColors.warning : AeraColors.accent,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AeraTypography.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: AeraTypography.label.copyWith(
+                      fontSize: 10,
+                      color: AeraColors.inkSoft,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (jobs.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 36),
+              child: Text(
+                'No jobs scheduled',
+                style: AeraTypography.bodySm.copyWith(
+                  fontSize: 11,
+                  color: AeraColors.inkSoft,
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(left: 36),
+              child: Column(
+                children: jobs
+                    .map(
+                      (job) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _ScheduledJobCard(job: job),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScheduledJobCard extends StatelessWidget {
+  const _ScheduledJobCard({required this.job});
+
+  final ScheduledJob job;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = job.scheduledStart?.toLocal();
+    final end = job.scheduledEnd?.toLocal();
+    final time = (start != null && end != null)
+        ? '${DateFormat('h:mm a').format(start)} - ${DateFormat('h:mm a').format(end)}'
+        : 'Time TBD';
+
     return AeraCard(
       padding: const EdgeInsets.all(12),
-      onTap: onTap,
+      onTap: () => context.push('/jobs/${job.id}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -342,42 +630,75 @@ class _CalendarScreenState extends State<CalendarScreen> {
             children: [
               Text(
                 time,
-                style: AeraTypography.label.copyWith(fontWeight: FontWeight.w700),
+                style: AeraTypography.label.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: softColor,
-                  borderRadius: AeraRadii.borderFull,
-                ),
-                child: Text(
-                  status,
-                  style: AeraTypography.label.copyWith(
-                    color: color,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+              AeraStatusChip(
+                label: job.status.replaceAll('_', ' '),
+                type: _jobStatusType(job.status),
               ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            title,
-            style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700, color: AeraColors.ink),
+            '${job.customer.fullName} · ${job.serviceType}',
+            style: AeraTypography.bodyMedium.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AeraColors.ink,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           Row(
             children: [
               const Icon(Icons.person_pin, size: 14, color: AeraColors.inkSoft),
               const SizedBox(width: 4),
-              Text(
-                tech,
-                style: AeraTypography.bodySm.copyWith(fontSize: 11, color: AeraColors.inkSoft),
+              Expanded(
+                child: Text(
+                  job.assignedTechnician?.fullName ?? 'Unassigned',
+                  style: AeraTypography.bodySm.copyWith(
+                    fontSize: 11,
+                    color: AeraColors.inkSoft,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ErrorBlock extends StatelessWidget {
+  const _ErrorBlock({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              size: 40,
+              color: AeraColors.warning,
+            ),
+            const SizedBox(height: 10),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            FilledButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
+        ),
       ),
     );
   }
