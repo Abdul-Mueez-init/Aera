@@ -3,7 +3,9 @@ export interface NotificationEvent {
     | "JOB_SCHEDULED"
     | "JOB_RESCHEDULED"
     | "JOB_ASSIGNED"
-    | "QUOTE_SENT";
+    | "QUOTE_SENT"
+    | "QUOTE_APPROVED"
+    | "QUOTE_DECLINED";
   companyId: string;
   jobId?: string;
   quoteId?: string;

@@ -1,161 +1,548 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
+import '../../core/widgets/aera_text_field.dart';
+import '../customers/providers/customers_provider.dart';
+import 'data/quotes_repository.dart';
+import 'providers/quotes_provider.dart';
 
-class CreateQuoteScreen extends StatefulWidget {
+class _DraftItem {
+  _DraftItem({String? description, double quantity = 1, double unitPrice = 0})
+    : descriptionController = TextEditingController(text: description),
+      quantityController = TextEditingController(
+        text: quantity == quantity.roundToDouble()
+            ? quantity.toStringAsFixed(0)
+            : quantity.toString(),
+      ),
+      unitPriceController = TextEditingController(
+        text: unitPrice == 0 ? '' : unitPrice.toStringAsFixed(2),
+      );
+
+  final TextEditingController descriptionController;
+  final TextEditingController quantityController;
+  final TextEditingController unitPriceController;
+
+  double get quantity => double.tryParse(quantityController.text.trim()) ?? 0;
+  double get unitPrice => double.tryParse(unitPriceController.text.trim()) ?? 0;
+  // Preview only — the server recomputes and returns the authoritative
+  // total. Never treat this as truth.
+  double get previewTotal => quantity * unitPrice;
+
+  void dispose() {
+    descriptionController.dispose();
+    quantityController.dispose();
+    unitPriceController.dispose();
+  }
+}
+
+class CreateQuoteScreen extends ConsumerStatefulWidget {
   const CreateQuoteScreen({super.key});
 
   @override
-  State<CreateQuoteScreen> createState() => _CreateQuoteScreenState();
+  ConsumerState<CreateQuoteScreen> createState() => _CreateQuoteScreenState();
 }
 
-class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
-  final List<_QuoteItem> _items = [
-    _QuoteItem('4-Ton Inverter Scroll Compressor (OEM Carrier)', 'OEM factory replacement', 1, 48000),
-    _QuoteItem('R-410A Refrigerant Recharge (8.2 lbs)', 'Virgin refrigerant gas', 1, 14500),
-    _QuoteItem('System Evacuation & Technical Labor', 'Vacuum pump test & weld labor', 3, 3500),
-  ];
+class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
+  String? _customerId;
+  String? _jobId;
+  String _currency = 'USD';
+  final _currencyController = TextEditingController(text: 'USD');
+  final _discountController = TextEditingController(text: '0');
+  final _taxRateController = TextEditingController(text: '0');
+  final List<_DraftItem> _items = [_DraftItem()];
+  bool _saving = false;
 
-  int get _subtotal => _items.fold(0, (sum, it) => sum + (it.qty * it.unitPrice));
-  int get _tax => (_subtotal * 0.05).round();
-  int get _total => _subtotal + _tax;
+  @override
+  void dispose() {
+    _currencyController.dispose();
+    _discountController.dispose();
+    _taxRateController.dispose();
+    for (final item in _items) {
+      item.dispose();
+    }
+    super.dispose();
+  }
+
+  double get _previewSubtotal =>
+      _items.fold(0, (sum, it) => sum + it.previewTotal);
+  double get _previewDiscount =>
+      double.tryParse(_discountController.text.trim()) ?? 0;
+  double get _previewTaxRatePct =>
+      double.tryParse(_taxRateController.text.trim()) ?? 0;
+  double get _previewTaxable => _previewSubtotal - _previewDiscount;
+  double get _previewTax => _previewTaxable * (_previewTaxRatePct / 100);
+  double get _previewTotal => _previewTaxable + _previewTax;
+
+  Future<void> _submit() async {
+    if (_customerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose a customer for this quote')),
+      );
+      return;
+    }
+
+    final validItems = _items
+        .where(
+          (it) =>
+              it.descriptionController.text.trim().isNotEmpty &&
+              it.quantity > 0,
+        )
+        .toList();
+    if (validItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Add at least one line item with a description and quantity',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      final quote = await ref
+          .read(quotesRepositoryProvider)
+          .createQuote(
+            CreateQuoteInput(
+              customerId: _customerId!,
+              jobId: _jobId,
+              currency: _currency,
+              discountMinor: (_previewDiscount * 100).round(),
+              taxRateBps: (_previewTaxRatePct * 100).round(),
+              items: validItems
+                  .map(
+                    (it) => CreateQuoteItemInput(
+                      description: it.descriptionController.text,
+                      quantity: it.quantity,
+                      unitPriceMinor: (it.unitPrice * 100).round(),
+                    ),
+                  )
+                  .toList(),
+            ),
+          );
+
+      ref.invalidate(quotesListProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Quote created as a draft')),
+        );
+        context.pushReplacement('/quotes/${quote.id}');
+      }
+    } catch (e) {
+      if (mounted) {
+        final message = e is ApiException
+            ? e.message
+            : 'Could not create quote. Please try again.';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final customersAsync = ref.watch(customersListProvider);
+    final customerId = _customerId;
+
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       appBar: const AeraAppBar(
         title: 'Draft Quote',
-        subtitle: 'Ref: EST-9024',
+        subtitle: 'New Estimate',
         showBrand: true,
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           children: [
-            // Job Context Banner
+            // Customer + optional job
             AeraCard(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AeraColors.accentSoft,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.request_quote_outlined, color: AeraColors.accent, size: 22),
+                  Text(
+                    'CUSTOMER',
+                    style: AeraTypography.labelUpper.copyWith(fontSize: 10),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('AC Compressor Breakdown', style: AeraTypography.h3.copyWith(fontSize: 15)),
-                        Text('Sarah Khan • Job #JOB-8492', style: AeraTypography.bodySm.copyWith(fontSize: 11)),
-                      ],
+                  const SizedBox(height: 10),
+                  customersAsync.when(
+                    loading: () => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(
+                        child: SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
                     ),
+                    error: (error, _) => Text(
+                      error is ApiException
+                          ? error.message
+                          : 'Could not load customers',
+                      style: AeraTypography.bodySm.copyWith(
+                        color: AeraColors.danger,
+                      ),
+                    ),
+                    data: (page) {
+                      if (page.items.isEmpty) {
+                        return Text(
+                          'No customers yet — add one first',
+                          style: AeraTypography.bodySm,
+                        );
+                      }
+                      return DropdownButtonFormField<String>(
+                        initialValue: customerId,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: AeraColors.surface,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: AeraRadii.borderMd,
+                            borderSide: const BorderSide(
+                              color: AeraColors.line,
+                            ),
+                          ),
+                          hintText: 'Select a customer',
+                        ),
+                        items: page.items
+                            .map(
+                              (c) => DropdownMenuItem(
+                                value: c.id,
+                                child: Text(
+                                  c.fullName,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _customerId = value;
+                            _jobId = null;
+                          });
+                        },
+                      );
+                    },
                   ),
+                  if (customerId != null) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      'ATTACH TO JOB (OPTIONAL)',
+                      style: AeraTypography.labelUpper.copyWith(fontSize: 10),
+                    ),
+                    const SizedBox(height: 10),
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final jobsAsync = ref.watch(
+                          customerJobsProvider(customerId),
+                        );
+                        return jobsAsync.when(
+                          loading: () => const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          error: (error, _) => Text(
+                            error is ApiException
+                                ? error.message
+                                : 'Could not load jobs',
+                            style: AeraTypography.bodySm.copyWith(
+                              color: AeraColors.danger,
+                            ),
+                          ),
+                          data: (page) {
+                            // A quote's job must remain active (not
+                            // COMPLETED/CANCELLED) per quote.service.ts
+                            // assertQuoteReferences.
+                            final eligible = page.items
+                                .where(
+                                  (j) =>
+                                      j.status != 'COMPLETED' &&
+                                      j.status != 'CANCELLED',
+                                )
+                                .toList();
+                            if (eligible.isEmpty) {
+                              return Text(
+                                'No active jobs for this customer',
+                                style: AeraTypography.bodySm,
+                              );
+                            }
+                            return DropdownButtonFormField<String>(
+                              initialValue: _jobId,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: AeraColors.surface,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: AeraRadii.borderMd,
+                                  borderSide: const BorderSide(
+                                    color: AeraColors.line,
+                                  ),
+                                ),
+                                hintText: 'No job — standalone quote',
+                              ),
+                              items: eligible
+                                  .map(
+                                    (j) => DropdownMenuItem(
+                                      value: j.id,
+                                      child: Text(
+                                        '#${j.jobNumber} · ${j.serviceType}',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) =>
+                                  setState(() => _jobId = value),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
-            // Line items header
+            // Line items
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Scope & Parts (${_items.length})', style: AeraTypography.h3.copyWith(fontSize: 15)),
+                Text(
+                  'Line Items (${_items.length})',
+                  style: AeraTypography.h3.copyWith(fontSize: 15),
+                ),
                 TextButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _items.add(_QuoteItem('Contactor / Capacitor Kit', '35/5 MFD Dual Run', 1, 6500));
-                    });
-                  },
-                  icon: const Icon(Icons.add, size: 16, color: AeraColors.accent),
-                  label: Text('Add Item', style: AeraTypography.label.copyWith(color: AeraColors.accent)),
+                  onPressed: () => setState(() => _items.add(_DraftItem())),
+                  icon: const Icon(
+                    Icons.add,
+                    size: 16,
+                    color: AeraColors.accent,
+                  ),
+                  label: Text(
+                    'Add Item',
+                    style: AeraTypography.label.copyWith(
+                      color: AeraColors.accent,
+                    ),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
 
-            // Line items list
-            ..._items.map((it) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: AeraCard(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+            for (final item in _items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: AeraCard(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AeraTextField(
+                              label: 'Description',
+                              hintText: 'e.g. Compressor replacement',
+                              controller: item.descriptionController,
+                            ),
+                          ),
+                          if (_items.length > 1)
+                            IconButton(
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                size: 20,
+                                color: AeraColors.outline,
+                              ),
+                              onPressed: () => setState(() {
+                                _items.remove(item);
+                                item.dispose();
+                              }),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AeraTextField(
+                              label: 'Quantity',
+                              controller: item.quantityController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: AeraTextField(
+                              label: 'Unit price',
+                              hintText: '0.00',
+                              controller: item.unitPriceController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AeraColors.surfaceSubtle,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Expanded(
-                              child: Text(
-                                it.name,
-                                style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700),
+                            Text(
+                              'Line total (preview)',
+                              style: AeraTypography.bodySm.copyWith(
+                                fontSize: 12,
                               ),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, size: 18, color: AeraColors.outline),
-                              onPressed: () => setState(() => _items.remove(it)),
+                            Text(
+                              '$_currency ${item.previewTotal.toStringAsFixed(2)}',
+                              style: AeraTypography.h3.copyWith(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ],
                         ),
-                        Text(it.desc, style: AeraTypography.bodySm.copyWith(fontSize: 11, color: AeraColors.inkSoft)),
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AeraColors.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'QTY: ${it.qty} × Rs ${it.unitPrice}',
-                                style: AeraTypography.bodySm.copyWith(fontSize: 12),
-                              ),
-                              Text(
-                                'Rs ${it.qty * it.unitPrice}',
-                                style: AeraTypography.h3.copyWith(fontSize: 14, fontWeight: FontWeight.w700),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                )),
-            const SizedBox(height: 16),
+                ),
+              ),
+            const SizedBox(height: 10),
 
-            // Calculation Summary Card
+            // Currency / discount / tax
+            AeraCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AeraTextField(
+                          label: 'Currency',
+                          hintText: 'USD',
+                          controller: _currencyController,
+                          onChanged: (val) {
+                            _currency = val.trim().toUpperCase();
+                            setState(() {});
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: AeraTextField(
+                          label: 'Discount (flat amount)',
+                          hintText: '0.00',
+                          controller: _discountController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  AeraTextField(
+                    label: 'Tax rate (%)',
+                    hintText: '0.00',
+                    controller: _taxRateController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Preview summary — server recomputes the authoritative totals
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  _calcRow('Subtotal', 'Rs $_subtotal'),
+                  _calcRow(
+                    'Subtotal (preview)',
+                    '$_currency ${_previewSubtotal.toStringAsFixed(2)}',
+                  ),
                   const SizedBox(height: 8),
-                  _calcRow('Punjab Sales Tax (5%)', 'Rs $_tax'),
+                  _calcRow(
+                    'Discount (preview)',
+                    '-$_currency ${_previewDiscount.toStringAsFixed(2)}',
+                  ),
+                  const SizedBox(height: 8),
+                  _calcRow(
+                    'Tax (preview)',
+                    '$_currency ${_previewTax.toStringAsFixed(2)}',
+                  ),
                   const SizedBox(height: 12),
                   const Divider(color: AeraColors.line),
                   const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Total Estimate', style: AeraTypography.h2.copyWith(fontSize: 17)),
                       Text(
-                        'Rs $_total',
-                        style: AeraTypography.money.copyWith(fontSize: 22, color: AeraColors.accent),
+                        'Total (preview)',
+                        style: AeraTypography.h2.copyWith(fontSize: 17),
+                      ),
+                      Text(
+                        '$_currency ${_previewTotal.toStringAsFixed(2)}',
+                        style: AeraTypography.money.copyWith(
+                          fontSize: 22,
+                          color: AeraColors.accent,
+                        ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Final totals are computed and confirmed by the server on save.',
+                    style: AeraTypography.label.copyWith(
+                      color: AeraColors.outline,
+                    ),
                   ),
                 ],
               ),
@@ -163,14 +550,14 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
             const SizedBox(height: 24),
 
             AeraButton(
-              text: 'Save & Share Quote with Client',
-              icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Quote dispatched for client approval')),
-                );
-                context.push('/quotes');
-              },
+              text: 'Save Draft Quote',
+              icon: const Icon(
+                Icons.save_outlined,
+                size: 18,
+                color: Colors.white,
+              ),
+              isLoading: _saving,
+              onPressed: _saving ? null : _submit,
             ),
             const SizedBox(height: 20),
           ],
@@ -183,17 +570,17 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft)),
-        Text(value, style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft),
+        ),
+        Text(
+          value,
+          style: AeraTypography.bodyMedium.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     );
   }
-}
-
-class _QuoteItem {
-  _QuoteItem(this.name, this.desc, this.qty, this.unitPrice);
-  final String name;
-  final String desc;
-  final int qty;
-  final int unitPrice;
 }

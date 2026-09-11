@@ -5,11 +5,7 @@ import { prisma } from "../../db/prisma.js";
 import { notificationPublisher } from "../notifications/notification.port.js";
 
 export type QuoteStatusValue =
-  | "DRAFT"
-  | "SENT"
-  | "APPROVED"
-  | "DECLINED"
-  | "EXPIRED";
+  "DRAFT" | "SENT" | "APPROVED" | "DECLINED" | "EXPIRED";
 export type QuoteApprovalActionValue = "APPROVED" | "DECLINED";
 
 export interface QuoteItemInput {
@@ -168,9 +164,7 @@ export async function createQuote(
             description: item.description.trim(),
             quantity: item.quantity,
             unitPriceMinor: BigInt(item.unitPriceMinor),
-            totalMinor: BigInt(
-              Math.round(item.quantity * item.unitPriceMinor),
-            ),
+            totalMinor: BigInt(Math.round(item.quantity * item.unitPriceMinor)),
             sortOrder: index,
           })),
         },
@@ -181,7 +175,10 @@ export async function createQuote(
   return jsonSafe(quote);
 }
 
-export async function listQuotes(context: AuthContext, status?: QuoteStatusValue) {
+export async function listQuotes(
+  context: AuthContext,
+  status?: QuoteStatusValue,
+) {
   const quotes = await prisma.quote.findMany({
     where: { companyId: context.companyId, ...(status ? { status } : {}) },
     orderBy: { createdAt: "desc" },
@@ -211,7 +208,11 @@ export async function sendQuote(context: AuthContext, quoteId: string) {
     throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
   }
   if (quote.status !== "DRAFT" && quote.status !== "DECLINED") {
-    throw new AppError("QUOTE_NOT_SENDABLE", "Quote cannot be sent in its current state", 409);
+    throw new AppError(
+      "QUOTE_NOT_SENDABLE",
+      "Quote cannot be sent in its current state",
+      409,
+    );
   }
 
   const sent = await prisma.quote.update({
@@ -282,7 +283,11 @@ export async function respondToPublicQuote(
     return getPublicQuote(shareToken);
   }
   if (quote.status !== "SENT") {
-    throw new AppError("QUOTE_ALREADY_RESOLVED", "Quote has already been resolved", 409);
+    throw new AppError(
+      "QUOTE_ALREADY_RESOLVED",
+      "Quote has already been resolved",
+      409,
+    );
   }
 
   const now = new Date();
@@ -295,7 +300,11 @@ export async function respondToPublicQuote(
       },
     });
     if (result.count !== 1) {
-      throw new AppError("QUOTE_ALREADY_RESOLVED", "Quote has already been resolved", 409);
+      throw new AppError(
+        "QUOTE_ALREADY_RESOLVED",
+        "Quote has already been resolved",
+        409,
+      );
     }
     await transaction.quoteApprovalEvent.create({
       data: {
@@ -305,6 +314,11 @@ export async function respondToPublicQuote(
         source: "CUSTOMER",
       },
     });
+  });
+  void notificationPublisher.publish({
+    type: action === "APPROVED" ? "QUOTE_APPROVED" : "QUOTE_DECLINED",
+    companyId: quote.companyId,
+    quoteId: quote.id,
   });
   return getPublicQuote(shareToken);
 }

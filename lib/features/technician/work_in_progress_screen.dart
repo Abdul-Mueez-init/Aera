@@ -151,14 +151,18 @@ class _WorkInProgressScreenState extends ConsumerState<WorkInProgressScreen> {
             AeraTextField(
               label: 'Quantity',
               controller: qtyController,
-              keyboardType: const TextInputType.numberDecimal(),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
             ),
             const SizedBox(height: 12),
             AeraTextField(
               label: 'Unit price (in whole currency units, e.g. 25.00)',
               hintText: '0.00',
               controller: priceController,
-              keyboardType: const TextInputType.numberDecimal(),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
             ),
           ],
         ),

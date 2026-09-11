@@ -55,11 +55,12 @@ class _CompleteJobScreenState extends ConsumerState<CompleteJobScreen> {
           const SnackBar(content: Text('Job marked as completed')),
         );
         // Pop the Evidence/Work/Complete stack back to Technician Home.
-        var popped = true;
-        while (popped && context.canPop()) {
-          popped = context.pop();
+        // Note: context.pop() returns void in go_router ^14.x, so it can't
+        // be used as a loop condition — check canPop() before each pop.
+        while (context.canPop()) {
+          context.pop();
         }
-        if (!context.canPop()) {
+        if (context.mounted) {
           context.go('/technician-home');
         }
       }
