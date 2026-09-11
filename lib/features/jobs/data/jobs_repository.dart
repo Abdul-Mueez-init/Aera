@@ -139,6 +139,81 @@ class JobStatusHistoryEntry {
   }
 }
 
+class JobPhoto {
+  const JobPhoto({
+    required this.id,
+    required this.objectKey,
+    required this.mimeType,
+    required this.sizeBytes,
+    required this.kind,
+    required this.createdAt,
+    this.caption,
+    this.uploaderName,
+  });
+
+  final String id;
+  final String objectKey;
+  final String mimeType;
+  final int sizeBytes;
+  final String kind;
+  final DateTime createdAt;
+  final String? caption;
+  final String? uploaderName;
+
+  factory JobPhoto.fromJson(Map<String, dynamic> json) {
+    final uploader = json['uploader'] as Map<String, dynamic>?;
+    final name = uploader != null
+        ? '${uploader['firstName'] ?? ''} ${uploader['lastName'] ?? ''}'.trim()
+        : null;
+    return JobPhoto(
+      id: json['id'] as String,
+      objectKey: json['objectKey'] as String? ?? '',
+      mimeType: json['mimeType'] as String? ?? '',
+      // sizeBytes is a Postgres BigInt, serialized by the backend as a
+      // JSON string (see job.service.ts `jsonSafe`) — never parse it as int.
+      sizeBytes: int.tryParse(json['sizeBytes']?.toString() ?? '') ?? 0,
+      kind: json['kind'] as String? ?? 'OTHER',
+      caption: json['caption'] as String?,
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+          DateTime.now(),
+      uploaderName: (name == null || name.isEmpty) ? null : name,
+    );
+  }
+}
+
+class JobPart {
+  const JobPart({
+    required this.id,
+    required this.name,
+    required this.quantity,
+    required this.unitPriceMinor,
+    required this.currency,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String name;
+  final double quantity;
+  final int unitPriceMinor;
+  final String currency;
+  final DateTime createdAt;
+
+  int get totalMinor => (quantity * unitPriceMinor).round();
+
+  factory JobPart.fromJson(Map<String, dynamic> json) => JobPart(
+    id: json['id'] as String,
+    name: json['name'] as String? ?? '',
+    // quantity is a Postgres Decimal, serialized as a JSON string.
+    quantity: double.tryParse(json['quantity']?.toString() ?? '') ?? 0,
+    // unitPriceMinor is a Postgres BigInt, serialized as a JSON string.
+    unitPriceMinor: int.tryParse(json['unitPriceMinor']?.toString() ?? '') ?? 0,
+    currency: json['currency'] as String? ?? 'USD',
+    createdAt:
+        DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+  );
+}
+
 class Job {
   const Job({
     required this.id,
@@ -159,6 +234,8 @@ class Job {
     this.assignedTechnician,
     this.notes = const [],
     this.statusHistory = const [],
+    this.photos = const [],
+    this.parts = const [],
   });
 
   final String id;
@@ -179,6 +256,8 @@ class Job {
   final Technician? assignedTechnician;
   final List<JobNote> notes;
   final List<JobStatusHistoryEntry> statusHistory;
+  final List<JobPhoto> photos;
+  final List<JobPart> parts;
 
   factory Job.fromJson(Map<String, dynamic> json) => Job(
     id: json['id'] as String,
@@ -225,6 +304,16 @@ class Job {
             ?.map(
               (h) => JobStatusHistoryEntry.fromJson(h as Map<String, dynamic>),
             )
+            .toList() ??
+        const [],
+    photos:
+        (json['photos'] as List<dynamic>?)
+            ?.map((p) => JobPhoto.fromJson(p as Map<String, dynamic>))
+            .toList() ??
+        const [],
+    parts:
+        (json['parts'] as List<dynamic>?)
+            ?.map((p) => JobPart.fromJson(p as Map<String, dynamic>))
             .toList() ??
         const [],
   );

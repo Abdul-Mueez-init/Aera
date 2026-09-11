@@ -5,10 +5,7 @@ import '../theme/aera_typography.dart';
 import '../widgets/aera_bottom_nav.dart';
 
 class AppScaffold extends StatelessWidget {
-  const AppScaffold({
-    super.key,
-    required this.navigationShell,
-  });
+  const AppScaffold({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
@@ -49,7 +46,9 @@ class _ScreenCatalogDrawer extends StatelessWidget {
                   const SizedBox(width: 10),
                   Text(
                     'Screen Catalog (34)',
-                    style: AeraTypography.h3.copyWith(fontWeight: FontWeight.w700),
+                    style: AeraTypography.h3.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -57,7 +56,10 @@ class _ScreenCatalogDrawer extends StatelessWidget {
             const Divider(color: AeraColors.line),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 children: [
                   _categoryHeader('Batch 1: Auth & Onboarding'),
                   _item(context, 'Splash', '/splash'),
@@ -66,7 +68,11 @@ class _ScreenCatalogDrawer extends StatelessWidget {
                   _item(context, 'Sign Up', '/sign-up'),
                   _item(context, 'Forgot Password', '/forgot-password'),
                   _item(context, 'Reset Password', '/reset-password'),
-                  _item(context, 'Business Basics', '/onboarding/business-basics'),
+                  _item(
+                    context,
+                    'Business Basics',
+                    '/onboarding/business-basics',
+                  ),
                   _item(context, 'Service Area', '/onboarding/service-area'),
                   _item(context, 'Services', '/onboarding/services'),
                   _item(context, 'Team Setup', '/onboarding/team-setup'),
@@ -92,9 +98,14 @@ class _ScreenCatalogDrawer extends StatelessWidget {
                   _item(context, 'Quote Detail', '/quotes/QTE-0021'),
                   _item(context, 'Invoices Directory', '/invoices'),
                   _item(context, 'Quote Approval (Client)', '/quote-approval'),
-                  _item(context, 'Invoice Payment (Client)', '/invoice-payment'),
+                  _item(
+                    context,
+                    'Invoice Payment (Client)',
+                    '/invoice-payment',
+                  ),
 
                   _categoryHeader('Batch 5: Field, AI & Settings'),
+                  _item(context, 'Technician Home', '/technician-home'),
                   _item(context, 'Technician Tracking', '/technician-tracking'),
                   _item(context, 'AI Operations Assistant', '/ai-assistant'),
                   _item(context, 'AI Insight Detail', '/ai-insight/ins-1'),
@@ -135,7 +146,11 @@ class _ScreenCatalogDrawer extends StatelessWidget {
           fontWeight: FontWeight.w500,
         ),
       ),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 12, color: AeraColors.outline),
+      trailing: const Icon(
+        Icons.arrow_forward_ios,
+        size: 12,
+        color: AeraColors.outline,
+      ),
       onTap: () {
         Navigator.of(context).pop(); // close drawer
         context.push(path);

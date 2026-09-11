@@ -58,11 +58,16 @@ class MoreScreen extends StatelessWidget {
                           children: [
                             Text(
                               'Marcus Vance',
-                              style: AeraTypography.bodySm.copyWith(fontWeight: FontWeight.w700),
+                              style: AeraTypography.bodySm.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                             const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1,
+                              ),
                               decoration: BoxDecoration(
                                 color: AeraColors.accentSoft,
                                 borderRadius: BorderRadius.circular(4),
@@ -79,12 +84,18 @@ class MoreScreen extends StatelessWidget {
                         ),
                         Text(
                           'Northstar Climate Solutions • Lahore Hub',
-                          style: AeraTypography.label.copyWith(color: AeraColors.outline),
+                          style: AeraTypography.label.copyWith(
+                            color: AeraColors.outline,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios, size: 14, color: AeraColors.outline),
+                  const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: AeraColors.outline,
+                  ),
                 ],
               ),
             ),
@@ -146,6 +157,13 @@ class MoreScreen extends StatelessWidget {
             subtitle: 'Van #12 (Ahmed Raza) • 18 min away',
             route: '/technician-tracking',
           ),
+          _navItem(
+            context,
+            icon: Icons.engineering,
+            title: 'Technician Home',
+            subtitle: "Today's assigned jobs & field execution",
+            route: '/technician-home',
+          ),
           const SizedBox(height: 14),
 
           // Section 3: Settings & Administration
@@ -179,12 +197,17 @@ class MoreScreen extends StatelessWidget {
             icon: const Icon(Icons.apps, size: 18, color: AeraColors.accent),
             label: const Text(
               'Open Full 34-Screen Catalog Drawer',
-              style: TextStyle(color: AeraColors.accent, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: AeraColors.accent,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
               side: const BorderSide(color: AeraColors.accent),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -236,12 +259,26 @@ class MoreScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: AeraTypography.bodySm.copyWith(fontWeight: FontWeight.w700)),
-                    Text(subtitle, style: AeraTypography.label.copyWith(color: AeraColors.outline)),
+                    Text(
+                      title,
+                      style: AeraTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: AeraTypography.label.copyWith(
+                        color: AeraColors.outline,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios, size: 12, color: AeraColors.outline),
+              const Icon(
+                Icons.arrow_forward_ios,
+                size: 12,
+                color: AeraColors.outline,
+              ),
             ],
           ),
         ),

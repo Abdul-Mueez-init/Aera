@@ -36,6 +36,10 @@ import '../../features/quotes/quote_approval_screen.dart';
 import '../../features/invoices/invoice_payment_screen.dart';
 
 import '../../features/field/technician_tracking_screen.dart';
+import '../../features/technician/technician_home_screen.dart';
+import '../../features/technician/work_in_progress_screen.dart';
+import '../../features/technician/job_evidence_screen.dart';
+import '../../features/technician/complete_job_screen.dart';
 import '../../features/ai/ai_operations_assistant_screen.dart';
 import '../../features/ai/ai_insight_detail_screen.dart';
 import '../../features/settings/notifications_screen.dart';
@@ -142,6 +146,31 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/technician-tracking',
       builder: (context, state) => const TechnicianTrackingScreen(),
+    ),
+    GoRoute(
+      path: '/technician-home',
+      builder: (context, state) => const TechnicianHomeScreen(),
+    ),
+    GoRoute(
+      path: '/technician/jobs/:jobId/work',
+      builder: (context, state) {
+        final jobId = state.pathParameters['jobId'] ?? '';
+        return WorkInProgressScreen(jobId: jobId);
+      },
+    ),
+    GoRoute(
+      path: '/technician/jobs/:jobId/evidence',
+      builder: (context, state) {
+        final jobId = state.pathParameters['jobId'] ?? '';
+        return JobEvidenceScreen(jobId: jobId);
+      },
+    ),
+    GoRoute(
+      path: '/technician/jobs/:jobId/complete',
+      builder: (context, state) {
+        final jobId = state.pathParameters['jobId'] ?? '';
+        return CompleteJobScreen(jobId: jobId);
+      },
     ),
     GoRoute(
       path: '/ai-assistant',

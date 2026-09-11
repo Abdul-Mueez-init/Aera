@@ -10,6 +10,7 @@ import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_status_chip.dart';
+import '../auth/providers/auth_provider.dart';
 import 'data/jobs_repository.dart';
 import 'providers/jobs_provider.dart';
 
@@ -602,6 +603,29 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                       ),
                     ),
                   ),
+
+                // Technician field-execution entry point: notes, evidence
+                // photos, parts, and completion all live in the dedicated
+                // Work In Progress screen rather than being crammed into
+                // this brief, per the Phase 6 handoff's "don't fork Job
+                // Brief" decision.
+                if (ref.watch(currentRoleProvider) == 'TECHNICIAN' &&
+                    (job.status == 'EN_ROUTE' ||
+                        job.status == 'IN_PROGRESS' ||
+                        job.status == 'WAITING_PARTS')) ...[
+                  const SizedBox(height: 10),
+                  AeraButton(
+                    text: 'Open Work Screen',
+                    variant: AeraButtonVariant.secondary,
+                    icon: const Icon(
+                      Icons.engineering,
+                      size: 18,
+                      color: AeraColors.ink,
+                    ),
+                    onPressed: () =>
+                        context.push('/technician/jobs/${job.id}/work'),
+                  ),
+                ],
 
                 const SizedBox(height: 10),
                 Row(

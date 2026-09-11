@@ -4,6 +4,10 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+		<key>NSCameraUsageDescription</key>
+	<string>Aera needs camera access so technicians can capture before/after job evidence photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Aera needs photo library access so technicians can attach job evidence photos.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
