@@ -5,6 +5,7 @@ import {
   manualPaymentProvider,
   type PaymentProvider,
 } from "../payments/payment.port.js";
+import { notificationPublisher } from "../notifications/notification.port.js";
 
 export type InvoiceStatusValue =
   | "DRAFT"
@@ -317,6 +318,11 @@ export async function issueInvoice(context: AuthContext, invoiceId: string) {
   await prisma.invoice.update({
     where: { id: invoiceId },
     data: { status: "ISSUED", issuedAt: new Date() },
+  });
+  void notificationPublisher.publish({
+    type: "INVOICE_ISSUED",
+    companyId: context.companyId,
+    invoiceId,
   });
   return getInvoice(context, invoiceId);
 }

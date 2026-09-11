@@ -5,10 +5,12 @@ export interface NotificationEvent {
     | "JOB_ASSIGNED"
     | "QUOTE_SENT"
     | "QUOTE_APPROVED"
-    | "QUOTE_DECLINED";
+    | "QUOTE_DECLINED"
+    | "INVOICE_ISSUED";
   companyId: string;
   jobId?: string;
   quoteId?: string;
+  invoiceId?: string;
   recipientUserId?: string;
 }
 

@@ -32,6 +32,7 @@ import '../../features/invoices/create_invoice_screen.dart';
 import '../../features/quotes/quotes_screen.dart';
 import '../../features/quotes/quote_detail_screen.dart';
 import '../../features/invoices/invoices_screen.dart';
+import '../../features/invoices/invoice_detail_screen.dart';
 import '../../features/quotes/quote_approval_screen.dart';
 import '../../features/invoices/invoice_payment_screen.dart';
 
@@ -132,6 +133,13 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/invoices',
       builder: (context, state) => const InvoicesScreen(),
+    ),
+    GoRoute(
+      path: '/invoices/:invoiceId',
+      builder: (context, state) {
+        final invoiceId = state.pathParameters['invoiceId'] ?? '';
+        return InvoiceDetailScreen(invoiceId: invoiceId);
+      },
     ),
     GoRoute(
       path: '/quote-approval',
