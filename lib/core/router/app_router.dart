@@ -35,6 +35,7 @@ import '../../features/invoices/invoices_screen.dart';
 import '../../features/invoices/invoice_detail_screen.dart';
 import '../../features/quotes/quote_approval_screen.dart';
 import '../../features/invoices/invoice_payment_screen.dart';
+import '../../features/portal/customer_home_screen.dart';
 
 import '../../features/field/technician_tracking_screen.dart';
 import '../../features/technician/technician_home_screen.dart';
@@ -142,18 +143,36 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/quote-approval',
-      builder: (context, state) => const QuoteApprovalScreen(),
+      path: '/portal/:token',
+      builder: (context, state) {
+        final token = state.pathParameters['token'] ?? '';
+        return CustomerHomeScreen(token: token);
+      },
     ),
     GoRoute(
-      path: '/invoice-payment',
-      builder: (context, state) => const InvoicePaymentScreen(),
+      path: '/quote-approval/:shareToken',
+      builder: (context, state) {
+        final shareToken = state.pathParameters['shareToken'] ?? '';
+        return QuoteApprovalScreen(shareToken: shareToken);
+      },
+    ),
+    GoRoute(
+      path: '/invoice-payment/:token/:invoiceId',
+      builder: (context, state) {
+        final token = state.pathParameters['token'] ?? '';
+        final invoiceId = state.pathParameters['invoiceId'] ?? '';
+        return InvoicePaymentScreen(token: token, invoiceId: invoiceId);
+      },
     ),
 
     // Field & AI & Settings
     GoRoute(
-      path: '/technician-tracking',
-      builder: (context, state) => const TechnicianTrackingScreen(),
+      path: '/technician-tracking/:token/:jobId',
+      builder: (context, state) {
+        final token = state.pathParameters['token'] ?? '';
+        final jobId = state.pathParameters['jobId'] ?? '';
+        return TechnicianTrackingScreen(token: token, jobId: jobId);
+      },
     ),
     GoRoute(
       path: '/technician-home',
