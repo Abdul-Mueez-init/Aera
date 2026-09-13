@@ -1,5 +1,6 @@
 import { prisma } from "../../db/prisma.js";
 import { logger } from "../../common/logger.js";
+import { inProcessQueue } from "../../queue/in-process-queue.adapter.js";
 
 export type NotificationEventType =
   | "JOB_SCHEDULED"
@@ -53,29 +54,53 @@ async function resolveRecipientIds(event: NotificationEvent): Promise<string[]> 
   return members.map((member) => member.userId);
 }
 
+// The job type this module owns on the shared queue (queue/queue.port.ts).
+// Kept private: other modules talk to notifications through
+// `notificationPublisher.publish`, never by enqueueing this type directly.
+const NOTIFICATION_JOB_TYPE = "notification.dispatch";
+
+async function dispatchNotification(event: NotificationEvent): Promise<void> {
+  const recipientIds = await resolveRecipientIds(event);
+  if (recipientIds.length === 0) {
+    return;
+  }
+
+  const payload = buildPayload(event);
+  await prisma.notification.createMany({
+    data: recipientIds.map((recipientUserId) => ({
+      companyId: event.companyId,
+      recipientUserId,
+      type: event.type,
+      payload,
+    })),
+  });
+}
+
+// Registered once, at module load. Any failure thrown here is retried with
+// backoff and then logged/dropped by the queue adapter (in-process-queue
+// adapter.ts) rather than surfacing back to whichever service called
+// `publish` for it — that separation of concerns (business logic here,
+// resilience in the adapter) is the point of going through the queue.
+inProcessQueue.registerHandler<NotificationEvent>(
+  NOTIFICATION_JOB_TYPE,
+  dispatchNotification,
+);
+
 export const notificationPublisher: NotificationPublisher = {
   async publish(event: NotificationEvent): Promise<void> {
     // Notification delivery must never break the primary business
-    // transaction that triggered it (architecture.md ADR-009).
+    // transaction that triggered it (architecture.md ADR-009). Enqueuing
+    // keeps this off the request path; the queue adapter owns retries and
+    // swallows/logs any handler failure so it can never propagate here.
     try {
-      const recipientIds = await resolveRecipientIds(event);
-      if (recipientIds.length === 0) {
-        return;
-      }
-
-      const payload = buildPayload(event);
-      await prisma.notification.createMany({
-        data: recipientIds.map((recipientUserId) => ({
-          companyId: event.companyId,
-          recipientUserId,
-          type: event.type,
-          payload,
-        })),
-      });
+      await inProcessQueue.enqueue<NotificationEvent>(
+        NOTIFICATION_JOB_TYPE,
+        event,
+      );
     } catch (error) {
       logger.warn(
         { err: error, eventType: event.type, companyId: event.companyId },
-        "Failed to persist notification",
+        "Failed to enqueue notification",
       );
     }
   },
