@@ -3,6 +3,9 @@ import { logger } from "../../common/logger.js";
 import { inProcessQueue } from "../../queue/in-process-queue.adapter.js";
 import { resendEmailAdapter } from "./resend-email.adapter.js";
 import { buildNotificationEmail } from "./email-templates.js";
+import { fcmPushAdapter, PushTokenInvalidError } from "./fcm-push.adapter.js";
+import { buildPushMessage } from "./push-messages.js";
+import { listTokensForUsers, removeInvalidToken } from "./device-token.service.js";
 
 export type NotificationEventType =
   | "JOB_SCHEDULED"
@@ -73,11 +76,12 @@ async function resolveRecipients(event: NotificationEvent): Promise<RecipientCon
   }));
 }
 
-// The two job types this module owns on the shared queue (queue/queue.port.ts).
+// The three job types this module owns on the shared queue (queue/queue.port.ts).
 // Kept private: other modules talk to notifications through
 // `notificationPublisher.publish`, never by enqueueing these types directly.
 const NOTIFICATION_DB_JOB_TYPE = "notification.dispatch";
 const NOTIFICATION_EMAIL_JOB_TYPE = "notification.email";
+const NOTIFICATION_PUSH_JOB_TYPE = "notification.push";
 
 async function dispatchNotification(event: NotificationEvent): Promise<void> {
   const recipients = await resolveRecipients(event);
@@ -125,6 +129,43 @@ async function dispatchEmailNotification(event: NotificationEvent): Promise<void
   }
 }
 
+async function dispatchPushNotification(event: NotificationEvent): Promise<void> {
+  const recipients = await resolveRecipients(event);
+  if (recipients.length === 0) {
+    return;
+  }
+
+  // Built once per event, not once per device: the title/body/data are the
+  // same for every recipient device — only the per-token send call differs.
+  const message = await buildPushMessage(event);
+  if (!message) return;
+
+  const tokens = await listTokensForUsers(recipients.map((recipient) => recipient.userId));
+  if (tokens.length === 0) return;
+
+  for (const { token } of tokens) {
+    try {
+      await fcmPushAdapter.send({ ...message, token });
+    } catch (error) {
+      if (error instanceof PushTokenInvalidError) {
+        // Expected/terminal, not a delivery failure worth a warning: the
+        // device unregistered (app uninstalled, token rotated) — prune it
+        // so future events stop paying for a doomed send.
+        await removeInvalidToken(token);
+        continue;
+      }
+      // Per-token isolation, deliberately not rethrown — same reasoning as
+      // dispatchEmailNotification: the queue retries the whole job, so
+      // letting one token's failure throw here would cause tokens that
+      // already got their push in this pass to be re-sent to on retry.
+      logger.warn(
+        { err: error, eventType: event.type },
+        "Failed to send push notification to a device token",
+      );
+    }
+  }
+}
+
 // Registered once, at module load. Any failure thrown from a handler is
 // retried with backoff and then logged/dropped by the queue adapter
 // (in-process-queue.adapter.ts) rather than surfacing back to whichever
@@ -139,6 +180,10 @@ inProcessQueue.registerHandler<NotificationEvent>(
   NOTIFICATION_EMAIL_JOB_TYPE,
   dispatchEmailNotification,
 );
+inProcessQueue.registerHandler<NotificationEvent>(
+  NOTIFICATION_PUSH_JOB_TYPE,
+  dispatchPushNotification,
+);
 
 export const notificationPublisher: NotificationPublisher = {
   async publish(event: NotificationEvent): Promise<void> {
@@ -146,8 +191,8 @@ export const notificationPublisher: NotificationPublisher = {
     // transaction that triggered it (architecture.md ADR-009). Enqueuing
     // keeps this off the request path; the queue adapter owns retries and
     // swallows/logs any handler failure so it can never propagate here.
-    // The two enqueues are independent: a failure enqueuing one (e.g. the
-    // queue rejecting for an unrelated reason) must not block the other.
+    // The three enqueues are independent: a failure enqueuing one (e.g. the
+    // queue rejecting for an unrelated reason) must not block the others.
     try {
       await inProcessQueue.enqueue<NotificationEvent>(
         NOTIFICATION_DB_JOB_TYPE,
@@ -169,6 +214,18 @@ export const notificationPublisher: NotificationPublisher = {
       logger.warn(
         { err: error, eventType: event.type, companyId: event.companyId },
         "Failed to enqueue notification email",
+      );
+    }
+
+    try {
+      await inProcessQueue.enqueue<NotificationEvent>(
+        NOTIFICATION_PUSH_JOB_TYPE,
+        event,
+      );
+    } catch (error) {
+      logger.warn(
+        { err: error, eventType: event.type, companyId: event.companyId },
+        "Failed to enqueue push notification",
       );
     }
   },

@@ -90,6 +90,19 @@ enum NotificationType {
   QUOTE_APPROVED
   QUOTE_DECLINED
   INVOICE_ISSUED
+  // Already present on the live Supabase enum via migration
+  // `add_invoice_payment_reminder_type` — this line only brings
+  // schema.prisma back in sync with the database, it does not introduce
+  // a new migration. No emitter exists yet (scheduled invoice reminders
+  // are a later Phase 10 slice); email-templates.ts already has a safe
+  // fallback for notification types without a template.
+  INVOICE_PAYMENT_REMINDER
+}
+
+enum DeviceTokenPlatform {
+  ANDROID
+  IOS
+  WEB
 }
 
 model User {
@@ -111,7 +124,8 @@ model User {
   createdInvoices Invoice[] @relation("InvoiceCreators")
   createdPayments Payment[] @relation("PaymentCreators")
   createdPortalTokens CustomerPortalToken[] @relation("PortalTokenCreators")
-  notifications Notification[] @relation("NotificationRecipients")
+   notifications Notification[] @relation("NotificationRecipients")
+  deviceTokens  DeviceToken[]  @relation("DeviceTokenOwners")
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -141,7 +155,8 @@ model Company {
   payments       Payment[]
   reviews         CustomerReview[]
   portalTokens   CustomerPortalToken[]
-  notifications  Notification[]
+    notifications  Notification[]
+  deviceTokens   DeviceToken[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -523,4 +538,21 @@ model Notification {
   @@index([recipientUserId, readAt, createdAt(sort: Desc)])
   @@index([companyId, createdAt(sort: Desc)])
   @@map("notifications")
+}
+
+model DeviceToken {
+  id         String              @id @default(uuid()) @db.Uuid
+  companyId  String              @db.Uuid
+  userId     String              @db.Uuid
+  token      String              @unique
+  platform   DeviceTokenPlatform
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  lastSeenAt DateTime            @default(now())
+  company    Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user       User                @relation("DeviceTokenOwners", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([companyId])
+  @@map("device_tokens")
 }

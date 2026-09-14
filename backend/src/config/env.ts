@@ -25,6 +25,17 @@ const envSchema = z.object({
   // Resend's shared sandbox sender works without domain verification; swap
   // to a verified sending domain before relying on this in production.
   RESEND_FROM_EMAIL: z.string().trim().min(1).default("Aera <onboarding@resend.dev>"),
+  // Phase 10 Slice E — push adapter (Firebase Cloud Messaging, HTTP v1 API).
+  // All three come from one Firebase service-account JSON key. Left unset
+  // in local/dev/test: fcm-push.adapter.ts skips sending and logs a warning
+  // instead of failing, so no credentials are required to run the app or
+  // test suite. Set them to send real push notifications.
+  FIREBASE_PROJECT_ID: z.string().trim().min(1).optional(),
+  FIREBASE_CLIENT_EMAIL: z.string().trim().min(1).optional(),
+  // Keep the literal "\n" sequences from the downloaded JSON key when
+  // pasting this into .env — fcm-push.adapter.ts restores real newlines
+  // before using the key.
+  FIREBASE_PRIVATE_KEY: z.string().min(1).optional(),
 });
  
 const parsed = envSchema.safeParse(process.env);
