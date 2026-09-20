@@ -105,6 +105,12 @@ enum DeviceTokenPlatform {
   WEB
 }
 
+enum AiMessageRole {
+  USER
+  ASSISTANT
+  TOOL
+}
+
 model User {
   id           String          @id @default(uuid()) @db.Uuid
   email        String?         @unique
@@ -126,6 +132,7 @@ model User {
   createdPortalTokens CustomerPortalToken[] @relation("PortalTokenCreators")
    notifications Notification[] @relation("NotificationRecipients")
   deviceTokens  DeviceToken[]  @relation("DeviceTokenOwners")
+  aiConversations AiConversation[] @relation("AiConversationOwners")
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -157,6 +164,7 @@ model Company {
   portalTokens   CustomerPortalToken[]
     notifications  Notification[]
   deviceTokens   DeviceToken[]
+  aiConversations AiConversation[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -555,4 +563,34 @@ model DeviceToken {
   @@index([userId])
   @@index([companyId])
   @@map("device_tokens")
+}
+
+model AiConversation {
+  id        String      @id @default(uuid()) @db.Uuid
+  companyId String      @db.Uuid
+  userId    String      @db.Uuid
+  title     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user      User        @relation("AiConversationOwners", fields: [userId], references: [id], onDelete: Cascade)
+  messages  AiMessage[]
+
+  @@unique([id, companyId])
+  @@index([companyId, userId, updatedAt(sort: Desc)])
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id             String         @id @default(uuid()) @db.Uuid
+  companyId      String         @db.Uuid
+  conversationId String         @db.Uuid
+  role           AiMessageRole
+  content        String
+  metadata       Json?
+  createdAt      DateTime       @default(now())
+  conversation   AiConversation @relation(fields: [conversationId, companyId], references: [id, companyId], onDelete: Cascade)
+
+  @@index([companyId, conversationId, createdAt])
+  @@map("ai_messages")
 }
