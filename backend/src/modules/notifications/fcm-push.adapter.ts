@@ -25,6 +25,15 @@ let warnedMissingConfig = false;
 // expiry instead of round-tripping to Google on every push.
 let cachedAccessToken: { token: string; expiresAt: number } | null = null;
 
+/**
+ * Clears the cached OAuth access token. Exists so tests can start from a known
+ * state; the cache lives at module level, so without this a token fetched by
+ * one test silently changes how many fetch calls the next test sees.
+ */
+export function resetFcmAccessTokenCache(): void {
+  cachedAccessToken = null;
+}
+
 function isConfigured(): boolean {
   return Boolean(
     env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY,

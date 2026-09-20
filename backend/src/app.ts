@@ -14,6 +14,7 @@ import { quoteRouter } from "./modules/quotes/quote.routes.js";
 import { invoiceRouter } from "./modules/invoices/invoice.routes.js";
 import { portalRouter } from "./modules/portal/portal.routes.js";
 import { notificationRouter } from "./modules/notifications/notification.routes.js";
+import { aiRouter } from "./modules/ai/ai.routes.js";
 
 export function buildApp() {
   const app = express();
@@ -93,6 +94,7 @@ export function buildApp() {
   app.use("/api/v1/invoices", invoiceRouter);
   app.use("/api/v1/portal", portalRouter);
   app.use("/api/v1/notifications", notificationRouter);
+  app.use("/api/v1/ai", aiRouter);
 
   app.use((_request, response) => {
     response.status(404).json({

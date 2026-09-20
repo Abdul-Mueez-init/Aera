@@ -63,6 +63,23 @@ async function createCustomerWithAddress(auth: { Authorization: string }) {
   };
 }
 
+// Notifications are published fire-and-forget (ADR-009: a slow or failing
+// notification must never fail the request that caused it), so the row can
+// land just after the HTTP response returns. Poll briefly instead of assuming
+// it is already there.
+async function inboxWithItems(auth: { Authorization: string }) {
+  let response = await request(app).get("/api/v1/notifications").set(auth);
+  for (
+    let attempt = 0;
+    attempt < 40 && response.body.data.items.length === 0;
+    attempt += 1
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    response = await request(app).get("/api/v1/notifications").set(auth);
+  }
+  return response;
+}
+
 describe("Notifications", () => {
   it("persists a JOB_ASSIGNED notification for the assigned technician only", async () => {
     const owner = await registerOwner("assign");
@@ -88,12 +105,10 @@ describe("Notifications", () => {
     const assign = await request(app)
       .post(`/api/v1/jobs/${job.body.data.id}/assign`)
       .set(ownerAuth)
-      .send({ technicianId: me.body.data.id });
+      .send({ technicianId: me.body.data.user.id });
     expect(assign.status).toBe(200);
 
-    const technicianInbox = await request(app)
-      .get("/api/v1/notifications")
-      .set(technicianAuth);
+    const technicianInbox = await inboxWithItems(technicianAuth);
     expect(technicianInbox.status).toBe(200);
     expect(technicianInbox.body.data.items).toHaveLength(1);
     expect(technicianInbox.body.data.items[0].type).toBe("JOB_ASSIGNED");
@@ -129,7 +144,7 @@ describe("Notifications", () => {
       .set(ownerAuth);
     expect(send.status).toBe(200);
 
-    const ownerInbox = await request(app).get("/api/v1/notifications").set(ownerAuth);
+    const ownerInbox = await inboxWithItems(ownerAuth);
     expect(ownerInbox.status).toBe(200);
     expect(ownerInbox.body.data.items).toHaveLength(1);
     expect(ownerInbox.body.data.items[0].type).toBe("QUOTE_SENT");
@@ -160,9 +175,9 @@ describe("Notifications", () => {
     await request(app)
       .post(`/api/v1/jobs/${job.body.data.id}/assign`)
       .set(ownerAuthA)
-      .send({ technicianId: meA.body.data.id });
+      .send({ technicianId: meA.body.data.user.id });
 
-    const inboxA = await request(app).get("/api/v1/notifications").set(technicianAuthA);
+    const inboxA = await inboxWithItems(technicianAuthA);
     const notificationId = inboxA.body.data.items[0].id as string;
 
     // A user from a completely different company cannot read or mark it.

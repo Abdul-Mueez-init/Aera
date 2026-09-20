@@ -4,20 +4,6 @@ import { buildApp } from "../src/app.js";
  
 const app = buildApp();
  
-async function registerOwner(label: string) {
-  const suffix = `${label}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-  const payload = {
-    email: `owner-${suffix}@example.com`,
-    password: "correct-horse-battery-staple",
-    firstName: "Owner",
-    lastName: label,
-    companyName: `Company ${suffix}`,
-  };
-  const res = await request(app).post("/api/v1/auth/register").send(payload);
-  expect(res.status).toBe(201);
-  return { accessToken: res.body.data.accessToken as string };
-}
- 
 describe("job API boundaries", () => {
   it("rejects unauthenticated job listing", async () => {
     const response = await request(app).get("/api/v1/jobs");

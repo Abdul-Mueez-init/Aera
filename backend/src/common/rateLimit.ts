@@ -53,3 +53,29 @@ export const refreshRateLimiter = rateLimit({
     );
   },
 });
+
+/**
+ * Phase 11: bounds AI message posting per authenticated user
+ * (OWASP API4 - unrestricted resource consumption). This endpoint will
+ * trigger paid LLM calls in a later slice, so it must be limited before that
+ * wiring exists, not after.
+ *
+ * Keyed by user id (not IP): it is mounted after requireAuth, so one busy
+ * office sharing an IP cannot exhaust each other's allowance.
+ */
+export const aiMessageRateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (request) => request.auth?.userId ?? "unauthenticated",
+  handler: (_request, _response, next) => {
+    next(
+      new AppError(
+        "RATE_LIMITED",
+        "Too many AI messages. Please try again shortly.",
+        429,
+      ),
+    );
+  },
+});

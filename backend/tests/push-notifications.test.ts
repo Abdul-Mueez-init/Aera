@@ -1,8 +1,12 @@
 import request from "supertest";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { env } from "../src/config/env.js";
-import { fcmPushAdapter, PushTokenInvalidError } from "../src/modules/notifications/fcm-push.adapter.js";
+import {
+  fcmPushAdapter,
+  PushTokenInvalidError,
+  resetFcmAccessTokenCache,
+} from "../src/modules/notifications/fcm-push.adapter.js";
 import { buildPushMessage } from "../src/modules/notifications/push-messages.js";
 
 const app = buildApp();
@@ -50,6 +54,10 @@ describe("fcmPushAdapter", () => {
     FIREBASE_CLIENT_EMAIL: env.FIREBASE_CLIENT_EMAIL,
     FIREBASE_PRIVATE_KEY: env.FIREBASE_PRIVATE_KEY,
   };
+
+  beforeEach(() => {
+    resetFcmAccessTokenCache();
+  });
 
   afterEach(() => {
     vi.unstubAllGlobals();
