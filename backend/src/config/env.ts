@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { z } from "zod";
- 
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -17,7 +17,7 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
   SUPABASE_JOB_PHOTOS_BUCKET: z.string().trim().min(1).default("job-photos"),
-    // Phase 10 Slice D — email adapter (Resend: https://resend.com).
+  // Phase 10 Slice D — email adapter (Resend: https://resend.com).
   // Left unset in local/dev/test: resend-email.adapter.ts skips sending and
   // logs a warning instead of failing, so no key is required to run the app
   // or test suite. Set it to send real email.
@@ -43,10 +43,20 @@ const envSchema = z.object({
   // gateway device (the textbee app) to be online — the free tier is
   // account-wide (one API key), not per-number.
   TEXTBEE_API_KEY: z.string().min(1).optional(),
+  // Phase 10 Slice G — scheduled invoice reminders (in-process scheduler).
+  INVOICE_REMINDERS_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  INVOICE_REMINDER_SWEEP_MINUTES: z.coerce.number().int().positive().default(60),
+  // Minimum gap between two reminders for the same invoice.
+  INVOICE_REMINDER_INTERVAL_DAYS: z.coerce.number().int().positive().default(3),
+  // Used only for invoices with no dueAt: due = issuedAt + this many days.
+  INVOICE_PAYMENT_TERMS_DAYS: z.coerce.number().int().positive().default(14),
 });
- 
+
 const parsed = envSchema.safeParse(process.env);
- 
+
 if (!parsed.success) {
   console.error(
     "Invalid environment configuration:",
@@ -54,5 +64,5 @@ if (!parsed.success) {
   );
   throw new Error("Invalid environment configuration");
 }
- 
+
 export const env = parsed.data;

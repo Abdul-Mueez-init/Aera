@@ -90,6 +90,31 @@ export async function buildSmsMessage(
       };
     }
 
+        case "INVOICE_PAYMENT_REMINDER": {
+      if (!event.invoiceId) return null;
+      const invoice = await prisma.invoice.findFirst({
+        where: { id: event.invoiceId, companyId: event.companyId },
+        select: {
+          invoiceNumber: true,
+          status: true,
+          balanceDueMinor: true,
+          currency: true,
+        },
+      });
+      if (!invoice) return null;
+      if (
+        invoice.balanceDueMinor <= BigInt(0) ||
+        invoice.status === "PAID" ||
+        invoice.status === "VOID"
+      ) {
+        return null;
+      }
+
+      return {
+        body: `Aera: Invoice ${invoice.invoiceNumber} is overdue — ${formatMoney(invoice.balanceDueMinor, invoice.currency)} outstanding.`,
+      };
+    }
+
     default:
       // Safety net for a future NotificationEventType added to the union
       // without an SMS template yet — skip rather than throw, so a queue

@@ -121,6 +121,37 @@ export async function buildNotificationEmail(
       return { to: recipient.email, subject, html, text };
     }
 
+        case "INVOICE_PAYMENT_REMINDER": {
+      if (!event.invoiceId) return null;
+      const invoice = await prisma.invoice.findFirst({
+        where: { id: event.invoiceId, companyId: event.companyId },
+        select: {
+          invoiceNumber: true,
+          status: true,
+          balanceDueMinor: true,
+          currency: true,
+          dueAt: true,
+          customer: { select: { firstName: true, lastName: true } },
+        },
+      });
+      if (!invoice) return null;
+      if (
+        invoice.balanceDueMinor <= BigInt(0) ||
+        invoice.status === "PAID" ||
+        invoice.status === "VOID"
+      ) {
+        return null;
+      }
+
+      const subject = `Payment overdue: invoice ${invoice.invoiceNumber}`;
+      const { html, text } = renderShell(subject, [
+        `Customer: ${invoice.customer.firstName} ${invoice.customer.lastName}.`,
+        `Balance due: ${formatMoney(invoice.balanceDueMinor, invoice.currency)}.`,
+        `Was due: ${formatDate(invoice.dueAt)}.`,
+      ]);
+      return { to: recipient.email, subject, html, text };
+    }
+
     default:
       // Safety net for a future NotificationEventType (e.g. an eventual
       // INVOICE_PAYMENT_REMINDER) added to the union without a template yet

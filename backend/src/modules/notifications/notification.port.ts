@@ -5,7 +5,7 @@ import { resendEmailAdapter } from "./resend-email.adapter.js";
 import { buildNotificationEmail } from "./email-templates.js";
 import { fcmPushAdapter, PushTokenInvalidError } from "./fcm-push.adapter.js";
 import { buildPushMessage } from "./push-messages.js";
-import { twilioSmsAdapter } from "./twilio-sms.adapter.js";
+import { textbeeSmsAdapter } from "./textbee-sms.adapter.js";
 import { buildSmsMessage } from "./sms-messages.js";
 import { listTokensForUsers, removeInvalidToken } from "./device-token.service.js";
 
@@ -16,7 +16,8 @@ export type NotificationEventType =
   | "QUOTE_SENT"
   | "QUOTE_APPROVED"
   | "QUOTE_DECLINED"
-  | "INVOICE_ISSUED";
+  | "INVOICE_ISSUED"
+  | "INVOICE_PAYMENT_REMINDER";
 
 export interface NotificationEvent {
   type: NotificationEventType;
@@ -198,7 +199,7 @@ async function dispatchSmsNotification(event: NotificationEvent): Promise<void> 
 
   for (const recipient of withPhone) {
     try {
-      await twilioSmsAdapter.send({ to: recipient.phone, body: message.body });
+      await textbeeSmsAdapter.send({ to: recipient.phone, body: message.body });
     } catch (error) {
       // Per-recipient isolation, deliberately not rethrown — same reasoning
       // as dispatchEmailNotification/dispatchPushNotification: the queue's

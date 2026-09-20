@@ -1,5 +1,6 @@
 import { AppError } from "../../common/errors.js";
 import type { AuthContext } from "../../common/auth/auth.types.js";
+import { env } from "../../config/env.js";
 import { prisma } from "../../db/prisma.js";
 import {
   manualPaymentProvider,
@@ -304,7 +305,7 @@ export async function listInvoicePayments(
 export async function issueInvoice(context: AuthContext, invoiceId: string) {
   const invoice = await prisma.invoice.findFirst({
     where: { id: invoiceId, companyId: context.companyId },
-    select: { id: true, status: true },
+       select: { id: true, status: true, dueAt: true },
   });
   if (!invoice) {
     throw new AppError("RESOURCE_NOT_FOUND", "Invoice not found", 404);
@@ -315,9 +316,16 @@ export async function issueInvoice(context: AuthContext, invoiceId: string) {
   if (invoice.status !== "DRAFT") {
     throw new AppError("INVOICE_NOT_ISSUABLE", "Invoice cannot be issued", 409);
   }
+    const issuedAt = new Date();
   await prisma.invoice.update({
     where: { id: invoiceId },
-    data: { status: "ISSUED", issuedAt: new Date() },
+    data: {
+      status: "ISSUED",
+      issuedAt,
+      dueAt:
+        invoice.dueAt ??
+        new Date(issuedAt.getTime() + env.INVOICE_PAYMENT_TERMS_DAYS * 86_400_000),
+    },
   });
   void notificationPublisher.publish({
     type: "INVOICE_ISSUED",
