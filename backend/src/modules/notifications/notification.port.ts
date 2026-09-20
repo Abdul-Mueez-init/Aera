@@ -5,6 +5,8 @@ import { resendEmailAdapter } from "./resend-email.adapter.js";
 import { buildNotificationEmail } from "./email-templates.js";
 import { fcmPushAdapter, PushTokenInvalidError } from "./fcm-push.adapter.js";
 import { buildPushMessage } from "./push-messages.js";
+import { twilioSmsAdapter } from "./twilio-sms.adapter.js";
+import { buildSmsMessage } from "./sms-messages.js";
 import { listTokensForUsers, removeInvalidToken } from "./device-token.service.js";
 
 export type NotificationEventType =
@@ -46,19 +48,23 @@ function buildPayload(event: NotificationEvent): Record<string, string> {
 interface RecipientContact {
   userId: string;
   email: string | null;
+  phone: string | null;
   firstName: string;
 }
 
-// Shared by both the in-app (DB) and email dispatch handlers so the "who
-// gets notified" rule lives in exactly one place. Returns email alongside
-// userId so the email handler doesn't need a second round-trip per event.
+// Shared by the in-app (DB), email, and SMS dispatch handlers so the "who
+// gets notified" rule lives in exactly one place. Returns email/phone
+// alongside userId so those handlers don't need a second round-trip per
+// event.
 async function resolveRecipients(event: NotificationEvent): Promise<RecipientContact[]> {
   if (event.recipientUserId) {
     const user = await prisma.user.findUnique({
       where: { id: event.recipientUserId },
-      select: { id: true, email: true, firstName: true },
+      select: { id: true, email: true, phone: true, firstName: true },
     });
-    return user ? [{ userId: user.id, email: user.email, firstName: user.firstName }] : [];
+    return user
+      ? [{ userId: user.id, email: user.email, phone: user.phone, firstName: user.firstName }]
+      : [];
   }
 
   const members = await prisma.companyMember.findMany({
@@ -67,21 +73,29 @@ async function resolveRecipients(event: NotificationEvent): Promise<RecipientCon
       role: { in: [...COMPANY_EVENT_ROLES] },
       status: "ACTIVE",
     },
-    select: { user: { select: { id: true, email: true, firstName: true } } },
+    select: { user: { select: { id: true, email: true, phone: true, firstName: true } } },
   });
   return members.map((member) => ({
     userId: member.user.id,
     email: member.user.email,
+    phone: member.user.phone,
     firstName: member.user.firstName,
   }));
 }
 
-// The three job types this module owns on the shared queue (queue/queue.port.ts).
+// Recipient phone numbers are free-text at the schema level (schema.md
+// `users.phone`), but Twilio requires E.164. Validate here rather than at
+// the adapter so a malformed number is a silent skip (like a missing email)
+// instead of a wasted/failed API call.
+const E164_PATTERN = /^\+[1-9]\d{6,14}$/;
+
+// The four job types this module owns on the shared queue (queue/queue.port.ts).
 // Kept private: other modules talk to notifications through
 // `notificationPublisher.publish`, never by enqueueing these types directly.
 const NOTIFICATION_DB_JOB_TYPE = "notification.dispatch";
 const NOTIFICATION_EMAIL_JOB_TYPE = "notification.email";
 const NOTIFICATION_PUSH_JOB_TYPE = "notification.push";
+const NOTIFICATION_SMS_JOB_TYPE = "notification.sms";
 
 async function dispatchNotification(event: NotificationEvent): Promise<void> {
   const recipients = await resolveRecipients(event);
@@ -166,6 +180,39 @@ async function dispatchPushNotification(event: NotificationEvent): Promise<void>
   }
 }
 
+async function dispatchSmsNotification(event: NotificationEvent): Promise<void> {
+  const recipients = await resolveRecipients(event);
+  const withPhone = recipients.filter(
+    (recipient): recipient is RecipientContact & { phone: string } =>
+      Boolean(recipient.phone) && E164_PATTERN.test(recipient.phone!),
+  );
+  if (withPhone.length === 0) {
+    return;
+  }
+
+  // Built once per event, not once per recipient: the message text is the
+  // same for everyone — only the destination number differs. Mirrors
+  // dispatchPushNotification.
+  const message = await buildSmsMessage(event);
+  if (!message) return;
+
+  for (const recipient of withPhone) {
+    try {
+      await twilioSmsAdapter.send({ to: recipient.phone, body: message.body });
+    } catch (error) {
+      // Per-recipient isolation, deliberately not rethrown — same reasoning
+      // as dispatchEmailNotification/dispatchPushNotification: the queue's
+      // retry unit is the whole job, so letting one recipient's failure
+      // throw here would cause recipients who already got their SMS in
+      // this pass to be re-sent to on retry.
+      logger.warn(
+        { err: error, eventType: event.type, recipientUserId: recipient.userId },
+        "Failed to send notification SMS to recipient",
+      );
+    }
+  }
+}
+
 // Registered once, at module load. Any failure thrown from a handler is
 // retried with backoff and then logged/dropped by the queue adapter
 // (in-process-queue.adapter.ts) rather than surfacing back to whichever
@@ -184,6 +231,10 @@ inProcessQueue.registerHandler<NotificationEvent>(
   NOTIFICATION_PUSH_JOB_TYPE,
   dispatchPushNotification,
 );
+inProcessQueue.registerHandler<NotificationEvent>(
+  NOTIFICATION_SMS_JOB_TYPE,
+  dispatchSmsNotification,
+);
 
 export const notificationPublisher: NotificationPublisher = {
   async publish(event: NotificationEvent): Promise<void> {
@@ -191,7 +242,7 @@ export const notificationPublisher: NotificationPublisher = {
     // transaction that triggered it (architecture.md ADR-009). Enqueuing
     // keeps this off the request path; the queue adapter owns retries and
     // swallows/logs any handler failure so it can never propagate here.
-    // The three enqueues are independent: a failure enqueuing one (e.g. the
+    // The four enqueues are independent: a failure enqueuing one (e.g. the
     // queue rejecting for an unrelated reason) must not block the others.
     try {
       await inProcessQueue.enqueue<NotificationEvent>(
@@ -226,6 +277,18 @@ export const notificationPublisher: NotificationPublisher = {
       logger.warn(
         { err: error, eventType: event.type, companyId: event.companyId },
         "Failed to enqueue push notification",
+      );
+    }
+
+    try {
+      await inProcessQueue.enqueue<NotificationEvent>(
+        NOTIFICATION_SMS_JOB_TYPE,
+        event,
+      );
+    } catch (error) {
+      logger.warn(
+        { err: error, eventType: event.type, companyId: event.companyId },
+        "Failed to enqueue notification SMS",
       );
     }
   },

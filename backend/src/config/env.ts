@@ -36,6 +36,13 @@ const envSchema = z.object({
   // pasting this into .env — fcm-push.adapter.ts restores real newlines
   // before using the key.
   FIREBASE_PRIVATE_KEY: z.string().min(1).optional(),
+  // Phase 10 Slice F — SMS adapter (textbee.dev — Android SMS gateway).
+  // Left unset in local/dev/test: textbee-sms.adapter.ts skips sending and
+  // logs a warning instead of failing, so no key is required to run the app
+  // or test suite. Set it to send real SMS. Requires a registered Android
+  // gateway device (the textbee app) to be online — the free tier is
+  // account-wide (one API key), not per-number.
+  TEXTBEE_API_KEY: z.string().min(1).optional(),
 });
  
 const parsed = envSchema.safeParse(process.env);
