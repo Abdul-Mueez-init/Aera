@@ -1,4 +1,3 @@
-
 import { z } from "zod";
 import { prisma } from "../../../db/prisma.js";
 import type {
@@ -221,7 +220,7 @@ export async function getCustomerJobHistory(
   return { found: true, ambiguous: false, matches: [], customer, visits };
 }
 
-export const customerHistoryTool: ToolDefinition
+export const customerHistoryTool: ToolDefinition<
   CustomerHistoryInput,
   CustomerHistoryResult
 > = {
