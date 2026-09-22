@@ -1,12 +1,19 @@
 import { AppError } from "../../../common/errors.js";
+import { businessMetricsTool } from "./business-metrics.tool.js";
 import { customerHistoryTool } from "./customer-history.tool.js";
 import { jobsAtRiskTool } from "./jobs-at-risk.tool.js";
+import { scheduleWorkloadTool } from "./schedule-workload.tool.js";
 import type { ToolContext, ToolDefinition } from "./types.js";
 
 /**
  * Phase 11, Slice C tool registry.
  *
- * Slice D's model gateway will call `executeTool` by name with whatever
+ * The initial Slice C delivery registered only jobsAtRiskTool and
+ * customerHistoryTool, leaving the two other tools plan.md/PRD.md call for
+ * ("analytics questions" and technician workload) unbuilt. scheduleWorkloadTool
+ * and businessMetricsTool complete that set (Slice C2).
+ *
+ * Slice D's model gateway calls `executeTool` by name with whatever
  * arguments the model produced; it never touches Prisma or an individual
  * tool file directly. That keeps the authorization/validation boundary in
  * exactly one place (ADR-010).
@@ -15,7 +22,12 @@ import type { ToolContext, ToolDefinition } from "./types.js";
 // See the comment on `ToolDefinition` in ./types.ts for why this array is
 // loosely typed — each tool above is still declared with concrete types.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const TOOLS: ToolDefinition<any, any>[] = [jobsAtRiskTool, customerHistoryTool];
+const TOOLS: ToolDefinition<any, any>[] = [
+  jobsAtRiskTool,
+  customerHistoryTool,
+  scheduleWorkloadTool,
+  businessMetricsTool,
+];
 
 export interface ToolDescriptor {
   name: string;
@@ -74,3 +86,15 @@ export {
   type JobsAtRiskInput,
   type JobsAtRiskResult,
 } from "./jobs-at-risk.tool.js";
+export {
+  scheduleWorkloadTool,
+  getScheduleWorkload,
+  type ScheduleWorkloadInput,
+  type ScheduleWorkloadResult,
+} from "./schedule-workload.tool.js";
+export {
+  businessMetricsTool,
+  getBusinessMetrics,
+  type BusinessMetricsInput,
+  type BusinessMetricsResult,
+} from "./business-metrics.tool.js";

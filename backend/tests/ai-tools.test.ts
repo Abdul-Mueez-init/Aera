@@ -6,9 +6,16 @@ import {
   executeTool,
   getJobsAtRisk,
   getCustomerJobHistory,
+  getScheduleWorkload,
+  getBusinessMetrics,
 } from "../src/modules/ai/tools/index.js";
-// getJobsAtRisk / getCustomerJobHistory are re-exported for direct testing
-// below via the barrel; see note near the imports if that changes.
+import {
+  dayBoundsInTimezone,
+  todayInTimezone,
+} from "../src/modules/ai/tools/timezone.util.js";
+// getJobsAtRisk / getCustomerJobHistory / getScheduleWorkload /
+// getBusinessMetrics are re-exported for direct testing below via the
+// barrel; see note near the imports if that changes.
 
 const app = buildApp();
 const HOUR_MS = 3_600_000;
@@ -103,6 +110,56 @@ async function seedJob(
   });
 }
 
+async function setCompanyTimezone(companyId: string, timezone: string) {
+  await prisma.company.update({ where: { id: companyId }, data: { timezone } });
+}
+
+let invoiceNumberCounter = 0;
+
+async function seedInvoice(
+  company: { companyId: string; customerId: string },
+  overrides: Partial<{
+    status: "DRAFT" | "ISSUED" | "PARTIALLY_PAID" | "PAID" | "VOID" | "OVERDUE";
+    totalMinor: bigint;
+    balanceDueMinor: bigint;
+    currency: string;
+  }> = {},
+) {
+  invoiceNumberCounter += 1;
+  const currency = overrides.currency ?? "USD";
+  const totalMinor = overrides.totalMinor ?? 10_000n;
+  return prisma.invoice.create({
+    data: {
+      companyId: company.companyId,
+      customerId: company.customerId,
+      invoiceNumber: `INV-TEST-${invoiceNumberCounter}-${Date.now()}`,
+      status: overrides.status ?? "ISSUED",
+      subtotalMinor: totalMinor,
+      totalMinor,
+      balanceDueMinor: overrides.balanceDueMinor ?? totalMinor,
+      currency,
+    },
+  });
+}
+
+async function seedPayment(
+  company: { companyId: string },
+  invoiceId: string,
+  overrides: Partial<{ amountMinor: bigint; currency: string; receivedAt: Date }> = {},
+) {
+  return prisma.payment.create({
+    data: {
+      companyId: company.companyId,
+      invoiceId,
+      amountMinor: overrides.amountMinor ?? 5_000n,
+      currency: overrides.currency ?? "USD",
+      method: "CARD",
+      idempotencyKey: `test-${Date.now()}-${Math.random()}`,
+      receivedAt: overrides.receivedAt ?? new Date(),
+    },
+  });
+}
+
 function context(company: { companyId: string; ownerUserId: string }) {
   return {
     companyId: company.companyId,
@@ -156,13 +213,13 @@ describe("get_jobs_at_risk", () => {
     expect(flagged.riskReasons.join(" ")).toMatch(/Scheduled window ended/);
   });
 
-  it("flags an imminent unassigned job, a long-running job, and a stuck waiting-parts job", async () => {
+  it("does not flag a not-yet-late unassigned job, but flags a long-running job and a stuck waiting-parts job", async () => {
     const company = await seedCompany("risk-signals");
     const customer = await seedCustomer(company.companyId, "Bilal", "Khan");
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
 
-    const unassigned = await seedJob(
+    const notYetLate = await seedJob(
       { ...company, ...customer },
       {
         status: "SCHEDULED",
@@ -192,9 +249,7 @@ describe("get_jobs_at_risk", () => {
     const result = await getJobsAtRisk(context(company), { date: today });
     const byId = new Map(result.jobs.map((job) => [job.jobId, job]));
 
-    expect(byId.get(unassigned.id)?.riskReasons.join(" ")).toMatch(
-      /Unassigned with under 2 hours/,
-    );
+    expect(byId.has(notYetLate.id)).toBe(false);
     expect(byId.get(longRunning.id)?.riskReasons.join(" ")).toMatch(
       /In progress for over/,
     );
@@ -206,11 +261,216 @@ describe("get_jobs_at_risk", () => {
     );
   });
 
+  it("flags a job over 15 minutes past its scheduled start that hasn't moved past SCHEDULED", async () => {
+    const company = await seedCompany("risk-late-start");
+    const customer = await seedCustomer(company.companyId, "Imran", "Sheikh");
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const MINUTE_MS = 60_000;
+
+    const lateUnassigned = await seedJob(
+      { ...company, ...customer },
+      {
+        status: "SCHEDULED",
+        scheduledStart: new Date(now.getTime() - 20 * MINUTE_MS),
+        scheduledEnd: new Date(now.getTime() + 40 * MINUTE_MS),
+      },
+    );
+    const withinGrace = await seedJob(
+      { ...company, ...customer },
+      {
+        status: "SCHEDULED",
+        scheduledStart: new Date(now.getTime() - 5 * MINUTE_MS),
+        scheduledEnd: new Date(now.getTime() + 55 * MINUTE_MS),
+      },
+    );
+    const alreadyEnRoute = await seedJob(
+      { ...company, ...customer },
+      {
+        status: "EN_ROUTE",
+        scheduledStart: new Date(now.getTime() - 20 * MINUTE_MS),
+        scheduledEnd: new Date(now.getTime() + 40 * MINUTE_MS),
+      },
+    );
+
+    const result = await getJobsAtRisk(context(company), { date: today });
+    const byId = new Map(result.jobs.map((job) => [job.jobId, job]));
+
+    expect(byId.get(lateUnassigned.id)?.riskReasons.join(" ")).toMatch(
+      /Unassigned and \d+m past its scheduled start/,
+    );
+    expect(byId.has(withinGrace.id)).toBe(false);
+    expect(byId.has(alreadyEnRoute.id)).toBe(false);
+  });
+
+  it("flags a job whose assigned technician is at/over the 6-job workload threshold", async () => {
+    const company = await seedCompany("risk-overload");
+    const customer = await seedCustomer(company.companyId, "Farah", "Malik");
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const technicianId = company.ownerUserId; // any valid user id works for FK purposes
+
+    let flaggedJobId = "";
+    for (let index = 0; index < 6; index += 1) {
+      const job = await seedJob(
+        { ...company, ...customer },
+        {
+          status: "SCHEDULED",
+          scheduledStart: new Date(now.getTime() + (index + 1) * HOUR_MS),
+          scheduledEnd: new Date(now.getTime() + (index + 2) * HOUR_MS),
+          assignedTechnicianId: technicianId,
+        },
+      );
+      flaggedJobId = job.id;
+    }
+
+    const result = await getJobsAtRisk(context(company), { date: today });
+    const flagged = result.jobs.find((job) => job.jobId === flaggedJobId);
+    expect(flagged?.riskReasons.join(" ")).toMatch(
+      /Assigned technician has 6 jobs today/,
+    );
+  });
+
+  it("computes 'today' using the company's own timezone, not UTC", async () => {
+    const company = await seedCompany("risk-timezone");
+    await setCompanyTimezone(company.companyId, "Pacific/Kiritimati"); // UTC+14
+
+    const result = await getJobsAtRisk(context(company), {});
+    expect(result.timezone).toBe("Pacific/Kiritimati");
+    expect(result.date).toBe(todayInTimezone("Pacific/Kiritimati"));
+  });
+
   it("rejects a malformed date", async () => {
     const company = await seedCompany("risk-bad-date");
     await expect(
       getJobsAtRisk(context(company), { date: "not-a-date" }),
     ).rejects.toThrow();
+  });
+});
+
+describe("get_schedule_workload", () => {
+  it("flags an overloaded technician at 6 jobs and leaves one under threshold unflagged", async () => {
+    const company = await seedCompany("workload-overload");
+    const customer = await seedCustomer(company.companyId, "Nadia", "Rauf");
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const busyTech = company.ownerUserId;
+
+    for (let index = 0; index < 6; index += 1) {
+      await seedJob(
+        { ...company, ...customer },
+        {
+          status: "SCHEDULED",
+          scheduledStart: new Date(now.getTime() + (index + 1) * HOUR_MS),
+          scheduledEnd: new Date(now.getTime() + (index + 2) * HOUR_MS),
+          assignedTechnicianId: busyTech,
+        },
+      );
+    }
+
+    const result = await getScheduleWorkload(context(company), { date: today });
+    const busy = result.technicians.find((tech) => tech.technicianId === busyTech);
+    expect(busy?.jobCount).toBe(6);
+    expect(busy?.overloaded).toBe(true);
+  });
+
+  it("counts unassigned jobs and flags a job over 15 minutes past its scheduled start", async () => {
+    const company = await seedCompany("workload-late");
+    const customer = await seedCustomer(company.companyId, "Waqas", "Iqbal");
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const MINUTE_MS = 60_000;
+
+    await seedJob(
+      { ...company, ...customer },
+      {
+        status: "SCHEDULED",
+        scheduledStart: new Date(now.getTime() + HOUR_MS),
+        scheduledEnd: new Date(now.getTime() + 2 * HOUR_MS),
+      },
+    );
+    const late = await seedJob(
+      { ...company, ...customer },
+      {
+        status: "SCHEDULED",
+        scheduledStart: new Date(now.getTime() - 30 * MINUTE_MS),
+        scheduledEnd: new Date(now.getTime() + 30 * MINUTE_MS),
+      },
+    );
+
+    const result = await getScheduleWorkload(context(company), { date: today });
+    expect(result.unassignedJobCount).toBe(2);
+    expect(result.lateJobs.map((job) => job.jobId)).toContain(late.id);
+  });
+
+  it("defaults 'date' to today in the company's own timezone", async () => {
+    const company = await seedCompany("workload-timezone");
+    await setCompanyTimezone(company.companyId, "Pacific/Kiritimati");
+
+    const result = await getScheduleWorkload(context(company), {});
+    expect(result.timezone).toBe("Pacific/Kiritimati");
+    expect(result.date).toBe(todayInTimezone("Pacific/Kiritimati"));
+  });
+});
+
+describe("get_business_metrics", () => {
+  it("aggregates jobs-by-status, unassigned jobs, outstanding invoices, and revenue this month, scoped to the company", async () => {
+    const companyA = await seedCompany("metrics-a");
+    const companyB = await seedCompany("metrics-b");
+    const customerA = await seedCustomer(companyA.companyId, "Hina", "Yousaf");
+    const customerB = await seedCustomer(companyB.companyId, "Other", "Company");
+
+    await seedJob({ ...companyA, ...customerA }, { status: "SCHEDULED" });
+    await seedJob(
+      { ...companyA, ...customerA },
+      { status: "SCHEDULED", assignedTechnicianId: companyA.ownerUserId },
+    );
+    await seedJob({ ...companyA, ...customerA }, { status: "COMPLETED" });
+    // Noise in another company; must not leak into companyA's metrics.
+    await seedJob({ ...companyB, ...customerB }, { status: "SCHEDULED" });
+
+    const invoice = await seedInvoice(
+      { companyId: companyA.companyId, customerId: customerA.customerId },
+      { status: "ISSUED", totalMinor: 20_000n, balanceDueMinor: 15_000n },
+    );
+    await seedPayment(companyA, invoice.id, { amountMinor: 5_000n });
+
+    const result = await getBusinessMetrics(context(companyA));
+
+    const scheduledCount = result.jobsByStatus.find(
+      (row) => row.status === "SCHEDULED",
+    )?.count;
+    expect(scheduledCount).toBe(2);
+    expect(result.jobsByStatus.some((row) => row.status === "COMPLETED")).toBe(
+      false,
+    );
+    expect(result.unassignedJobs).toBe(1);
+
+    const usdOutstanding = result.outstandingInvoices.balanceDueByCurrency.find(
+      (row) => row.currency === "USD",
+    );
+    expect(usdOutstanding?.totalMinor).toBe("15000");
+
+    const usdRevenue = result.revenueThisMonth.collectedByCurrency.find(
+      (row) => row.currency === "USD",
+    );
+    expect(usdRevenue?.totalMinor).toBe("5000");
+  });
+});
+
+describe("timezone.util", () => {
+  it("computes company-local day boundaries that differ from UTC midnight", () => {
+    const { start, end } = dayBoundsInTimezone("2026-06-15", "Asia/Karachi"); // UTC+5
+    expect(start.toISOString()).toBe("2026-06-14T19:00:00.000Z");
+    expect(end.toISOString()).toBe("2026-06-15T19:00:00.000Z");
+  });
+
+  it("returns today's date for a timezone far ahead of UTC even near UTC midnight", () => {
+    // Pacific/Kiritimati is UTC+14; at 23:30 UTC it is already the next
+    // calendar day there.
+    const reference = new Date("2026-06-15T23:30:00.000Z");
+    expect(todayInTimezone("Pacific/Kiritimati", reference)).toBe("2026-06-16");
+    expect(todayInTimezone("UTC", reference)).toBe("2026-06-15");
   });
 });
 
