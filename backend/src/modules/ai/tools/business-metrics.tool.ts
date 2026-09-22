@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { prisma } from "../../../db/prisma.js";
+import type {
+  InvoiceStatus,
+  JobStatus,
+} from "../../../generated/prisma/index.js";
 import {
   dayBoundsInTimezone,
   getCompanyTimezone,
@@ -34,7 +38,13 @@ import type {
  * pipeline, not all-time history.
  */
 
-const LIVE_STATUSES = [
+// Typed as the actual Prisma enums (not `string[]`) so they satisfy the
+// `status: { in: [...] }` filters below. Left untyped, TS widens these to
+// `string[]`, which Prisma rejects for an enum column — and that mismatch
+// was also breaking generic inference on the two `groupBy` calls that use
+// them, which is why the `_count`/`_sum` result fields further down were
+// showing up as possibly-undefined/wrong-shape too.
+const LIVE_STATUSES: JobStatus[] = [
   "NEW",
   "QUOTING",
   "SCHEDULED",
@@ -42,7 +52,11 @@ const LIVE_STATUSES = [
   "IN_PROGRESS",
   "WAITING_PARTS",
 ];
-const OUTSTANDING_INVOICE_STATUSES = ["ISSUED", "PARTIALLY_PAID", "OVERDUE"];
+const OUTSTANDING_INVOICE_STATUSES: InvoiceStatus[] = [
+  "ISSUED",
+  "PARTIALLY_PAID",
+  "OVERDUE",
+];
 
 export const businessMetricsInputSchema = z.object({});
 export type BusinessMetricsInput = z.infer<typeof businessMetricsInputSchema>;
@@ -85,45 +99,50 @@ export async function getBusinessMetrics(
   const todayBounds = dayBoundsInTimezone(dateStr, timezone);
   const monthBounds = dayBoundsInTimezone(monthStartDateStr(dateStr), timezone);
 
-  const [jobsToday, statusGroups, unassignedJobs, outstandingGroups, revenueGroups] =
-    await Promise.all([
-      prisma.job.count({
-        where: {
-          companyId: context.companyId,
-          scheduledStart: { gte: todayBounds.start, lt: todayBounds.end },
-          status: { not: "CANCELLED" },
-        },
-      }),
-      prisma.job.groupBy({
-        by: ["status"],
-        where: { companyId: context.companyId, status: { in: LIVE_STATUSES } },
-        _count: { _all: true },
-      }),
-      prisma.job.count({
-        where: {
-          companyId: context.companyId,
-          status: { in: LIVE_STATUSES },
-          assignedTechnicianId: null,
-        },
-      }),
-      prisma.invoice.groupBy({
-        by: ["currency"],
-        where: {
-          companyId: context.companyId,
-          status: { in: OUTSTANDING_INVOICE_STATUSES },
-        },
-        _count: { _all: true },
-        _sum: { balanceDueMinor: true },
-      }),
-      prisma.payment.groupBy({
-        by: ["currency"],
-        where: {
-          companyId: context.companyId,
-          receivedAt: { gte: monthBounds.start, lt: now },
-        },
-        _sum: { amountMinor: true },
-      }),
-    ]);
+  const [
+    jobsToday,
+    statusGroups,
+    unassignedJobs,
+    outstandingGroups,
+    revenueGroups,
+  ] = await Promise.all([
+    prisma.job.count({
+      where: {
+        companyId: context.companyId,
+        scheduledStart: { gte: todayBounds.start, lt: todayBounds.end },
+        status: { not: "CANCELLED" },
+      },
+    }),
+    prisma.job.groupBy({
+      by: ["status"],
+      where: { companyId: context.companyId, status: { in: LIVE_STATUSES } },
+      _count: { _all: true },
+    }),
+    prisma.job.count({
+      where: {
+        companyId: context.companyId,
+        status: { in: LIVE_STATUSES },
+        assignedTechnicianId: null,
+      },
+    }),
+    prisma.invoice.groupBy({
+      by: ["currency"],
+      where: {
+        companyId: context.companyId,
+        status: { in: OUTSTANDING_INVOICE_STATUSES },
+      },
+      _count: { _all: true },
+      _sum: { balanceDueMinor: true },
+    }),
+    prisma.payment.groupBy({
+      by: ["currency"],
+      where: {
+        companyId: context.companyId,
+        receivedAt: { gte: monthBounds.start, lt: now },
+      },
+      _sum: { amountMinor: true },
+    }),
+  ]);
 
   return {
     date: dateStr,

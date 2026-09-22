@@ -1,6 +1,7 @@
 import { AppError } from "../../common/errors.js";
 import { logger } from "../../common/logger.js";
 import { prisma } from "../../db/prisma.js";
+import type { Prisma } from "../../generated/prisma/index.js";
 import {
   runAiTurn,
   AI_HISTORY_MESSAGE_LIMIT,
@@ -245,6 +246,20 @@ export async function postUserMessage(input: PostUserMessageInput) {
   return { userMessage, assistantMessage };
 }
 
+/**
+ * `AiTurnToolCall.input` is `unknown` (it originates from Gemini's parsed
+ * JSON response), but Prisma's `metadata Json?` column requires a value
+ * assignable to `Prisma.InputJsonValue`, a strict recursive JSON type that
+ * `unknown` never satisfies. Round-tripping through `JSON.stringify`/
+ * `JSON.parse` both guarantees the value really is plain JSON (tool
+ * inputs/outputs should already be, but this is the one place it's
+ * actually written to the DB) and gives TypeScript a value it can check
+ * against `InputJsonValue`, rather than reaching for a blind `as` cast.
+ */
+function toInputJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
 interface RunAssistantTurnInput {
   companyId: string;
   userId: string;
@@ -273,12 +288,10 @@ async function runAssistantTurn(input: RunAssistantTurnInput) {
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: AI_HISTORY_MESSAGE_LIMIT,
     });
-    history = recent
-      .reverse()
-      .map((message) => ({
-        role: message.role as "USER" | "ASSISTANT",
-        content: message.content,
-      }));
+    history = recent.reverse().map((message) => ({
+      role: message.role as "USER" | "ASSISTANT",
+      content: message.content,
+    }));
   } catch (error) {
     logger.error(
       { err: error, conversationId: input.conversationId },
@@ -333,7 +346,7 @@ async function runAssistantTurn(input: RunAssistantTurnInput) {
           metadata: {
             toolCalls: turn.toolCalls.map((call) => ({
               name: call.name,
-              input: call.input,
+              input: toInputJson(call.input),
             })),
             degraded: turn.degraded,
           },
