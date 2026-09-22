@@ -140,6 +140,7 @@ router.post(
     const result = await postUserMessage({
       companyId: request.auth!.companyId,
       userId: request.auth!.userId,
+      role: request.auth!.role,
       conversationId: params.data.conversationId,
       content: body.data.content,
     });

@@ -1,17 +1,23 @@
 import { AppError } from "../../common/errors.js";
+import { logger } from "../../common/logger.js";
 import { prisma } from "../../db/prisma.js";
+import {
+  runAiTurn,
+  AI_HISTORY_MESSAGE_LIMIT,
+} from "./gateway/ai-gateway.service.js";
+import type { AiHistoryMessage } from "./gateway/ai-gateway.service.js";
 
 /**
- * Phase 11, Slice B: AI conversation persistence.
- *
- * Scope of this slice: conversations and messages are stored and read back.
- * NO model/LLM call happens here (that is Slice D) and there is NO tool layer
- * (Slice C). Per architecture ADR-010 the model will never receive database
- * access; nothing in this file gives it any.
+ * Phase 11: AI conversation persistence (Slice B) plus the model gateway
+ * turn (Slice D).
  *
  * Tenancy + ownership: every query is scoped by `companyId` AND `userId`.
  * A conversation is private to the user who started it. Anything else is
  * reported as "not found" (never "forbidden") so IDs cannot be probed.
+ *
+ * Per architecture ADR-010 the model never receives database access — it
+ * only sees whatever `runAiTurn` (Slice D, calling Slice C's typed tools)
+ * hands back, and nothing here lets it write anything.
  */
 
 const TITLE_MAX_CHARS = 60;
@@ -166,57 +172,187 @@ export async function getConversation(input: GetConversationInput) {
 export interface PostUserMessageInput {
   companyId: string;
   userId: string;
+  role: "OWNER" | "DISPATCHER" | "TECHNICIAN";
   conversationId: string;
   content: string;
 }
 
 /**
- * Persists a USER message. The role is fixed to USER here: clients can never
- * author ASSISTANT or TOOL messages.
+ * Persists a USER message, then (Slice D) runs one AI turn and persists the
+ * TOOL/ASSISTANT messages it produces. The role is fixed to USER for the
+ * client-supplied message: clients can never author ASSISTANT or TOOL
+ * messages directly.
  *
- * The response shape already reserves `assistantMessage` (always null in this
- * slice) so that Slice D can fill it in without changing the API contract.
- *
- * Message insert + conversation bump happen in one transaction so a message
- * can never exist without the conversation's `updatedAt` reflecting it.
+ * Two separate transactions, deliberately: the user message must exist the
+ * moment it's sent regardless of what the model does afterward (rules.md
+ * §7's transaction guidance is about writes that must succeed/fail
+ * together — persisting the user's message and calling an external HTTP
+ * API are not that; holding a transaction open across a network round trip
+ * to Gemini would hold a row lock for the duration of that call, which is
+ * exactly what to avoid). If the AI turn fails or is unconfigured,
+ * `assistantMessage` is `null` and the user's message is unaffected — an
+ * AI failure must not look like a lost message.
  */
 export async function postUserMessage(input: PostUserMessageInput) {
-  return prisma.$transaction(async (transaction) => {
-    const conversation = await transaction.aiConversation.findFirst({
-      where: {
-        id: input.conversationId,
-        companyId: input.companyId,
-        userId: input.userId,
-      },
-      select: { id: true, title: true },
-    });
+  const { userMessage, conversationId } = await prisma.$transaction(
+    async (transaction) => {
+      const conversation = await transaction.aiConversation.findFirst({
+        where: {
+          id: input.conversationId,
+          companyId: input.companyId,
+          userId: input.userId,
+        },
+        select: { id: true, title: true },
+      });
 
-    if (!conversation) {
-      throw conversationNotFound();
-    }
+      if (!conversation) {
+        throw conversationNotFound();
+      }
 
-    const userMessage = await transaction.aiMessage.create({
-      data: {
-        companyId: input.companyId,
-        conversationId: conversation.id,
-        role: "USER",
-        content: input.content,
-      },
-      select: messageSelect,
-    });
+      const userMessage = await transaction.aiMessage.create({
+        data: {
+          companyId: input.companyId,
+          conversationId: conversation.id,
+          role: "USER",
+          content: input.content,
+        },
+        select: messageSelect,
+      });
 
-    await transaction.aiConversation.update({
-      where: { id: conversation.id },
-      data: {
-        // @updatedAt only fires when the row itself changes, so bump it
-        // explicitly to keep "most recent conversation first" correct.
-        updatedAt: new Date(),
-        ...(conversation.title === null
-          ? { title: deriveConversationTitle(input.content) }
-          : {}),
-      },
-    });
+      await transaction.aiConversation.update({
+        where: { id: conversation.id },
+        data: {
+          // @updatedAt only fires when the row itself changes, so bump it
+          // explicitly to keep "most recent conversation first" correct.
+          updatedAt: new Date(),
+          ...(conversation.title === null
+            ? { title: deriveConversationTitle(input.content) }
+            : {}),
+        },
+      });
 
-    return { userMessage, assistantMessage: null };
+      return { userMessage, conversationId: conversation.id };
+    },
+  );
+
+  const assistantMessage = await runAssistantTurn({
+    companyId: input.companyId,
+    userId: input.userId,
+    role: input.role,
+    conversationId,
   });
+
+  return { userMessage, assistantMessage };
+}
+
+interface RunAssistantTurnInput {
+  companyId: string;
+  userId: string;
+  role: "OWNER" | "DISPATCHER" | "TECHNICIAN";
+  conversationId: string;
+}
+
+/**
+ * Loads bounded recent history (including the user message just committed
+ * above), runs the model gateway, and persists whatever it produced. Any
+ * failure here — no API key configured, a Gemini API error, a network
+ * error — is caught and logged; the function returns `null` rather than
+ * throwing so a broken AI gateway can never turn into a failed message
+ * post (the user's message already committed successfully).
+ */
+async function runAssistantTurn(input: RunAssistantTurnInput) {
+  let history: AiHistoryMessage[];
+  try {
+    const recent = await prisma.aiMessage.findMany({
+      where: {
+        companyId: input.companyId,
+        conversationId: input.conversationId,
+        role: { in: [...CLIENT_VISIBLE_ROLES] },
+      },
+      select: { role: true, content: true },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: AI_HISTORY_MESSAGE_LIMIT,
+    });
+    history = recent
+      .reverse()
+      .map((message) => ({
+        role: message.role as "USER" | "ASSISTANT",
+        content: message.content,
+      }));
+  } catch (error) {
+    logger.error(
+      { err: error, conversationId: input.conversationId },
+      "Failed to load AI conversation history",
+    );
+    return null;
+  }
+
+  let turn;
+  try {
+    turn = await runAiTurn(
+      { companyId: input.companyId, userId: input.userId, role: input.role },
+      history,
+    );
+  } catch (error) {
+    logger.error(
+      { err: error, conversationId: input.conversationId },
+      "AI gateway turn failed",
+    );
+    return null;
+  }
+
+  if (!turn) {
+    // GEMINI_API_KEY not configured — already logged once by gemini.client.ts.
+    return null;
+  }
+
+  try {
+    return await prisma.$transaction(async (transaction) => {
+      for (const call of turn.toolCalls) {
+        await transaction.aiMessage.create({
+          data: {
+            companyId: input.companyId,
+            conversationId: input.conversationId,
+            role: "TOOL",
+            content: JSON.stringify({
+              tool: call.name,
+              input: call.input,
+              output: call.output,
+              ...(call.error ? { error: call.error } : {}),
+            }),
+          },
+        });
+      }
+
+      const assistantMessage = await transaction.aiMessage.create({
+        data: {
+          companyId: input.companyId,
+          conversationId: input.conversationId,
+          role: "ASSISTANT",
+          content: turn.text,
+          metadata: {
+            toolCalls: turn.toolCalls.map((call) => ({
+              name: call.name,
+              input: call.input,
+            })),
+            degraded: turn.degraded,
+          },
+        },
+        select: messageSelect,
+      });
+
+      await transaction.aiConversation.update({
+        where: { id: input.conversationId },
+        data: { updatedAt: new Date() },
+      });
+
+      return assistantMessage;
+    });
+  } catch (error) {
+    logger.error(
+      { err: error, conversationId: input.conversationId },
+      "Failed to persist AI assistant reply",
+    );
+    return null;
+  }
 }

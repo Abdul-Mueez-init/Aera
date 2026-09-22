@@ -24,7 +24,11 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   // Resend's shared sandbox sender works without domain verification; swap
   // to a verified sending domain before relying on this in production.
-  RESEND_FROM_EMAIL: z.string().trim().min(1).default("Aera <onboarding@resend.dev>"),
+  RESEND_FROM_EMAIL: z
+    .string()
+    .trim()
+    .min(1)
+    .default("Aera <onboarding@resend.dev>"),
   // Phase 10 Slice E — push adapter (Firebase Cloud Messaging, HTTP v1 API).
   // All three come from one Firebase service-account JSON key. Left unset
   // in local/dev/test: fcm-push.adapter.ts skips sending and logs a warning
@@ -48,11 +52,32 @@ const envSchema = z.object({
     .enum(["true", "false"])
     .default("true")
     .transform((value) => value === "true"),
-  INVOICE_REMINDER_SWEEP_MINUTES: z.coerce.number().int().positive().default(60),
+  INVOICE_REMINDER_SWEEP_MINUTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60),
   // Minimum gap between two reminders for the same invoice.
   INVOICE_REMINDER_INTERVAL_DAYS: z.coerce.number().int().positive().default(3),
   // Used only for invoices with no dueAt: due = issuedAt + this many days.
   INVOICE_PAYMENT_TERMS_DAYS: z.coerce.number().int().positive().default(14),
+  // Phase 11 Slice D — AI gateway (Google Gemini, generativelanguage.googleapis.com).
+  // Left unset in local/dev/test: gemini.client.ts skips the model call and
+  // logs a warning instead of failing, so no key is required to run the app
+  // or test suite (the user message still gets saved; assistantMessage is
+  // null). Set it to get real AI replies.
+  // Get a free key at https://aistudio.google.com/apikey — no credit card.
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  // gemini-3.1-flash-lite has been the stable, free-tier-eligible Gemini 3
+  // model since 7 May 2026 (the Gemini 2.5 line — flash, flash-lite, pro —
+  // is scheduled for shutdown 16 October 2026, so it is deliberately not
+  // the default here). Override for a different model without a code change.
+  GEMINI_MODEL: z.string().trim().min(1).default("gemini-3.1-flash-lite"),
+  // Hard cap on tool-call round trips within a single AI turn (rules.md:
+  // "no endpoint returns unbounded collections" — this is the AI-turn
+  // analogue). Reaching the cap degrades to an honest "couldn't finish"
+  // message rather than looping forever against the model API.
+  AI_MAX_TOOL_ITERATIONS: z.coerce.number().int().positive().max(10).default(4),
 });
 
 const parsed = envSchema.safeParse(process.env);
