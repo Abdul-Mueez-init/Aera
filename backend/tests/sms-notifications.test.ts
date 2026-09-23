@@ -81,13 +81,11 @@ describe("textbeeSmsAdapter", () => {
 
   it("throws on a non-2xx response so the queue retries", async () => {
     (env as { TEXTBEE_API_KEY?: string }).TEXTBEE_API_KEY = "tb_test_key";
-    const fetchSpy = vi
-      .fn()
-      .mockResolvedValue({
-        ok: false,
-        status: 401,
-        text: async () => "API key rejected",
-      });
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () => "API key rejected",
+    });
     vi.stubGlobal("fetch", fetchSpy);
 
     await expect(

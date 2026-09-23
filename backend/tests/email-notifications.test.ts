@@ -91,13 +91,11 @@ describe("resendEmailAdapter", () => {
 
   it("throws on a non-2xx response so the queue retries", async () => {
     (env as { RESEND_API_KEY?: string }).RESEND_API_KEY = "re_test_key";
-    const fetchSpy = vi
-      .fn()
-      .mockResolvedValue({
-        ok: false,
-        status: 422,
-        text: async () => "invalid recipient",
-      });
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+      text: async () => "invalid recipient",
+    });
     vi.stubGlobal("fetch", fetchSpy);
 
     await expect(
