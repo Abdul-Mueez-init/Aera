@@ -50,7 +50,7 @@ void main() {
     // Tap on Schedule tab
     await tester.tap(find.text('Schedule').last);
     await tester.pumpAndSettle();
-    expect(find.text('Schedule Job'), findsOneWidget);
+    expect(find.text('Timeline'), findsOneWidget);
 
     // Tap on Customers tab
     await tester.tap(find.text('Customers').last);

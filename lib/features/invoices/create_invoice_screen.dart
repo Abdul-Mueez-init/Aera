@@ -9,7 +9,6 @@ import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../jobs/data/jobs_repository.dart';
-import '../jobs/providers/jobs_provider.dart';
 import 'data/invoices_repository.dart';
 import 'providers/invoices_provider.dart';
 

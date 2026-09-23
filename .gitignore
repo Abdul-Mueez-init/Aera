@@ -30,6 +30,7 @@ backend/dist/
 backend/.env
 backend/.env.*
 !backend/.env.example
+!backend/.env.test.example
 
 # Prisma
 backend/prisma/*.db

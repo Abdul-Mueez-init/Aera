@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../common/auth/auth.middleware.js";
+import { verifyAccessToken } from "../../common/auth/tokens.js";
 import { authRateLimiter, refreshRateLimiter } from "../../common/rateLimit.js";
 import {
   acceptInvitationAndLogin,
@@ -8,6 +9,7 @@ import {
   login,
   register,
   revokeRefreshSession,
+  revokeSessionById,
   rotateRefreshSession,
 } from "./auth.service.js";
 
@@ -97,6 +99,17 @@ router.post(
 );
 
 router.post("/logout", async (request, response) => {
+  const authorization = request.header("authorization");
+  const token = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : undefined;
+  if (token) {
+    const auth = await verifyAccessToken(token);
+    if (auth?.sessionId) {
+      await revokeSessionById(auth.sessionId);
+    }
+  }
+
   const parsed = refreshSchema.safeParse(request.body);
   if (parsed.success) {
     await revokeRefreshSession(parsed.data.refreshToken);

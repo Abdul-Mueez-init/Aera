@@ -72,7 +72,7 @@ class _AiOperationsAssistantScreenState
       }
 
       _queryController.clear();
-      final result = await repo.postMessage(conversationId!, content);
+      final result = await repo.postMessage(conversationId, content);
       ref.invalidate(aiConversationDetailProvider(conversationId));
       if (isNewConversation) {
         ref.invalidate(aiConversationsListProvider);

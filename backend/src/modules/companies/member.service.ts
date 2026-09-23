@@ -169,10 +169,15 @@ export async function acceptInvitation(
   return { userId: member.userId, companyId: member.companyId };
 }
 
-export async function updateMemberRole(
+export interface UpdateMemberInput {
+  role?: "OWNER" | "DISPATCHER" | "TECHNICIAN";
+  status?: "ACTIVE" | "SUSPENDED";
+}
+
+export async function updateMember(
   context: AuthContext,
   memberId: string,
-  role: "OWNER" | "DISPATCHER" | "TECHNICIAN",
+  updates: UpdateMemberInput,
 ) {
   const member = await prisma.companyMember.findFirst({
     where: { id: memberId, companyId: context.companyId },
@@ -182,9 +187,20 @@ export async function updateMemberRole(
     throw new AppError("RESOURCE_NOT_FOUND", "Member not found", 404);
   }
 
+  if (member.userId === context.userId && updates.status === "SUSPENDED") {
+    throw new AppError(
+      "CANNOT_SUSPEND_SELF",
+      "You cannot suspend your own company membership",
+      422,
+    );
+  }
+
   const updated = await prisma.companyMember.update({
     where: { id: memberId },
-    data: { role },
+    data: {
+      ...(updates.role !== undefined ? { role: updates.role } : {}),
+      ...(updates.status !== undefined ? { status: updates.status } : {}),
+    },
     select: {
       id: true,
       role: true,
@@ -193,7 +209,29 @@ export async function updateMemberRole(
     },
   });
 
+  if (updates.status === "SUSPENDED") {
+    await prisma.refreshSession.updateMany({
+      where: {
+        userId: member.userId,
+        companyId: member.companyId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+        lastUsedAt: new Date(),
+      },
+    });
+  }
+
   return updated;
+}
+
+export async function updateMemberRole(
+  context: AuthContext,
+  memberId: string,
+  role: "OWNER" | "DISPATCHER" | "TECHNICIAN",
+) {
+  return updateMember(context, memberId, { role });
 }
 
 export async function removeMember(context: AuthContext, memberId: string) {
@@ -213,9 +251,22 @@ export async function removeMember(context: AuthContext, memberId: string) {
     );
   }
 
-  await prisma.companyMember.delete({
-    where: { id: memberId },
-  });
+  await prisma.$transaction([
+    prisma.companyMember.delete({
+      where: { id: memberId },
+    }),
+    prisma.refreshSession.updateMany({
+      where: {
+        userId: member.userId,
+        companyId: member.companyId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+        lastUsedAt: new Date(),
+      },
+    }),
+  ]);
 
   return { id: memberId, removed: true };
 }

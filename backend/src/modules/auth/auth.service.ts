@@ -338,6 +338,16 @@ export async function revokeRefreshSession(
   });
 }
 
+export async function revokeSessionById(sessionId: string): Promise<void> {
+  await prisma.refreshSession.updateMany({
+    where: {
+      id: sessionId,
+      revokedAt: null,
+    },
+    data: { revokedAt: new Date(), lastUsedAt: new Date() },
+  });
+}
+
 export async function acceptInvitationAndLogin(
   token: string,
   password: string,

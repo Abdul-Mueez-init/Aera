@@ -9,7 +9,6 @@ import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_text_field.dart';
-import '../customers/data/customers_repository.dart';
 import '../customers/providers/customers_provider.dart';
 import 'data/jobs_repository.dart';
 import 'providers/jobs_provider.dart';
@@ -89,7 +88,6 @@ class _CreateJobScreenState extends ConsumerState<CreateJobScreen> {
           );
 
       ref.invalidate(jobsListProvider);
-      ref.read(jobDraftProvider.notifier).state = job;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

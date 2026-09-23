@@ -89,7 +89,7 @@ router.post(
 import {
   listMembers,
   inviteMember,
-  updateMemberRole,
+  updateMember,
   removeMember,
 } from "./member.service.js";
 
@@ -100,14 +100,24 @@ const inviteSchema = z.object({
   role: z.enum(["OWNER", "DISPATCHER", "TECHNICIAN"]),
 });
 
-const updateRoleSchema = z.object({
-  role: z.enum(["OWNER", "DISPATCHER", "TECHNICIAN"]),
-});
+const updateMemberSchema = z
+  .object({
+    role: z.enum(["OWNER", "DISPATCHER", "TECHNICIAN"]).optional(),
+    status: z.enum(["ACTIVE", "SUSPENDED"]).optional(),
+  })
+  .refine((data) => data.role !== undefined || data.status !== undefined, {
+    message: "Either role or status must be provided",
+  });
 
-router.get("/current/members", requireAuth, async (request, response) => {
-  const members = await listMembers(request.auth!);
-  response.status(200).json({ data: members });
-});
+router.get(
+  "/current/members",
+  requireAuth,
+  requireRole("OWNER", "DISPATCHER"),
+  async (request, response) => {
+    const members = await listMembers(request.auth!);
+    response.status(200).json({ data: members });
+  },
+);
 
 router.post(
   "/current/invitations",
@@ -134,7 +144,7 @@ router.patch(
   requireAuth,
   requireRole("OWNER"),
   async (request, response) => {
-    const parsed = updateRoleSchema.safeParse(request.body);
+    const parsed = updateMemberSchema.safeParse(request.body);
     if (!parsed.success) {
       response.status(422).json({
         error: {
@@ -147,11 +157,7 @@ router.patch(
     const memberId = Array.isArray(request.params.memberId)
       ? request.params.memberId[0]
       : request.params.memberId;
-    const member = await updateMemberRole(
-      request.auth!,
-      memberId,
-      parsed.data.role,
-    );
+    const member = await updateMember(request.auth!, memberId, parsed.data);
     response.status(200).json({ data: member });
   },
 );
@@ -173,6 +179,11 @@ router.get("/:companyId", requireAuth, async (request, response) => {
   const companyId = Array.isArray(request.params.companyId)
     ? request.params.companyId[0]
     : request.params.companyId;
+
+  if (companyId !== request.auth!.companyId) {
+    throw new AppError("TENANT_ACCESS_DENIED", "Company access denied", 403);
+  }
+
   const company = await prisma.company.findFirst({
     where: {
       id: companyId,

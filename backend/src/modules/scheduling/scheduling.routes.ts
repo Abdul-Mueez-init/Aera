@@ -30,27 +30,37 @@ function routeId(value: string | string[]): string {
   return Array.isArray(value) ? value[0] : value;
 }
 
-router.get("/", requireAuth, async (request, response) => {
-  const parsed = dateSchema.safeParse(request.query);
-  if (!parsed.success) {
-    sendValidationError(response, parsed.error);
-    return;
-  }
-  response.status(200).json({
-    data: await getDaySchedule(request.auth!, parsed.data.date),
-  });
-});
+router.get(
+  "/",
+  requireAuth,
+  requireRole(...managerRoles),
+  async (request, response) => {
+    const parsed = dateSchema.safeParse(request.query);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    response.status(200).json({
+      data: await getDaySchedule(request.auth!, parsed.data.date),
+    });
+  },
+);
 
-router.get("/workload", requireAuth, async (request, response) => {
-  const parsed = dateSchema.safeParse(request.query);
-  if (!parsed.success) {
-    sendValidationError(response, parsed.error);
-    return;
-  }
-  response.status(200).json({
-    data: await getTechnicianWorkload(request.auth!, parsed.data.date),
-  });
-});
+router.get(
+  "/workload",
+  requireAuth,
+  requireRole(...managerRoles),
+  async (request, response) => {
+    const parsed = dateSchema.safeParse(request.query);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    response.status(200).json({
+      data: await getTechnicianWorkload(request.auth!, parsed.data.date),
+    });
+  },
+);
 
 router.post(
   "/jobs/:jobId/schedule",

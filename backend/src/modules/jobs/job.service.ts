@@ -4,6 +4,12 @@ import { prisma } from "../../db/prisma.js";
 import { notificationPublisher } from "../notifications/notification.port.js";
 import { supabaseStorageAdapter } from "../../common/storage/supabase-storage.adapter.js";
 import type { SignedUploadResult } from "../../common/storage/storage.port.js";
+import {
+  assertCanAddJobNote,
+  assertCanExecuteJobWork,
+  assertCanTransitionJob,
+  assertCanViewJob,
+} from "./job.policy.js";
 
 export type JobStatusValue =
   | "NEW"
@@ -202,8 +208,19 @@ export async function createJob(context: AuthContext, input: JobInput) {
 }
 
 export async function getJob(context: AuthContext, jobId: string) {
+  const jobMeta = await prisma.job.findFirst({
+    where: { id: jobId, companyId: context.companyId },
+    select: { id: true, companyId: true, assignedTechnicianId: true },
+  });
+
+  if (!jobMeta) {
+    throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+  }
+
+  assertCanViewJob(context, jobMeta);
+
   const job = await prisma.job.findFirst({
-    where: { id: jobId, ...jobAccessWhere(context) },
+    where: { id: jobId, companyId: context.companyId },
     select: {
       ...jobSelect(),
       statusHistory: {
@@ -392,12 +409,18 @@ export async function transitionJob(
   reason?: string,
 ) {
   const job = await prisma.job.findFirst({
-    where: { id: jobId, ...jobAccessWhere(context) },
-    select: { id: true, status: true },
+    where: { id: jobId, companyId: context.companyId },
+    select: {
+      id: true,
+      companyId: true,
+      status: true,
+      assignedTechnicianId: true,
+    },
   });
   if (!job) {
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
+  assertCanTransitionJob(context, job, toStatus);
   if (toStatus === "COMPLETED") {
     throw new AppError(
       "JOB_COMPLETION_REQUIRED",
@@ -466,12 +489,18 @@ export async function listTechnicianToday(context: AuthContext, date: string) {
 
 async function assertExecutableJob(context: AuthContext, jobId: string) {
   const job = await prisma.job.findFirst({
-    where: { id: jobId, ...jobAccessWhere(context) },
-    select: { id: true, status: true },
+    where: { id: jobId, companyId: context.companyId },
+    select: {
+      id: true,
+      companyId: true,
+      status: true,
+      assignedTechnicianId: true,
+    },
   });
   if (!job) {
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
+  assertCanExecuteJobWork(context, job);
   if (["COMPLETED", "CANCELLED"].includes(job.status)) {
     throw new AppError("JOB_IMMUTABLE", "Final jobs cannot be changed", 409);
   }
@@ -600,12 +629,13 @@ export async function addJobNote(
   visibility: NoteVisibilityValue,
 ) {
   const job = await prisma.job.findFirst({
-    where: { id: jobId, ...jobAccessWhere(context) },
-    select: { id: true },
+    where: { id: jobId, companyId: context.companyId },
+    select: { id: true, companyId: true, assignedTechnicianId: true },
   });
   if (!job) {
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
+  assertCanAddJobNote(context, job, visibility);
 
   return prisma.jobNote.create({
     data: {

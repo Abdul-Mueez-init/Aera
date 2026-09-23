@@ -1,10 +1,20 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
+import { env } from "../src/config/env.js";
 import { prisma } from "../src/db/prisma.js";
 
 const app = buildApp();
+const originalGeminiKey = env.GEMINI_API_KEY;
+
+beforeEach(() => {
+  (env as { GEMINI_API_KEY?: string }).GEMINI_API_KEY = undefined;
+});
+
+afterEach(() => {
+  (env as { GEMINI_API_KEY?: string }).GEMINI_API_KEY = originalGeminiKey;
+});
 
 type Auth = { Authorization: string };
 

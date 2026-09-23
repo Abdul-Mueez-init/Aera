@@ -312,6 +312,7 @@ describe("get_jobs_at_risk", () => {
     const customer = await seedCustomer(company.companyId, "Farah", "Malik");
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
+    const baseTime = new Date(`${today}T08:00:00.000Z`).getTime();
     const technicianId = company.ownerUserId; // any valid user id works for FK purposes
 
     let flaggedJobId = "";
@@ -320,8 +321,8 @@ describe("get_jobs_at_risk", () => {
         { ...company, ...customer },
         {
           status: "SCHEDULED",
-          scheduledStart: new Date(now.getTime() + (index + 1) * HOUR_MS),
-          scheduledEnd: new Date(now.getTime() + (index + 2) * HOUR_MS),
+          scheduledStart: new Date(baseTime + (index + 1) * HOUR_MS),
+          scheduledEnd: new Date(baseTime + (index + 2) * HOUR_MS),
           assignedTechnicianId: technicianId,
         },
       );
@@ -358,6 +359,7 @@ describe("get_schedule_workload", () => {
     const customer = await seedCustomer(company.companyId, "Nadia", "Rauf");
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
+    const baseTime = new Date(`${today}T08:00:00.000Z`).getTime();
     const busyTech = company.ownerUserId;
 
     for (let index = 0; index < 6; index += 1) {
@@ -365,8 +367,8 @@ describe("get_schedule_workload", () => {
         { ...company, ...customer },
         {
           status: "SCHEDULED",
-          scheduledStart: new Date(now.getTime() + (index + 1) * HOUR_MS),
-          scheduledEnd: new Date(now.getTime() + (index + 2) * HOUR_MS),
+          scheduledStart: new Date(baseTime + (index + 1) * HOUR_MS),
+          scheduledEnd: new Date(baseTime + (index + 2) * HOUR_MS),
           assignedTechnicianId: busyTech,
         },
       );

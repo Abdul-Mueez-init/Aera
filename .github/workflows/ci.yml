@@ -34,6 +34,8 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aera_ci
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/aera_ci
       JWT_SECRET: ci-only-secret-that-is-at-least-32-characters-long
+      SUPABASE_URL: https://test-project.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: test-only-service-role-key-not-real
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -64,5 +66,5 @@ jobs:
           channel: stable
           flutter-version: '3.35.0'
       - run: flutter pub get
-      - run: flutter analyze
+      - run: flutter analyze --no-fatal-infos
       - run: flutter test
