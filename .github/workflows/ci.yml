@@ -16,9 +16,23 @@ jobs:
     defaults:
       run:
         working-directory: .
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aera_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
-      DATABASE_URL: postgresql://localhost:5432/aera_ci
-      DIRECT_URL: postgresql://localhost:5432/aera_ci
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aera_ci
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/aera_ci
       JWT_SECRET: ci-only-secret-that-is-at-least-32-characters-long
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +50,7 @@ jobs:
       - run: pnpm --filter backend lint
       - run: pnpm --filter backend format:check
       - run: pnpm --filter backend typecheck
+      - run: pnpm --filter backend prisma:migrate:deploy
       - run: pnpm --filter backend test
       - run: pnpm --filter backend build
 
