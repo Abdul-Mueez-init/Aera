@@ -145,7 +145,11 @@ async function seedInvoice(
 async function seedPayment(
   company: { companyId: string },
   invoiceId: string,
-  overrides: Partial<{ amountMinor: bigint; currency: string; receivedAt: Date }> = {},
+  overrides: Partial<{
+    amountMinor: bigint;
+    currency: string;
+    receivedAt: Date;
+  }> = {},
 ) {
   return prisma.payment.create({
     data: {
@@ -369,7 +373,9 @@ describe("get_schedule_workload", () => {
     }
 
     const result = await getScheduleWorkload(context(company), { date: today });
-    const busy = result.technicians.find((tech) => tech.technicianId === busyTech);
+    const busy = result.technicians.find(
+      (tech) => tech.technicianId === busyTech,
+    );
     expect(busy?.jobCount).toBe(6);
     expect(busy?.overloaded).toBe(true);
   });
@@ -418,7 +424,11 @@ describe("get_business_metrics", () => {
     const companyA = await seedCompany("metrics-a");
     const companyB = await seedCompany("metrics-b");
     const customerA = await seedCustomer(companyA.companyId, "Hina", "Yousaf");
-    const customerB = await seedCustomer(companyB.companyId, "Other", "Company");
+    const customerB = await seedCustomer(
+      companyB.companyId,
+      "Other",
+      "Company",
+    );
 
     await seedJob({ ...companyA, ...customerA }, { status: "SCHEDULED" });
     await seedJob(

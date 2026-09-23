@@ -84,14 +84,18 @@ describe("fcmPushAdapter", () => {
   it("exchanges for an access token then posts to the FCM v1 send endpoint", async () => {
     const mutable = env as MutableEnv;
     mutable.FIREBASE_PROJECT_ID = "aera-test-project";
-    mutable.FIREBASE_CLIENT_EMAIL = "fcm@aera-test-project.iam.gserviceaccount.com";
+    mutable.FIREBASE_CLIENT_EMAIL =
+      "fcm@aera-test-project.iam.gserviceaccount.com";
     mutable.FIREBASE_PRIVATE_KEY = TEST_PRIVATE_KEY;
 
     const fetchSpy = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ access_token: "fake-access-token", expires_in: 3600 }),
+        json: async () => ({
+          access_token: "fake-access-token",
+          expires_in: 3600,
+        }),
       })
       .mockResolvedValueOnce({ ok: true, status: 200, text: async () => "" });
     vi.stubGlobal("fetch", fetchSpy);
@@ -116,7 +120,10 @@ describe("fcmPushAdapter", () => {
     expect(JSON.parse(sendInit.body)).toMatchObject({
       message: {
         token: "device-token",
-        notification: { title: "Job #4 assigned", body: "AC repair for Bilal Ahmed" },
+        notification: {
+          title: "Job #4 assigned",
+          body: "AC repair for Bilal Ahmed",
+        },
         data: { jobId: "job-1" },
       },
     });
@@ -125,20 +132,26 @@ describe("fcmPushAdapter", () => {
   it("throws PushTokenInvalidError when FCM reports the token as unregistered", async () => {
     const mutable = env as MutableEnv;
     mutable.FIREBASE_PROJECT_ID = "aera-test-project";
-    mutable.FIREBASE_CLIENT_EMAIL = "fcm@aera-test-project.iam.gserviceaccount.com";
+    mutable.FIREBASE_CLIENT_EMAIL =
+      "fcm@aera-test-project.iam.gserviceaccount.com";
     mutable.FIREBASE_PRIVATE_KEY = TEST_PRIVATE_KEY;
 
     const fetchSpy = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ access_token: "fake-access-token", expires_in: 3600 }),
+        json: async () => ({
+          access_token: "fake-access-token",
+          expires_in: 3600,
+        }),
       })
       .mockResolvedValueOnce({
         ok: false,
         status: 404,
         text: async () =>
-          JSON.stringify({ error: { status: "UNREGISTERED", message: "gone" } }),
+          JSON.stringify({
+            error: { status: "UNREGISTERED", message: "gone" },
+          }),
       });
     vi.stubGlobal("fetch", fetchSpy);
 
@@ -150,14 +163,18 @@ describe("fcmPushAdapter", () => {
   it("throws a generic error on other non-2xx responses so the queue retries", async () => {
     const mutable = env as MutableEnv;
     mutable.FIREBASE_PROJECT_ID = "aera-test-project";
-    mutable.FIREBASE_CLIENT_EMAIL = "fcm@aera-test-project.iam.gserviceaccount.com";
+    mutable.FIREBASE_CLIENT_EMAIL =
+      "fcm@aera-test-project.iam.gserviceaccount.com";
     mutable.FIREBASE_PRIVATE_KEY = TEST_PRIVATE_KEY;
 
     const fetchSpy = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ access_token: "fake-access-token", expires_in: 3600 }),
+        json: async () => ({
+          access_token: "fake-access-token",
+          expires_in: 3600,
+        }),
       })
       .mockResolvedValueOnce({
         ok: false,
@@ -194,7 +211,9 @@ describe("buildPushMessage", () => {
         companyName: `Company ${suffix}`,
       });
     expect(owner.status).toBe(201);
-    const ownerAuth = { Authorization: `Bearer ${owner.body.data.accessToken}` };
+    const ownerAuth = {
+      Authorization: `Bearer ${owner.body.data.accessToken}`,
+    };
 
     const me = await request(app).get("/api/v1/auth/me").set(ownerAuth);
     const companyId = me.body.data.company.id as string;
@@ -211,7 +230,13 @@ describe("buildPushMessage", () => {
       .send({
         customerId: customer.body.data.id,
         currency: "USD",
-        items: [{ description: "Compressor replacement", quantity: 1, unitPriceMinor: 50000 }],
+        items: [
+          {
+            description: "Compressor replacement",
+            quantity: 1,
+            unitPriceMinor: 50000,
+          },
+        ],
       });
     expect(quote.status).toBe(201);
 

@@ -147,7 +147,11 @@ router.patch(
     const memberId = Array.isArray(request.params.memberId)
       ? request.params.memberId[0]
       : request.params.memberId;
-    const member = await updateMemberRole(request.auth!, memberId, parsed.data.role);
+    const member = await updateMemberRole(
+      request.auth!,
+      memberId,
+      parsed.data.role,
+    );
     response.status(200).json({ data: member });
   },
 );
@@ -196,4 +200,3 @@ router.get("/:companyId", requireAuth, async (request, response) => {
 });
 
 export { router as companyRouter };
-

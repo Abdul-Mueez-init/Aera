@@ -138,7 +138,11 @@ export async function getPublicPortal(token: string) {
     },
   });
   if (!portal) {
-    throw new AppError("PORTAL_ACCESS_EXPIRED", "Customer portal access has expired", 401);
+    throw new AppError(
+      "PORTAL_ACCESS_EXPIRED",
+      "Customer portal access has expired",
+      401,
+    );
   }
   return jsonSafe(portal.customer);
 }
@@ -154,7 +158,11 @@ export async function submitPublicReview(
     select: { companyId: true, customerId: true },
   });
   if (!portal) {
-    throw new AppError("PORTAL_ACCESS_EXPIRED", "Customer portal access has expired", 401);
+    throw new AppError(
+      "PORTAL_ACCESS_EXPIRED",
+      "Customer portal access has expired",
+      401,
+    );
   }
   const job = await prisma.job.findFirst({
     where: {
@@ -166,7 +174,11 @@ export async function submitPublicReview(
     select: { id: true },
   });
   if (!job) {
-    throw new AppError("REVIEW_JOB_NOT_ELIGIBLE", "Completed service job not found", 422);
+    throw new AppError(
+      "REVIEW_JOB_NOT_ELIGIBLE",
+      "Completed service job not found",
+      422,
+    );
   }
   try {
     const review = await prisma.customerReview.create({
@@ -187,7 +199,11 @@ export async function submitPublicReview(
       "code" in error &&
       error.code === "P2002"
     ) {
-      throw new AppError("REVIEW_ALREADY_SUBMITTED", "This service job already has a review", 409);
+      throw new AppError(
+        "REVIEW_ALREADY_SUBMITTED",
+        "This service job already has a review",
+        409,
+      );
     }
     throw error;
   }

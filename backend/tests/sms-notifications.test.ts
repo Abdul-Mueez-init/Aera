@@ -83,7 +83,11 @@ describe("textbeeSmsAdapter", () => {
     (env as { TEXTBEE_API_KEY?: string }).TEXTBEE_API_KEY = "tb_test_key";
     const fetchSpy = vi
       .fn()
-      .mockResolvedValue({ ok: false, status: 401, text: async () => "API key rejected" });
+      .mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: async () => "API key rejected",
+      });
     vi.stubGlobal("fetch", fetchSpy);
 
     await expect(
@@ -117,7 +121,13 @@ describe("buildSmsMessage", () => {
       .send({
         customerId,
         currency: "USD",
-        items: [{ description: "Compressor replacement", quantity: 1, unitPriceMinor: 50000 }],
+        items: [
+          {
+            description: "Compressor replacement",
+            quantity: 1,
+            unitPriceMinor: 50000,
+          },
+        ],
       });
     expect(quote.status).toBe(201);
 
@@ -143,7 +153,13 @@ describe("buildSmsMessage", () => {
       .send({
         customerId,
         currency: "USD",
-        items: [{ description: "Filter replacement", quantity: 1, unitPriceMinor: 2000 }],
+        items: [
+          {
+            description: "Filter replacement",
+            quantity: 1,
+            unitPriceMinor: 2000,
+          },
+        ],
       });
     expect(quote.status).toBe(201);
 

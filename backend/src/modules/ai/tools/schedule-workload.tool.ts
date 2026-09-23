@@ -98,7 +98,14 @@ export async function getScheduleWorkload(
       companyId: context.companyId,
       scheduledStart: { gte: bounds.start, lt: bounds.end },
       status: {
-        in: ["NEW", "QUOTING", "SCHEDULED", "EN_ROUTE", "IN_PROGRESS", "WAITING_PARTS"],
+        in: [
+          "NEW",
+          "QUOTING",
+          "SCHEDULED",
+          "EN_ROUTE",
+          "IN_PROGRESS",
+          "WAITING_PARTS",
+        ],
       },
     },
     select: {

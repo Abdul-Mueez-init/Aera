@@ -8,14 +8,18 @@ const jobId = "00000000-0000-0000-0000-000000000001";
 
 describe("invoice and payment API boundaries", () => {
   it("requires manager authentication to generate an invoice", async () => {
-    const response = await request(app).post(`/api/v1/invoices/from-job/${jobId}`);
+    const response = await request(app).post(
+      `/api/v1/invoices/from-job/${jobId}`,
+    );
 
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe("AUTH_SESSION_EXPIRED");
   });
 
   it("requires manager authentication to issue an invoice", async () => {
-    const response = await request(app).post(`/api/v1/invoices/${invoiceId}/issue`);
+    const response = await request(app).post(
+      `/api/v1/invoices/${invoiceId}/issue`,
+    );
 
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe("AUTH_SESSION_EXPIRED");

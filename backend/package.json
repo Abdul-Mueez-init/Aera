@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "cross-env NODE_ENV=test DATABASE_URL=postgresql://localhost:5432/aera_test DIRECT_URL=postgresql://localhost:5432/aera_test JWT_SECRET=test-only-secret-that-is-at-least-32-characters-long SUPABASE_URL=https://test-project.supabase.co SUPABASE_SERVICE_ROLE_KEY=test-only-service-role-key-not-real vitest run --exclude dist/**",
+    "pretest": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "test": "cross-env NODE_ENV=test DATABASE_URL=postgresql://localhost:5432/aera_test DIRECT_URL=postgresql://localhost:5432/aera_test JWT_SECRET=test-only-secret-that-is-at-least-32-characters-long SUPABASE_URL=https://test-project.supabase.co SUPABASE_SERVICE_ROLE_KEY=test-only-service-role-key-not-real vitest run",
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "build": "tsc -p tsconfig.json",

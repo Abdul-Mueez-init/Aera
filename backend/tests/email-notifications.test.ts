@@ -83,18 +83,30 @@ describe("resendEmailAdapter", () => {
     expect(url).toBe("https://api.resend.com/emails");
     expect(init.method).toBe("POST");
     expect(init.headers.Authorization).toBe("Bearer re_test_key");
-    expect(JSON.parse(init.body)).toMatchObject({ to: ["a@example.com"], subject: "Hi" });
+    expect(JSON.parse(init.body)).toMatchObject({
+      to: ["a@example.com"],
+      subject: "Hi",
+    });
   });
 
   it("throws on a non-2xx response so the queue retries", async () => {
     (env as { RESEND_API_KEY?: string }).RESEND_API_KEY = "re_test_key";
     const fetchSpy = vi
       .fn()
-      .mockResolvedValue({ ok: false, status: 422, text: async () => "invalid recipient" });
+      .mockResolvedValue({
+        ok: false,
+        status: 422,
+        text: async () => "invalid recipient",
+      });
     vi.stubGlobal("fetch", fetchSpy);
 
     await expect(
-      resendEmailAdapter.send({ to: "bad", subject: "Hi", html: "<p>Hi</p>", text: "Hi" }),
+      resendEmailAdapter.send({
+        to: "bad",
+        subject: "Hi",
+        html: "<p>Hi</p>",
+        text: "Hi",
+      }),
     ).rejects.toThrow(/422/);
   });
 });
@@ -127,7 +139,13 @@ describe("buildNotificationEmail", () => {
       .send({
         customerId,
         currency: "USD",
-        items: [{ description: "Compressor replacement", quantity: 1, unitPriceMinor: 50000 }],
+        items: [
+          {
+            description: "Compressor replacement",
+            quantity: 1,
+            unitPriceMinor: 50000,
+          },
+        ],
       });
     expect(quote.status).toBe(201);
 
@@ -153,7 +171,13 @@ describe("buildNotificationEmail", () => {
       .send({
         customerId,
         currency: "USD",
-        items: [{ description: "Filter replacement", quantity: 1, unitPriceMinor: 2000 }],
+        items: [
+          {
+            description: "Filter replacement",
+            quantity: 1,
+            unitPriceMinor: 2000,
+          },
+        ],
       });
     expect(quote.status).toBe(201);
 

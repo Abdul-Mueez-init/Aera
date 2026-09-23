@@ -7,7 +7,10 @@ import { fcmPushAdapter, PushTokenInvalidError } from "./fcm-push.adapter.js";
 import { buildPushMessage } from "./push-messages.js";
 import { textbeeSmsAdapter } from "./textbee-sms.adapter.js";
 import { buildSmsMessage } from "./sms-messages.js";
-import { listTokensForUsers, removeInvalidToken } from "./device-token.service.js";
+import {
+  listTokensForUsers,
+  removeInvalidToken,
+} from "./device-token.service.js";
 
 export type NotificationEventType =
   | "JOB_SCHEDULED"
@@ -57,14 +60,23 @@ interface RecipientContact {
 // gets notified" rule lives in exactly one place. Returns email/phone
 // alongside userId so those handlers don't need a second round-trip per
 // event.
-async function resolveRecipients(event: NotificationEvent): Promise<RecipientContact[]> {
+async function resolveRecipients(
+  event: NotificationEvent,
+): Promise<RecipientContact[]> {
   if (event.recipientUserId) {
     const user = await prisma.user.findUnique({
       where: { id: event.recipientUserId },
       select: { id: true, email: true, phone: true, firstName: true },
     });
     return user
-      ? [{ userId: user.id, email: user.email, phone: user.phone, firstName: user.firstName }]
+      ? [
+          {
+            userId: user.id,
+            email: user.email,
+            phone: user.phone,
+            firstName: user.firstName,
+          },
+        ]
       : [];
   }
 
@@ -74,7 +86,9 @@ async function resolveRecipients(event: NotificationEvent): Promise<RecipientCon
       role: { in: [...COMPANY_EVENT_ROLES] },
       status: "ACTIVE",
     },
-    select: { user: { select: { id: true, email: true, phone: true, firstName: true } } },
+    select: {
+      user: { select: { id: true, email: true, phone: true, firstName: true } },
+    },
   });
   return members.map((member) => ({
     userId: member.user.id,
@@ -115,7 +129,9 @@ async function dispatchNotification(event: NotificationEvent): Promise<void> {
   });
 }
 
-async function dispatchEmailNotification(event: NotificationEvent): Promise<void> {
+async function dispatchEmailNotification(
+  event: NotificationEvent,
+): Promise<void> {
   const recipients = await resolveRecipients(event);
 
   for (const recipient of recipients) {
@@ -137,14 +153,20 @@ async function dispatchEmailNotification(event: NotificationEvent): Promise<void
       // one recipient" for "no duplicate sends to the others" — the right
       // call until per-recipient job granularity exists.
       logger.warn(
-        { err: error, eventType: event.type, recipientUserId: recipient.userId },
+        {
+          err: error,
+          eventType: event.type,
+          recipientUserId: recipient.userId,
+        },
         "Failed to send notification email to recipient",
       );
     }
   }
 }
 
-async function dispatchPushNotification(event: NotificationEvent): Promise<void> {
+async function dispatchPushNotification(
+  event: NotificationEvent,
+): Promise<void> {
   const recipients = await resolveRecipients(event);
   if (recipients.length === 0) {
     return;
@@ -155,7 +177,9 @@ async function dispatchPushNotification(event: NotificationEvent): Promise<void>
   const message = await buildPushMessage(event);
   if (!message) return;
 
-  const tokens = await listTokensForUsers(recipients.map((recipient) => recipient.userId));
+  const tokens = await listTokensForUsers(
+    recipients.map((recipient) => recipient.userId),
+  );
   if (tokens.length === 0) return;
 
   for (const { token } of tokens) {
@@ -181,7 +205,9 @@ async function dispatchPushNotification(event: NotificationEvent): Promise<void>
   }
 }
 
-async function dispatchSmsNotification(event: NotificationEvent): Promise<void> {
+async function dispatchSmsNotification(
+  event: NotificationEvent,
+): Promise<void> {
   const recipients = await resolveRecipients(event);
   const withPhone = recipients.filter(
     (recipient): recipient is RecipientContact & { phone: string } =>
@@ -207,7 +233,11 @@ async function dispatchSmsNotification(event: NotificationEvent): Promise<void> 
       // throw here would cause recipients who already got their SMS in
       // this pass to be re-sent to on retry.
       logger.warn(
-        { err: error, eventType: event.type, recipientUserId: recipient.userId },
+        {
+          err: error,
+          eventType: event.type,
+          recipientUserId: recipient.userId,
+        },
         "Failed to send notification SMS to recipient",
       );
     }

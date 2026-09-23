@@ -1,7 +1,10 @@
 import { Router, type Response } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../common/auth/auth.middleware.js";
-import { listNotifications, markNotificationRead } from "./notification.service.js";
+import {
+  listNotifications,
+  markNotificationRead,
+} from "./notification.service.js";
 import {
   registerDeviceToken,
   removeDeviceToken,

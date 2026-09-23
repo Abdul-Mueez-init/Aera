@@ -96,7 +96,7 @@ export async function buildPushMessage(
       };
     }
 
-        case "INVOICE_PAYMENT_REMINDER": {
+    case "INVOICE_PAYMENT_REMINDER": {
       if (!event.invoiceId) return null;
       const invoice = await prisma.invoice.findFirst({
         where: { id: event.invoiceId, companyId: event.companyId },

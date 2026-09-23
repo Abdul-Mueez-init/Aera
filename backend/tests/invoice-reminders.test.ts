@@ -12,13 +12,15 @@ const OPTIONS = { intervalDays: 3, termsDays: 14 };
 async function seedCompany(label: string) {
   const suffix = `${label}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
   const email = `owner-${suffix}@example.com`;
-  const res = await request(app).post("/api/v1/auth/register").send({
-    email,
-    password: "correct-horse-battery-staple",
-    firstName: "Owner",
-    lastName: label,
-    companyName: `Company ${suffix}`,
-  });
+  const res = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email,
+      password: "correct-horse-battery-staple",
+      firstName: "Owner",
+      lastName: label,
+      companyName: `Company ${suffix}`,
+    });
   expect(res.status).toBe(201);
   const auth = { Authorization: `Bearer ${res.body.data.accessToken}` };
 
@@ -62,8 +64,14 @@ async function createInvoice(
       balanceDueMinor: balance,
       amountPaidMinor: BigInt(50000) - balance,
       currency: "USD",
-      issuedAt: overrides.issuedAt === undefined ? new Date(Date.now() - 10 * DAY_MS) : overrides.issuedAt,
-      dueAt: overrides.dueAt === undefined ? new Date(Date.now() - 2 * DAY_MS) : overrides.dueAt,
+      issuedAt:
+        overrides.issuedAt === undefined
+          ? new Date(Date.now() - 10 * DAY_MS)
+          : overrides.issuedAt,
+      dueAt:
+        overrides.dueAt === undefined
+          ? new Date(Date.now() - 2 * DAY_MS)
+          : overrides.dueAt,
     },
   });
 }
@@ -88,7 +96,9 @@ describe("invoice reminder sweep", () => {
 
     await sweep();
 
-    const updated = await prisma.invoice.findUnique({ where: { id: invoice.id } });
+    const updated = await prisma.invoice.findUnique({
+      where: { id: invoice.id },
+    });
     expect(updated?.status).toBe("OVERDUE");
 
     const rows = await reminders(company.companyId);
@@ -99,8 +109,13 @@ describe("invoice reminder sweep", () => {
 
   it("ignores not-yet-due, paid, zero-balance, and draft invoices", async () => {
     const company = await seedCompany("ineligible");
-    const future = await createInvoice(company, { dueAt: new Date(Date.now() + 5 * DAY_MS) });
-    const paid = await createInvoice(company, { status: "PAID", balanceDueMinor: BigInt(0) });
+    const future = await createInvoice(company, {
+      dueAt: new Date(Date.now() + 5 * DAY_MS),
+    });
+    const paid = await createInvoice(company, {
+      status: "PAID",
+      balanceDueMinor: BigInt(0),
+    });
     const draft = await createInvoice(company, { status: "DRAFT" });
 
     await sweep();

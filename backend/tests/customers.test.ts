@@ -44,15 +44,12 @@ describe("customer CRUD + search (Phase 3 exit criteria)", () => {
     const { accessToken } = await registerOwner("crud");
     const auth = { Authorization: `Bearer ${accessToken}` };
 
-    const create = await request(app)
-      .post("/api/v1/customers")
-      .set(auth)
-      .send({
-        firstName: "Sarah",
-        lastName: "Khan",
-        email: "sarah.khan@example.com",
-        phone: "+92 300 1234567",
-      });
+    const create = await request(app).post("/api/v1/customers").set(auth).send({
+      firstName: "Sarah",
+      lastName: "Khan",
+      email: "sarah.khan@example.com",
+      phone: "+92 300 1234567",
+    });
     expect(create.status).toBe(201);
     expect(create.body.data.status).toBe("ACTIVE");
     const customerId = create.body.data.id as string;
@@ -187,26 +184,20 @@ describe("customer CRUD + search (Phase 3 exit criteria)", () => {
     expect(emptyJobs.body.data.items).toHaveLength(0);
     expect(emptyJobs.body.data.meta.total).toBe(0);
 
-    const job1 = await request(app)
-      .post("/api/v1/jobs")
-      .set(auth)
-      .send({
-        customerId,
-        serviceAddressId,
-        serviceType: "AC Repair",
-        problemDescription: "Unit not cooling",
-      });
+    const job1 = await request(app).post("/api/v1/jobs").set(auth).send({
+      customerId,
+      serviceAddressId,
+      serviceType: "AC Repair",
+      problemDescription: "Unit not cooling",
+    });
     expect(job1.status).toBe(201);
 
-    const job2 = await request(app)
-      .post("/api/v1/jobs")
-      .set(auth)
-      .send({
-        customerId,
-        serviceAddressId,
-        serviceType: "Duct Cleaning",
-        problemDescription: "Annual maintenance",
-      });
+    const job2 = await request(app).post("/api/v1/jobs").set(auth).send({
+      customerId,
+      serviceAddressId,
+      serviceType: "Duct Cleaning",
+      problemDescription: "Annual maintenance",
+    });
     expect(job2.status).toBe(201);
 
     const jobs = await request(app)
@@ -226,9 +217,7 @@ describe("customer CRUD + search (Phase 3 exit criteria)", () => {
     const auth = { Authorization: `Bearer ${accessToken}` };
     const fakeId = "11111111-2222-3333-4444-555555555555";
 
-    const get = await request(app)
-      .get(`/api/v1/customers/${fakeId}`)
-      .set(auth);
+    const get = await request(app).get(`/api/v1/customers/${fakeId}`).set(auth);
     expect(get.status).toBe(404);
     expect(get.body.error.code).toBe("RESOURCE_NOT_FOUND");
 
@@ -288,9 +277,7 @@ describe("customer tenant isolation (Phase 3 exit criteria)", () => {
 
     const listA = await request(app).get("/api/v1/customers").set(authA);
     expect(
-      listA.body.data.items.some(
-        (c: { id: string }) => c.id === customerBId,
-      ),
+      listA.body.data.items.some((c: { id: string }) => c.id === customerBId),
     ).toBe(false);
 
     const ownRead = await request(app)

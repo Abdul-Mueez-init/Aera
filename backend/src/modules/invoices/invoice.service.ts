@@ -9,12 +9,7 @@ import {
 import { notificationPublisher } from "../notifications/notification.port.js";
 
 export type InvoiceStatusValue =
-  | "DRAFT"
-  | "ISSUED"
-  | "PARTIALLY_PAID"
-  | "PAID"
-  | "VOID"
-  | "OVERDUE";
+  "DRAFT" | "ISSUED" | "PARTIALLY_PAID" | "PAID" | "VOID" | "OVERDUE";
 export type PaymentMethodValue = "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER";
 
 export interface PaymentInput {
@@ -222,7 +217,10 @@ export async function generateInvoiceFromJob(
 
   try {
     const invoice = await prisma.$transaction(async (transaction) => {
-      const invoiceNumber = await nextInvoiceNumber(transaction, context.companyId);
+      const invoiceNumber = await nextInvoiceNumber(
+        transaction,
+        context.companyId,
+      );
       return transaction.invoice.create({
         data: {
           companyId: context.companyId,
@@ -305,18 +303,22 @@ export async function listInvoicePayments(
 export async function issueInvoice(context: AuthContext, invoiceId: string) {
   const invoice = await prisma.invoice.findFirst({
     where: { id: invoiceId, companyId: context.companyId },
-       select: { id: true, status: true, dueAt: true },
+    select: { id: true, status: true, dueAt: true },
   });
   if (!invoice) {
     throw new AppError("RESOURCE_NOT_FOUND", "Invoice not found", 404);
   }
-  if (invoice.status === "ISSUED" || invoice.status === "PARTIALLY_PAID" || invoice.status === "PAID") {
+  if (
+    invoice.status === "ISSUED" ||
+    invoice.status === "PARTIALLY_PAID" ||
+    invoice.status === "PAID"
+  ) {
     return getInvoice(context, invoiceId);
   }
   if (invoice.status !== "DRAFT") {
     throw new AppError("INVOICE_NOT_ISSUABLE", "Invoice cannot be issued", 409);
   }
-    const issuedAt = new Date();
+  const issuedAt = new Date();
   await prisma.invoice.update({
     where: { id: invoiceId },
     data: {
@@ -324,7 +326,9 @@ export async function issueInvoice(context: AuthContext, invoiceId: string) {
       issuedAt,
       dueAt:
         invoice.dueAt ??
-        new Date(issuedAt.getTime() + env.INVOICE_PAYMENT_TERMS_DAYS * 86_400_000),
+        new Date(
+          issuedAt.getTime() + env.INVOICE_PAYMENT_TERMS_DAYS * 86_400_000,
+        ),
     },
   });
   void notificationPublisher.publish({
@@ -352,12 +356,20 @@ export async function recordPayment(
   });
   if (existingPayment) {
     if (existingPayment.invoiceId !== invoiceId) {
-      throw new AppError("PAYMENT_IDEMPOTENCY_CONFLICT", "Idempotency key was used for another invoice", 409);
+      throw new AppError(
+        "PAYMENT_IDEMPOTENCY_CONFLICT",
+        "Idempotency key was used for another invoice",
+        409,
+      );
     }
     return getInvoice(context, invoiceId);
   }
   if (input.amountMinor <= 0) {
-    throw new AppError("PAYMENT_INVALID_AMOUNT", "Payment amount must be positive", 422);
+    throw new AppError(
+      "PAYMENT_INVALID_AMOUNT",
+      "Payment amount must be positive",
+      422,
+    );
   }
 
   try {
@@ -366,12 +378,21 @@ export async function recordPayment(
         where: { id: invoiceId, companyId: context.companyId },
         select: { status: true, balanceDueMinor: true, currency: true },
       });
-      if (!invoice) throw new AppError("RESOURCE_NOT_FOUND", "Invoice not found", 404);
+      if (!invoice)
+        throw new AppError("RESOURCE_NOT_FOUND", "Invoice not found", 404);
       if (invoice.status === "DRAFT" || invoice.status === "VOID") {
-        throw new AppError("INVOICE_NOT_PAYABLE", "Invoice is not payable", 409);
+        throw new AppError(
+          "INVOICE_NOT_PAYABLE",
+          "Invoice is not payable",
+          409,
+        );
       }
       if (invoice.currency !== input.currency.toUpperCase()) {
-        throw new AppError("PAYMENT_CURRENCY_MISMATCH", "Payment currency does not match invoice", 422);
+        throw new AppError(
+          "PAYMENT_CURRENCY_MISMATCH",
+          "Payment currency does not match invoice",
+          422,
+        );
       }
 
       const providerResult = await provider.recordPayment({
@@ -390,12 +411,21 @@ export async function recordPayment(
         data: {
           amountPaidMinor: { increment: BigInt(input.amountMinor) },
           balanceDueMinor: { decrement: BigInt(input.amountMinor) },
-          status: invoice.balanceDueMinor === BigInt(input.amountMinor) ? "PAID" : "PARTIALLY_PAID",
-          ...(invoice.balanceDueMinor === BigInt(input.amountMinor) ? { paidAt: new Date() } : {}),
+          status:
+            invoice.balanceDueMinor === BigInt(input.amountMinor)
+              ? "PAID"
+              : "PARTIALLY_PAID",
+          ...(invoice.balanceDueMinor === BigInt(input.amountMinor)
+            ? { paidAt: new Date() }
+            : {}),
         },
       });
       if (update.count !== 1) {
-        throw new AppError("PAYMENT_EXCEEDS_BALANCE", "Payment exceeds the invoice balance", 422);
+        throw new AppError(
+          "PAYMENT_EXCEEDS_BALANCE",
+          "Payment exceeds the invoice balance",
+          422,
+        );
       }
       await transaction.payment.create({
         data: {

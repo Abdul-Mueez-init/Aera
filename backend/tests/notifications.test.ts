@@ -85,18 +85,18 @@ describe("Notifications", () => {
     const owner = await registerOwner("assign");
     const ownerAuth = { Authorization: `Bearer ${owner.accessToken}` };
     const technician = await inviteAndAcceptTechnician(ownerAuth);
-    const technicianAuth = { Authorization: `Bearer ${technician.accessToken}` };
+    const technicianAuth = {
+      Authorization: `Bearer ${technician.accessToken}`,
+    };
 
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(ownerAuth);
-    const job = await request(app)
-      .post("/api/v1/jobs")
-      .set(ownerAuth)
-      .send({
-        customerId,
-        serviceAddressId,
-        serviceType: "AC Repair",
-        problemDescription: "Unit not cooling",
-      });
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(ownerAuth);
+    const job = await request(app).post("/api/v1/jobs").set(ownerAuth).send({
+      customerId,
+      serviceAddressId,
+      serviceType: "AC Repair",
+      problemDescription: "Unit not cooling",
+    });
     expect(job.status).toBe(201);
 
     const me = await request(app).get("/api/v1/auth/me").set(technicianAuth);
@@ -112,12 +112,16 @@ describe("Notifications", () => {
     expect(technicianInbox.status).toBe(200);
     expect(technicianInbox.body.data.items).toHaveLength(1);
     expect(technicianInbox.body.data.items[0].type).toBe("JOB_ASSIGNED");
-    expect(technicianInbox.body.data.items[0].payload.jobId).toBe(job.body.data.id);
+    expect(technicianInbox.body.data.items[0].payload.jobId).toBe(
+      job.body.data.id,
+    );
     expect(technicianInbox.body.data.items[0].readAt).toBeNull();
     expect(technicianInbox.body.data.meta.unreadCount).toBe(1);
 
     // The owner is not the recipient of a job-assignment notification.
-    const ownerInbox = await request(app).get("/api/v1/notifications").set(ownerAuth);
+    const ownerInbox = await request(app)
+      .get("/api/v1/notifications")
+      .set(ownerAuth);
     expect(ownerInbox.status).toBe(200);
     expect(ownerInbox.body.data.items).toHaveLength(0);
   });
@@ -126,7 +130,9 @@ describe("Notifications", () => {
     const owner = await registerOwner("quote");
     const ownerAuth = { Authorization: `Bearer ${owner.accessToken}` };
     const technician = await inviteAndAcceptTechnician(ownerAuth);
-    const technicianAuth = { Authorization: `Bearer ${technician.accessToken}` };
+    const technicianAuth = {
+      Authorization: `Bearer ${technician.accessToken}`,
+    };
 
     const { customerId } = await createCustomerWithAddress(ownerAuth);
     const quote = await request(app)
@@ -135,7 +141,13 @@ describe("Notifications", () => {
       .send({
         customerId,
         currency: "USD",
-        items: [{ description: "Compressor replacement", quantity: 1, unitPriceMinor: 50000 }],
+        items: [
+          {
+            description: "Compressor replacement",
+            quantity: 1,
+            unitPriceMinor: 50000,
+          },
+        ],
       });
     expect(quote.status).toBe(201);
 
@@ -160,17 +172,17 @@ describe("Notifications", () => {
     const ownerA = await registerOwner("read-a");
     const ownerAuthA = { Authorization: `Bearer ${ownerA.accessToken}` };
     const technicianA = await inviteAndAcceptTechnician(ownerAuthA);
-    const technicianAuthA = { Authorization: `Bearer ${technicianA.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(ownerAuthA);
-    const job = await request(app)
-      .post("/api/v1/jobs")
-      .set(ownerAuthA)
-      .send({
-        customerId,
-        serviceAddressId,
-        serviceType: "AC Repair",
-        problemDescription: "Unit not cooling",
-      });
+    const technicianAuthA = {
+      Authorization: `Bearer ${technicianA.accessToken}`,
+    };
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(ownerAuthA);
+    const job = await request(app).post("/api/v1/jobs").set(ownerAuthA).send({
+      customerId,
+      serviceAddressId,
+      serviceType: "AC Repair",
+      problemDescription: "Unit not cooling",
+    });
     const meA = await request(app).get("/api/v1/auth/me").set(technicianAuthA);
     await request(app)
       .post(`/api/v1/jobs/${job.body.data.id}/assign`)

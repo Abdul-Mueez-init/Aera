@@ -65,11 +65,7 @@ export async function markNotificationRead(
     select: { id: true, readAt: true },
   });
   if (!notification) {
-    throw new AppError(
-      "RESOURCE_NOT_FOUND",
-      "Notification not found",
-      404,
-    );
+    throw new AppError("RESOURCE_NOT_FOUND", "Notification not found", 404);
   }
   if (notification.readAt) {
     return notification;

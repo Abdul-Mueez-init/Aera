@@ -45,25 +45,40 @@ function routeId(value: string | string[]): string {
   return Array.isArray(value) ? value[0] : value;
 }
 
-router.get("/", requireAuth, requireRole(...managerRoles), async (request, response) => {
-  const parsed = listSchema.safeParse(request.query);
-  if (!parsed.success) {
-    sendValidationError(response, parsed.error);
-    return;
-  }
-  response.status(200).json({
-    data: await listQuotes(request.auth!, parsed.data.status as QuoteStatusValue | undefined),
-  });
-});
+router.get(
+  "/",
+  requireAuth,
+  requireRole(...managerRoles),
+  async (request, response) => {
+    const parsed = listSchema.safeParse(request.query);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    response.status(200).json({
+      data: await listQuotes(
+        request.auth!,
+        parsed.data.status as QuoteStatusValue | undefined,
+      ),
+    });
+  },
+);
 
-router.post("/", requireAuth, requireRole(...managerRoles), async (request, response) => {
-  const parsed = createSchema.safeParse(request.body);
-  if (!parsed.success) {
-    sendValidationError(response, parsed.error);
-    return;
-  }
-  response.status(201).json({ data: await createQuote(request.auth!, parsed.data) });
-});
+router.post(
+  "/",
+  requireAuth,
+  requireRole(...managerRoles),
+  async (request, response) => {
+    const parsed = createSchema.safeParse(request.body);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    response
+      .status(201)
+      .json({ data: await createQuote(request.auth!, parsed.data) });
+  },
+);
 
 router.get("/shared/:shareToken", async (request, response) => {
   response.status(200).json({
@@ -85,16 +100,26 @@ router.post("/shared/:shareToken/respond", async (request, response) => {
   });
 });
 
-router.get("/:quoteId", requireAuth, requireRole(...managerRoles), async (request, response) => {
-  response.status(200).json({
-    data: await getQuote(request.auth!, routeId(request.params.quoteId)),
-  });
-});
+router.get(
+  "/:quoteId",
+  requireAuth,
+  requireRole(...managerRoles),
+  async (request, response) => {
+    response.status(200).json({
+      data: await getQuote(request.auth!, routeId(request.params.quoteId)),
+    });
+  },
+);
 
-router.post("/:quoteId/send", requireAuth, requireRole(...managerRoles), async (request, response) => {
-  response.status(200).json({
-    data: await sendQuote(request.auth!, routeId(request.params.quoteId)),
-  });
-});
+router.post(
+  "/:quoteId/send",
+  requireAuth,
+  requireRole(...managerRoles),
+  async (request, response) => {
+    response.status(200).json({
+      data: await sendQuote(request.auth!, routeId(request.params.quoteId)),
+    });
+  },
+);
 
 export { router as quoteRouter };

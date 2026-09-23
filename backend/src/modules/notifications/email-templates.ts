@@ -12,13 +12,19 @@ function formatMoney(minor: bigint, currency: string): string {
 
 function formatDate(date: Date | null): string {
   if (!date) return "to be scheduled";
-  return date.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+  return date.toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 // Small, brand-consistent HTML shell (design.md colors: canvas/surface/ink/
 // accent). Deliberately plain — no gradients, no decorative motion — this
 // is transactional email, not marketing.
-function renderShell(title: string, lines: string[]): Pick<EmailMessage, "html" | "text"> {
+function renderShell(
+  title: string,
+  lines: string[],
+): Pick<EmailMessage, "html" | "text"> {
   const html = `<div style="font-family:-apple-system,Inter,Helvetica,Arial,sans-serif;background:#F6F5F1;padding:32px;">
   <div style="max-width:480px;margin:0 auto;background:#FFFFFF;border:1px solid #DCE0DB;border-radius:18px;padding:32px;">
     <p style="font-size:12px;font-weight:650;letter-spacing:0.05em;text-transform:uppercase;color:#1E5A58;margin:0 0 16px;">Aera</p>
@@ -91,10 +97,13 @@ export async function buildNotificationEmail(
             ? "declined"
             : "sent";
       const subject = `Quote ${verb}`;
-      const { html, text } = renderShell(`${subject} — ${formatMoney(quote.totalMinor, quote.currency)}`, [
-        `Customer: ${quote.customer.firstName} ${quote.customer.lastName}.`,
-        `Total: ${formatMoney(quote.totalMinor, quote.currency)}.`,
-      ]);
+      const { html, text } = renderShell(
+        `${subject} — ${formatMoney(quote.totalMinor, quote.currency)}`,
+        [
+          `Customer: ${quote.customer.firstName} ${quote.customer.lastName}.`,
+          `Total: ${formatMoney(quote.totalMinor, quote.currency)}.`,
+        ],
+      );
       return { to: recipient.email, subject, html, text };
     }
 
@@ -121,7 +130,7 @@ export async function buildNotificationEmail(
       return { to: recipient.email, subject, html, text };
     }
 
-        case "INVOICE_PAYMENT_REMINDER": {
+    case "INVOICE_PAYMENT_REMINDER": {
       if (!event.invoiceId) return null;
       const invoice = await prisma.invoice.findFirst({
         where: { id: event.invoiceId, companyId: event.companyId },

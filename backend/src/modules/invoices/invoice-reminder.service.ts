@@ -42,7 +42,8 @@ export async function runInvoiceReminderSweep(
   now: Date = new Date(),
   options: InvoiceReminderSweepOptions = {},
 ): Promise<InvoiceReminderSweepResult> {
-  const intervalDays = options.intervalDays ?? env.INVOICE_REMINDER_INTERVAL_DAYS;
+  const intervalDays =
+    options.intervalDays ?? env.INVOICE_REMINDER_INTERVAL_DAYS;
   const termsDays = options.termsDays ?? env.INVOICE_PAYMENT_TERMS_DAYS;
   const legacyIssuedBefore = new Date(now.getTime() - termsDays * DAY_MS);
   const dedupeSince = new Date(now.getTime() - intervalDays * DAY_MS);

@@ -39,7 +39,10 @@ export async function registerDeviceToken(params: {
  * user's token, even within the same company) — call this on logout so a
  * signed-out device stops receiving push for that account.
  */
-export async function removeDeviceToken(userId: string, token: string): Promise<void> {
+export async function removeDeviceToken(
+  userId: string,
+  token: string,
+): Promise<void> {
   const existing = await prisma.deviceToken.findFirst({
     where: { token, userId },
     select: { id: true },

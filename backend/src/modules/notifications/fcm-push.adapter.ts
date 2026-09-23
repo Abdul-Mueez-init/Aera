@@ -36,7 +36,9 @@ export function resetFcmAccessTokenCache(): void {
 
 function isConfigured(): boolean {
   return Boolean(
-    env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY,
+    env.FIREBASE_PROJECT_ID &&
+    env.FIREBASE_CLIENT_EMAIL &&
+    env.FIREBASE_PRIVATE_KEY,
   );
 }
 
@@ -88,8 +90,14 @@ async function getAccessToken(): Promise<string> {
     );
   }
 
-  const data = (await response.json()) as { access_token: string; expires_in: number };
-  cachedAccessToken = { token: data.access_token, expiresAt: now + data.expires_in * 1000 };
+  const data = (await response.json()) as {
+    access_token: string;
+    expires_in: number;
+  };
+  cachedAccessToken = {
+    token: data.access_token,
+    expiresAt: now + data.expires_in * 1000,
+  };
   return cachedAccessToken.token;
 }
 
@@ -139,10 +147,16 @@ export const fcmPushAdapter: PushPort = {
       }
     })();
 
-    if (errorStatus === "UNREGISTERED" || errorStatus === "NOT_FOUND" || response.status === 404) {
+    if (
+      errorStatus === "UNREGISTERED" ||
+      errorStatus === "NOT_FOUND" ||
+      response.status === 404
+    ) {
       throw new PushTokenInvalidError(message.token);
     }
 
-    throw new Error(`FCM send failed (${response.status}): ${body.slice(0, 300)}`);
+    throw new Error(
+      `FCM send failed (${response.status}): ${body.slice(0, 300)}`,
+    );
   },
 };

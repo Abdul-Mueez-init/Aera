@@ -98,7 +98,10 @@ router.post(
   requireRole(...managerRoles),
   async (request, response) => {
     response.status(200).json({
-      data: await issueInvoice(request.auth!, routeId(request.params.invoiceId)),
+      data: await issueInvoice(
+        request.auth!,
+        routeId(request.params.invoiceId),
+      ),
     });
   },
 );
@@ -138,11 +141,15 @@ router.post(
       return;
     }
     response.status(201).json({
-      data: await recordPayment(request.auth!, routeId(request.params.invoiceId), {
-        ...parsed.data,
-        idempotencyKey: key,
-        method: parsed.data.method as PaymentMethodValue,
-      }),
+      data: await recordPayment(
+        request.auth!,
+        routeId(request.params.invoiceId),
+        {
+          ...parsed.data,
+          idempotencyKey: key,
+          method: parsed.data.method as PaymentMethodValue,
+        },
+      ),
     });
   },
 );

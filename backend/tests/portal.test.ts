@@ -46,15 +46,12 @@ async function createJob(
   customerId: string,
   serviceAddressId: string,
 ) {
-  const job = await request(app)
-    .post("/api/v1/jobs")
-    .set(auth)
-    .send({
-      customerId,
-      serviceAddressId,
-      serviceType: "AC Repair",
-      problemDescription: "Unit not cooling",
-    });
+  const job = await request(app).post("/api/v1/jobs").set(auth).send({
+    customerId,
+    serviceAddressId,
+    serviceType: "AC Repair",
+    problemDescription: "Unit not cooling",
+  });
   expect(job.status).toBe(201);
   return job.body.data.id as string;
 }
