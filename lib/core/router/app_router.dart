@@ -206,7 +206,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/ai-insight/:insightId',
       builder: (context, state) {
-        final insightId = state.pathParameters['insightId'] ?? 'ins-1';
+        final insightId = state.pathParameters['insightId'] ?? '';
         return AiInsightDetailScreen(insightId: insightId);
       },
     ),

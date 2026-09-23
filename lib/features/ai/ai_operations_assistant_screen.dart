@@ -1,35 +1,127 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_typography.dart';
-import '../../core/widgets/aera_card.dart';
+import 'data/ai_repository.dart';
+import 'providers/ai_provider.dart';
+import 'widgets/ai_message_bubble.dart';
 
-class AiOperationsAssistantScreen extends StatefulWidget {
+// Sentinel timestamp for the `orElse` fallback in `_ConversationThread` below
+// — never rendered, since that fallback message's id is always empty and
+// display is gated on a non-empty id.
+final DateTime _epoch = DateTime.fromMillisecondsSinceEpoch(0);
+
+class AiOperationsAssistantScreen extends ConsumerStatefulWidget {
   const AiOperationsAssistantScreen({super.key});
 
   @override
-  State<AiOperationsAssistantScreen> createState() => _AiOperationsAssistantScreenState();
+  ConsumerState<AiOperationsAssistantScreen> createState() =>
+      _AiOperationsAssistantScreenState();
 }
 
-class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScreen> {
-  String _activePrompt = 'Which jobs are at risk today?';
+class _AiOperationsAssistantScreenState
+    extends ConsumerState<AiOperationsAssistantScreen> {
   final TextEditingController _queryController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  bool _sending = false;
 
-  final List<String> _presets = [
+  static const _presets = [
     'Which jobs are at risk today?',
     'Who is running behind schedule?',
-    'What invoices are overdue?',
-    'Which customers need follow-up?',
+    'What does my team\'s workload look like today?',
+    'Give me a business metrics summary.',
   ];
 
   @override
   void dispose() {
     _queryController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  Future<void> _send(String text) async {
+    final content = text.trim();
+    if (content.isEmpty || _sending) return;
+
+    setState(() => _sending = true);
+    final repo = ref.read(aiRepositoryProvider);
+    final conversationIdNotifier = ref.read(
+      activeAiConversationIdProvider.notifier,
+    );
+
+    try {
+      var conversationId = ref.read(activeAiConversationIdProvider);
+      final isNewConversation = conversationId == null;
+      if (isNewConversation) {
+        final conversation = await repo.createConversation();
+        conversationId = conversation.id;
+        conversationIdNotifier.state = conversationId;
+      }
+
+      _queryController.clear();
+      final result = await repo.postMessage(conversationId!, content);
+      ref.invalidate(aiConversationDetailProvider(conversationId));
+      if (isNewConversation) {
+        ref.invalidate(aiConversationsListProvider);
+      }
+      _scrollToBottom();
+
+      if (result.assistantMessage == null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Your message was saved, but the assistant did not reply '
+              '(it may not be configured yet).',
+            ),
+          ),
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        final message = e.statusCode == 403
+            ? 'The AI assistant is available to owners and dispatchers only.'
+            : e.message;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not send that message')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  void _startNewConversation() {
+    ref.read(activeAiConversationIdProvider.notifier).state = null;
+  }
+
+  void _resumeConversation(String conversationId) {
+    ref.read(activeAiConversationIdProvider.notifier).state = conversationId;
+    _scrollToBottom();
   }
 
   @override
   Widget build(BuildContext context) {
+    final conversationId = ref.watch(activeAiConversationIdProvider);
+
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       appBar: AppBar(
@@ -53,13 +145,27 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('AERA INTELLIGENCE', style: AeraTypography.labelUpper.copyWith(fontSize: 10)),
-                Text('AI Operations Assistant', style: AeraTypography.body.copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  'AERA INTELLIGENCE',
+                  style: AeraTypography.labelUpper.copyWith(fontSize: 10),
+                ),
+                Text(
+                  'AI Operations Assistant',
+                  style: AeraTypography.body.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ],
         ),
         actions: [
+          if (conversationId != null)
+            IconButton(
+              icon: const Icon(Icons.add_comment_outlined),
+              tooltip: 'New conversation',
+              onPressed: _startNewConversation,
+            ),
           IconButton(
             icon: const Icon(Icons.apps),
             tooltip: 'Screen Catalog',
@@ -70,470 +176,331 @@ class _AiOperationsAssistantScreenState extends State<AiOperationsAssistantScree
       body: Column(
         children: [
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              children: [
-                // Live Status Sync Ribbon
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AeraColors.successSoft,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: AeraColors.success,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Dispatch telemetry synced · 09:42 AM',
-                            style: AeraTypography.label.copyWith(color: AeraColors.success),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      'MARCUS CONSOLE',
-                      style: AeraTypography.labelUpper.copyWith(color: AeraColors.inkSoft),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // Operational Metric Snapshot (3 columns)
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AeraColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AeraColors.line),
+            child: conversationId == null
+                ? _EmptyState(
+                    presets: _presets,
+                    onPresetTap: _send,
+                    onResume: _resumeConversation,
+                  )
+                : _ConversationThread(
+                    conversationId: conversationId,
+                    scrollController: _scrollController,
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Active Vans', style: AeraTypography.label.copyWith(color: AeraColors.inkSoft)),
-                            const SizedBox(height: 2),
-                            RichText(
-                              text: TextSpan(
-                                text: '4 ',
-                                style: AeraTypography.h3.copyWith(
-                                  color: AeraColors.ink,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                children: [
-                                  TextSpan(
-                                    text: '/ 4',
-                                    style: AeraTypography.bodySm.copyWith(color: AeraColors.outline),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(width: 1, height: 32, color: AeraColors.line),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Jobs Today', style: AeraTypography.label.copyWith(color: AeraColors.inkSoft)),
-                              const SizedBox(height: 2),
-                              Text('18', style: AeraTypography.h3.copyWith(fontWeight: FontWeight.w700)),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Container(width: 1, height: 32, color: AeraColors.line),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Interventions', style: AeraTypography.label.copyWith(color: AeraColors.warning)),
-                              const SizedBox(height: 2),
-                              Text(
-                                '2 Pending',
-                                style: AeraTypography.body.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: AeraColors.warning,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // Presets Carousel
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'OPERATIONAL DIAGNOSTICS',
-                      style: AeraTypography.labelUpper.copyWith(color: AeraColors.inkSoft),
-                    ),
-                    Text(
-                      'Presets',
-                      style: AeraTypography.label.copyWith(color: AeraColors.accent),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: _presets.map((preset) {
-                      final isSelected = _activePrompt == preset;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ActionChip(
-                          label: Text(preset),
-                          onPressed: () => setState(() => _activePrompt = preset),
-                          backgroundColor: isSelected ? AeraColors.accent : AeraColors.surface,
-                          labelStyle: AeraTypography.label.copyWith(
-                            color: isSelected ? AeraColors.surface : AeraColors.ink,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            side: BorderSide(
-                              color: isSelected ? AeraColors.accent : AeraColors.line,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // Conversation Thread
-                // User Message
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AeraColors.surfaceSubtle,
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(14),
-                            topRight: Radius.circular(4),
-                            bottomLeft: Radius.circular(14),
-                            bottomRight: Radius.circular(14),
-                          ),
-                          border: Border.all(color: AeraColors.line),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Marcus Vance · 09:41 AM',
-                              style: AeraTypography.label.copyWith(color: AeraColors.inkSoft),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _activePrompt,
-                              style: AeraTypography.body.copyWith(fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const CircleAvatar(
-                      radius: 14,
-                      backgroundColor: AeraColors.accentSoft,
-                      child: Icon(Icons.person, size: 16, color: AeraColors.accent),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // Aera Synthesized Response
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: AeraColors.accent,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'A',
-                          style: AeraTypography.bodySm.copyWith(
-                            color: AeraColors.surface,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Hazard Alert Card
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AeraColors.warningSoft,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AeraColors.warning.withOpacity(0.3)),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(Icons.priority_high, color: AeraColors.warning, size: 20),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'OPERATIONAL HAZARD DETECTED',
-                                        style: AeraTypography.labelUpper.copyWith(
-                                          color: AeraColors.warning,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '2 jobs require dispatch intervention before 14:00 peak rush.',
-                                        style: AeraTypography.bodySm.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          color: AeraColors.ink,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-
-                          // Grounded Evidence Feed Card
-                          AeraCard(
-                            padding: const EdgeInsets.all(14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.fact_check, size: 16, color: AeraColors.inkSoft),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          'VERIFIED EVIDENCE FEED',
-                                          style: AeraTypography.labelUpper.copyWith(color: AeraColors.inkSoft),
-                                        ),
-                                      ],
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: AeraColors.surfaceSubtle,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text('2 Flagged Units', style: AeraTypography.label),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-
-                                // Incident 1
-                                _incidentItem(
-                                  'JOB-4019: Sarah Khan (Gulberg III)',
-                                  'Ahmed Raza delayed by +28 min on coil clean in Model Town. Arrival window breach imminent.',
-                                  Icons.schedule,
-                                  AeraColors.danger,
-                                  onTap: () => context.push('/ai-insight/ins-1'),
-                                ),
-                                const Divider(color: AeraColors.line, height: 16),
-
-                                // Incident 2
-                                _incidentItem(
-                                  'JOB-4022: M. Trading Co. HQ (Cantt)',
-                                  'Carrier scroll compressor CP-402 delivery pending at regional depot. Risk to 15:30 start.',
-                                  Icons.inventory_2,
-                                  AeraColors.warning,
-                                  onTap: () => context.push('/ai-insight/ins-2'),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-
-                          // Recommended Action Card
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AeraColors.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AeraColors.line),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'RECOMMENDED AUTONOMOUS ACTION',
-                                  style: AeraTypography.labelUpper.copyWith(color: AeraColors.accent),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Reassign JOB-4019 to Omar Khan (currently idle in Gulberg II, 4 min away) to preserve 100% SLA.',
-                                  style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft),
-                                ),
-                                const SizedBox(height: 8),
-                                ElevatedButton.icon(
-                                  onPressed: () => context.push('/ai-insight/ins-1'),
-                                  icon: const Icon(Icons.bolt, size: 16),
-                                  label: const Text('Review & Execute Reassignment'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AeraColors.accent,
-                                    foregroundColor: AeraColors.surface,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
           ),
-
-          // Persistent Input Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: AeraColors.surface,
-              border: const Border(top: BorderSide(color: AeraColors.line)),
-            ),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 44,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: AeraColors.canvas,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: AeraColors.line),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.auto_awesome, size: 18, color: AeraColors.accent),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: _queryController,
-                              style: AeraTypography.bodySm,
-                              decoration: InputDecoration(
-                                hintText: 'Ask Aera anything about jobs, techs, revenue...',
-                                hintStyle: AeraTypography.bodySm.copyWith(color: AeraColors.outline),
-                                border: InputBorder.none,
-                                isDense: true,
-                              ),
-                              onSubmitted: (val) {
-                                if (val.trim().isNotEmpty) {
-                                  setState(() => _activePrompt = val.trim());
-                                  _queryController.clear();
-                                }
-                              },
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.mic, size: 20, color: AeraColors.inkSoft),
-                            onPressed: () {},
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    style: IconButton.styleFrom(backgroundColor: AeraColors.accent),
-                    icon: const Icon(Icons.arrow_upward, size: 20, color: AeraColors.surface),
-                    onPressed: () {
-                      if (_queryController.text.trim().isNotEmpty) {
-                        setState(() => _activePrompt = _queryController.text.trim());
-                        _queryController.clear();
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
+          _InputBar(
+            controller: _queryController,
+            sending: _sending,
+            onSubmit: _send,
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _incidentItem(
-    String title,
-    String desc,
-    IconData icon,
-    Color color, {
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: AeraTypography.bodySm.copyWith(fontWeight: FontWeight.w700),
+class _EmptyState extends ConsumerWidget {
+  const _EmptyState({
+    required this.presets,
+    required this.onPresetTap,
+    required this.onResume,
+  });
+
+  final List<String> presets;
+  final ValueChanged<String> onPresetTap;
+  final ValueChanged<String> onResume;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final recent = ref.watch(aiConversationsListProvider);
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      children: [
+        const SizedBox(height: 12),
+        Icon(Icons.auto_awesome, size: 32, color: AeraColors.accent),
+        const SizedBox(height: 10),
+        Text(
+          'Ask Aera about jobs, schedule, or your team\'s workload today.',
+          style: AeraTypography.body.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'TRY ASKING',
+          style: AeraTypography.labelUpper.copyWith(color: AeraColors.inkSoft),
+        ),
+        const SizedBox(height: 8),
+        ...presets.map(
+          (preset) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: InkWell(
+              onTap: () => onPresetTap(preset),
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  desc,
-                  style: AeraTypography.label.copyWith(color: AeraColors.inkSoft),
+                decoration: BoxDecoration(
+                  color: AeraColors.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AeraColors.line),
                 ),
-              ],
+                child: Row(
+                  children: [
+                    Expanded(child: Text(preset, style: AeraTypography.bodySm)),
+                    const Icon(
+                      Icons.chevron_right,
+                      size: 16,
+                      color: AeraColors.outline,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-          const Icon(Icons.chevron_right, size: 16, color: AeraColors.outline),
-        ],
+        ),
+        recent.when(
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+          data: (conversations) {
+            if (conversations.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'RECENT CONVERSATIONS',
+                    style: AeraTypography.labelUpper.copyWith(
+                      color: AeraColors.inkSoft,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...conversations.map(
+                    (c) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: InkWell(
+                        onTap: () => onResume(c.id),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AeraColors.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.chat_bubble_outline,
+                                size: 15,
+                                color: AeraColors.inkSoft,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  c.title?.isNotEmpty == true
+                                      ? c.title!
+                                      : 'Untitled conversation',
+                                  style: AeraTypography.bodySm,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ConversationThread extends ConsumerWidget {
+  const _ConversationThread({
+    required this.conversationId,
+    required this.scrollController,
+  });
+
+  final String conversationId;
+  final ScrollController scrollController;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final detailAsync = ref.watch(aiConversationDetailProvider(conversationId));
+
+    return detailAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                error is ApiException
+                    ? error.message
+                    : 'Could not load this conversation',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () => ref.invalidate(
+                  aiConversationDetailProvider(conversationId),
+                ),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      data: (detail) {
+        final messages = detail.messages;
+        final lastAssistantWithTools = messages.lastWhere(
+          (m) => !m.isUser && m.toolCalls.isNotEmpty,
+          orElse: () => AiMessage(
+            id: '',
+            role: 'ASSISTANT',
+            content: '',
+            createdAt: _epoch,
+          ),
+        );
+
+        return ListView.separated(
+          controller: scrollController,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          itemCount: messages.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final message = messages[index];
+            final showFullAnalysisLink =
+                message.id.isNotEmpty &&
+                message.id == lastAssistantWithTools.id;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AiMessageBubble(message: message),
+                if (showFullAnalysisLink)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, left: 36),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () =>
+                            context.push('/ai-insight/$conversationId'),
+                        child: const Text('View full analysis'),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _InputBar extends StatelessWidget {
+  const _InputBar({
+    required this.controller,
+    required this.sending,
+    required this.onSubmit,
+  });
+
+  final TextEditingController controller;
+  final bool sending;
+  final ValueChanged<String> onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: const BoxDecoration(
+        color: AeraColors.surface,
+        border: Border(top: BorderSide(color: AeraColors.line)),
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: AeraColors.canvas,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: AeraColors.line),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.auto_awesome,
+                      size: 18,
+                      color: AeraColors.accent,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: controller,
+                        enabled: !sending,
+                        style: AeraTypography.bodySm,
+                        decoration: InputDecoration(
+                          hintText:
+                              'Ask Aera anything about jobs, techs, revenue...',
+                          hintStyle: AeraTypography.bodySm.copyWith(
+                            color: AeraColors.outline,
+                          ),
+                          border: InputBorder.none,
+                          isDense: true,
+                        ),
+                        onSubmitted: onSubmit,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              style: IconButton.styleFrom(backgroundColor: AeraColors.accent),
+              icon: sending
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AeraColors.surface,
+                        ),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.arrow_upward,
+                      size: 20,
+                      color: AeraColors.surface,
+                    ),
+              onPressed: sending ? null : () => onSubmit(controller.text),
+            ),
+          ],
+        ),
       ),
     );
   }
