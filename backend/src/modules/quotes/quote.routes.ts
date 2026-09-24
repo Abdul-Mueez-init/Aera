@@ -7,6 +7,7 @@ import {
   getQuote,
   listQuotes,
   respondToPublicQuote,
+  respondToQuote,
   sendQuote,
   type QuoteStatusValue,
 } from "./quote.service.js";
@@ -118,6 +119,26 @@ router.post(
   async (request, response) => {
     response.status(200).json({
       data: await sendQuote(request.auth!, routeId(request.params.quoteId)),
+    });
+  },
+);
+
+router.post(
+  "/:quoteId/respond",
+  requireAuth,
+  requireRole(...managerRoles),
+  async (request, response) => {
+    const parsed = responseSchema.safeParse(request.body);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    response.status(200).json({
+      data: await respondToQuote(
+        request.auth!,
+        routeId(request.params.quoteId),
+        parsed.data.action,
+      ),
     });
   },
 );

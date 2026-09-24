@@ -42,6 +42,40 @@ class QuoteDetailScreen extends ConsumerStatefulWidget {
 
 class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   bool _sending = false;
+  bool _responding = false;
+
+  Future<void> _respondQuote(bool approve) async {
+    setState(() => _responding = true);
+    try {
+      await ref
+          .read(quotesRepositoryProvider)
+          .respondToQuote(widget.quoteId, approve: approve);
+      ref.invalidate(quoteDetailProvider(widget.quoteId));
+      ref.invalidate(quotesListProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              approve
+                  ? 'Quote marked as approved'
+                  : 'Quote marked as declined',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        final message = e is ApiException
+            ? e.message
+            : 'Could not record quote response. Please try again.';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } finally {
+      if (mounted) setState(() => _responding = false);
+    }
+  }
 
   Future<void> _sendQuote() async {
     setState(() => _sending = true);
@@ -350,6 +384,34 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
                   isLoading: _sending,
                   onPressed: _sending ? null : _sendQuote,
                 ),
+              if (quote.status == 'SENT') ...[
+                AeraButton(
+                  text: 'Record Customer Approval',
+                  icon: const Icon(
+                    Icons.check_circle_outline_rounded,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                  isLoading: _responding,
+                  onPressed: (_sending || _responding)
+                      ? null
+                      : () => _respondQuote(true),
+                ),
+                const SizedBox(height: 10),
+                AeraButton(
+                  text: 'Record Customer Decline',
+                  variant: AeraButtonVariant.danger,
+                  icon: const Icon(
+                    Icons.cancel_outlined,
+                    size: 18,
+                    color: AeraColors.danger,
+                  ),
+                  isLoading: _responding,
+                  onPressed: (_sending || _responding)
+                      ? null
+                      : () => _respondQuote(false),
+                ),
+              ],
               const SizedBox(height: 20),
             ],
           ),

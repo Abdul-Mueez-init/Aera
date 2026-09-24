@@ -38,12 +38,13 @@ async function findConflicts(
   jobId: string,
   technicianId: string | null,
   input: ScheduleInput,
+  db: typeof prisma | Parameters<Parameters<typeof prisma.$transaction>[0]>[0] = prisma,
 ) {
   if (!technicianId) {
     return [];
   }
 
-  return prisma.job.findMany({
+  return db.job.findMany({
     where: {
       companyId,
       id: { not: jobId },
@@ -70,34 +71,36 @@ export async function scheduleJob(
   reschedule: boolean,
 ) {
   assertScheduleRange(input);
-  const job = await prisma.job.findFirst({
-    where: { id: jobId, companyId: context.companyId },
-    select: { id: true, status: true, assignedTechnicianId: true },
-  });
-  if (!job) {
-    throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
-  }
-  if (["COMPLETED", "CANCELLED"].includes(job.status)) {
-    throw new AppError("JOB_IMMUTABLE", "Final jobs cannot be scheduled", 409);
-  }
-  if (reschedule && job.status !== "SCHEDULED") {
-    throw new AppError(
-      "SCHEDULE_INVALID_RESCHEDULE",
-      "Only scheduled jobs can be rescheduled",
-      422,
+  
+  return prisma.$transaction(async (transaction) => {
+    const job = await transaction.job.findFirst({
+      where: { id: jobId, companyId: context.companyId },
+      select: { id: true, status: true, assignedTechnicianId: true },
+    });
+    if (!job) {
+      throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+    }
+    if (["COMPLETED", "CANCELLED"].includes(job.status)) {
+      throw new AppError("JOB_IMMUTABLE", "Final jobs cannot be scheduled", 409);
+    }
+    if (reschedule && job.status !== "SCHEDULED") {
+      throw new AppError(
+        "SCHEDULE_INVALID_RESCHEDULE",
+        "Only scheduled jobs can be rescheduled",
+        422,
+      );
+    }
+
+    const conflicts = await findConflicts(
+      context.companyId,
+      jobId,
+      job.assignedTechnicianId,
+      input,
+      transaction,
     );
-  }
+    const nextStatus =
+      job.status === "NEW" || job.status === "QUOTING" ? "SCHEDULED" : job.status;
 
-  const conflicts = await findConflicts(
-    context.companyId,
-    jobId,
-    job.assignedTechnicianId,
-    input,
-  );
-  const nextStatus =
-    job.status === "NEW" || job.status === "QUOTING" ? "SCHEDULED" : job.status;
-
-  await prisma.$transaction(async (transaction) => {
     await transaction.job.update({
       where: { id: jobId },
       data: {
@@ -118,26 +121,32 @@ export async function scheduleJob(
         },
       });
     }
-  });
 
-  void notificationPublisher.publish({
-    type: reschedule ? "JOB_RESCHEDULED" : "JOB_SCHEDULED",
-    companyId: context.companyId,
-    jobId,
-    recipientUserId: job.assignedTechnicianId ?? undefined,
-  });
+    return {
+      job,
+      conflicts,
+      reschedule,
+    };
+  }).then(async ({ job, conflicts, reschedule }) => {
+    void notificationPublisher.publish({
+      type: reschedule ? "JOB_RESCHEDULED" : "JOB_SCHEDULED",
+      companyId: context.companyId,
+      jobId,
+      recipientUserId: job.assignedTechnicianId ?? undefined,
+    });
 
-  return {
-    job: await getJob(context, jobId),
-    warnings: conflicts.map((conflict) => ({
-      code: "TECHNICIAN_SCHEDULE_CONFLICT",
-      jobId: conflict.id,
-      jobNumber: conflict.jobNumber,
-      scheduledStart: conflict.scheduledStart,
-      scheduledEnd: conflict.scheduledEnd,
-      customer: conflict.customer,
-    })),
-  };
+    return {
+      job: await getJob(context, jobId),
+      warnings: conflicts.map((conflict) => ({
+        code: "TECHNICIAN_SCHEDULE_CONFLICT",
+        jobId: conflict.id,
+        jobNumber: conflict.jobNumber,
+        scheduledStart: conflict.scheduledStart,
+        scheduledEnd: conflict.scheduledEnd,
+        customer: conflict.customer,
+      })),
+    };
+  });
 }
 
 export async function getDaySchedule(context: AuthContext, date: string) {

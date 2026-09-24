@@ -7,6 +7,7 @@ import {
   type PaymentProvider,
 } from "../payments/payment.port.js";
 import { notificationPublisher } from "../notifications/notification.port.js";
+import { getNextInvoiceNumber } from "../../common/counters/counter.service.js";
 
 export type InvoiceStatusValue =
   "DRAFT" | "ISSUED" | "PARTIALLY_PAID" | "PAID" | "VOID" | "OVERDUE";
@@ -99,17 +100,20 @@ async function nextInvoiceNumber(
   transaction: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   companyId: string,
 ) {
-  const latest = await transaction.invoice.findFirst({
-    where: { companyId },
-    orderBy: { createdAt: "desc" },
-    select: { invoiceNumber: true },
-  });
-  const next = latest ? Number.parseInt(latest.invoiceNumber, 10) + 1 : 1;
-  return `INV-${next.toString().padStart(6, "0")}`;
+  const nextNumber = await getNextInvoiceNumber(companyId, transaction);
+  return `INV-${nextNumber.toString().padStart(6, "0")}`;
 }
 
-async function getCompletedJobSource(context: AuthContext, jobId: string) {
-  const job = await prisma.job.findFirst({
+export interface GenerateInvoiceOptions {
+  allowZeroAmount?: boolean;
+}
+
+async function getCompletedJobSource(
+  context: AuthContext,
+  jobId: string,
+  db: typeof prisma | Parameters<Parameters<typeof prisma.$transaction>[0]>[0] = prisma,
+) {
+  const job = await db.job.findFirst({
     where: { id: jobId, companyId: context.companyId },
     select: {
       id: true,
@@ -168,8 +172,11 @@ async function getCompletedJobSource(context: AuthContext, jobId: string) {
 export async function generateInvoiceFromJob(
   context: AuthContext,
   jobId: string,
+  options: GenerateInvoiceOptions = {},
+  existingTx?: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
 ) {
-  const existing = await prisma.invoice.findFirst({
+  const db = existingTx ?? prisma;
+  const existing = await db.invoice.findFirst({
     where: { companyId: context.companyId, jobId },
     select: invoiceSelect,
   });
@@ -177,82 +184,128 @@ export async function generateInvoiceFromJob(
     return jsonSafe(existing);
   }
 
-  const job = await getCompletedJobSource(context, jobId);
+  const job = await getCompletedJobSource(context, jobId, db);
   const quote = job.quotes[0];
   const currency = quote?.currency ?? job.parts[0]?.currency ?? "USD";
-  const items = quote
-    ? quote.items.map((item) => ({
-        description: item.description,
-        quantity: item.quantity,
-        unitPriceMinor: item.unitPriceMinor,
-        totalMinor: item.totalMinor,
-        sortOrder: item.sortOrder,
-      }))
-    : job.parts.length > 0
-      ? job.parts.map((part, index) => ({
-          description: part.name,
-          quantity: part.quantity,
-          unitPriceMinor: part.unitPriceMinor,
-          totalMinor: multiplyMinorByQuantity(
-            part.unitPriceMinor,
-            part.quantity.toString(),
-          ),
-          sortOrder: index,
-        }))
-      : [
-          {
-            description: job.serviceType,
-            quantity: 1,
-            unitPriceMinor: BigInt(0),
-            totalMinor: BigInt(0),
-            sortOrder: 0,
-          },
-        ];
+
+  type InvoiceItemDraft = {
+    description: string;
+    quantity: string | number | { toString(): string };
+    unitPriceMinor: bigint;
+    totalMinor: bigint;
+    sortOrder: number;
+  };
+
+  let items: InvoiceItemDraft[];
+
+  if (quote && quote.items.length > 0) {
+    items = quote.items.map((item) => ({
+      description: item.description,
+      quantity: item.quantity,
+      unitPriceMinor: item.unitPriceMinor,
+      totalMinor: item.totalMinor,
+      sortOrder: item.sortOrder,
+    }));
+  } else if (job.parts.length > 0) {
+    items = job.parts.map((part, index) => ({
+      description: part.name,
+      quantity: part.quantity,
+      unitPriceMinor: part.unitPriceMinor,
+      totalMinor: multiplyMinorByQuantity(
+        part.unitPriceMinor,
+        part.quantity.toString(),
+      ),
+      sortOrder: index,
+    }));
+  } else {
+    if (!options.allowZeroAmount) {
+      throw new AppError(
+        "INVOICE_ZERO_AMOUNT",
+        "Cannot generate a $0 invoice without billable items (approved quote or parts). To generate a zero-cost invoice, set allowZeroAmount to true.",
+        422,
+      );
+    }
+    items = [
+      {
+        description: `${job.serviceType} (Zero-cost / Courtesy Service)`,
+        quantity: 1,
+        unitPriceMinor: BigInt(0),
+        totalMinor: BigInt(0),
+        sortOrder: 0,
+      },
+    ];
+  }
+
   const subtotalMinor = quote
     ? quote.subtotalMinor
     : items.reduce((sum, item) => sum + item.totalMinor, BigInt(0));
   const discountMinor = quote?.discountMinor ?? BigInt(0);
   const taxMinor = quote?.taxMinor ?? BigInt(0);
-  const totalMinor = quote?.totalMinor ?? subtotalMinor;
+  const totalMinor =
+    quote?.totalMinor ?? (subtotalMinor - discountMinor + taxMinor);
+
+  if (totalMinor === BigInt(0) && !options.allowZeroAmount) {
+    throw new AppError(
+      "INVOICE_ZERO_AMOUNT",
+      "Cannot generate a $0 invoice without billable items (approved quote or parts). To generate a zero-cost invoice, set allowZeroAmount to true.",
+      422,
+    );
+  }
+
+  const executeCreate = async (
+    transaction: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  ) => {
+    const innerExisting = await transaction.invoice.findFirst({
+      where: { companyId: context.companyId, jobId },
+      select: invoiceSelect,
+    });
+    if (innerExisting) {
+      return innerExisting;
+    }
+
+    const invoiceNumber = await nextInvoiceNumber(
+      transaction,
+      context.companyId,
+    );
+    return transaction.invoice.create({
+      data: {
+        companyId: context.companyId,
+        customerId: job.customerId,
+        jobId: job.id,
+        quoteId: quote?.id,
+        createdBy: context.userId,
+        invoiceNumber,
+        subtotalMinor,
+        discountMinor,
+        taxMinor,
+        totalMinor,
+        balanceDueMinor: totalMinor,
+        currency,
+        items: {
+          create: items.map((item) => ({
+            companyId: context.companyId,
+            description: item.description,
+            quantity: item.quantity.toString(),
+            unitPriceMinor: item.unitPriceMinor,
+            totalMinor: item.totalMinor,
+            sortOrder: item.sortOrder,
+          })),
+        },
+      },
+      select: invoiceSelect,
+    });
+  };
 
   try {
-    const invoice = await prisma.$transaction(async (transaction) => {
-      const invoiceNumber = await nextInvoiceNumber(
-        transaction,
-        context.companyId,
-      );
-      return transaction.invoice.create({
-        data: {
-          companyId: context.companyId,
-          customerId: job.customerId,
-          jobId: job.id,
-          quoteId: quote?.id,
-          createdBy: context.userId,
-          invoiceNumber,
-          subtotalMinor,
-          discountMinor,
-          taxMinor,
-          totalMinor,
-          balanceDueMinor: totalMinor,
-          currency,
-          items: {
-            create: items.map((item) => ({
-              companyId: context.companyId,
-              description: item.description,
-              quantity: item.quantity,
-              unitPriceMinor: item.unitPriceMinor,
-              totalMinor: item.totalMinor,
-              sortOrder: item.sortOrder,
-            })),
-          },
-        },
-        select: invoiceSelect,
-      });
-    });
+    const invoice = existingTx
+      ? await executeCreate(existingTx)
+      : await prisma.$transaction(async (transaction) =>
+          executeCreate(transaction),
+        );
     return jsonSafe(invoice);
   } catch (error) {
     if (isUniqueConstraintError(error)) {
-      const invoice = await prisma.invoice.findFirst({
+      const invoice = await db.invoice.findFirst({
         where: { companyId: context.companyId, jobId },
         select: invoiceSelect,
       });

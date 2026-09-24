@@ -214,6 +214,33 @@ class JobPart {
   );
 }
 
+class JobInvoiceSummary {
+  const JobInvoiceSummary({
+    required this.id,
+    required this.invoiceNumber,
+    required this.status,
+    required this.totalMinor,
+    required this.balanceDueMinor,
+    required this.currency,
+  });
+
+  final String id;
+  final String invoiceNumber;
+  final String status;
+  final int totalMinor;
+  final int balanceDueMinor;
+  final String currency;
+
+  factory JobInvoiceSummary.fromJson(Map<String, dynamic> json) => JobInvoiceSummary(
+    id: json['id'] as String,
+    invoiceNumber: json['invoiceNumber'] as String? ?? '',
+    status: json['status'] as String? ?? 'DRAFT',
+    totalMinor: int.tryParse(json['totalMinor']?.toString() ?? '') ?? 0,
+    balanceDueMinor: int.tryParse(json['balanceDueMinor']?.toString() ?? '') ?? 0,
+    currency: json['currency'] as String? ?? 'USD',
+  );
+}
+
 class Job {
   const Job({
     required this.id,
@@ -236,6 +263,7 @@ class Job {
     this.statusHistory = const [],
     this.photos = const [],
     this.parts = const [],
+    this.invoices = const [],
   });
 
   final String id;
@@ -258,6 +286,7 @@ class Job {
   final List<JobStatusHistoryEntry> statusHistory;
   final List<JobPhoto> photos;
   final List<JobPart> parts;
+  final List<JobInvoiceSummary> invoices;
 
   factory Job.fromJson(Map<String, dynamic> json) => Job(
     id: json['id'] as String,
@@ -314,6 +343,11 @@ class Job {
     parts:
         (json['parts'] as List<dynamic>?)
             ?.map((p) => JobPart.fromJson(p as Map<String, dynamic>))
+            .toList() ??
+        const [],
+    invoices:
+        (json['invoices'] as List<dynamic>?)
+            ?.map((i) => JobInvoiceSummary.fromJson(i as Map<String, dynamic>))
             .toList() ??
         const [],
   );
@@ -449,10 +483,20 @@ class JobsRepository {
     return Job.fromJson(res as Map<String, dynamic>);
   }
 
-  Future<Job> completeJob(String jobId, String summary) async {
+  Future<Job> completeJob(
+    String jobId,
+    String summary, {
+    bool? autoInvoice,
+    bool? allowZeroAmountInvoice,
+  }) async {
     final res = await _client.post(
       '/api/v1/jobs/$jobId/complete',
-      body: {'summary': summary.trim()},
+      body: {
+        'summary': summary.trim(),
+        if (autoInvoice != null) 'autoInvoice': autoInvoice,
+        if (allowZeroAmountInvoice != null)
+          'allowZeroAmountInvoice': allowZeroAmountInvoice,
+      },
     );
     return Job.fromJson(res as Map<String, dynamic>);
   }

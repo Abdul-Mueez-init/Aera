@@ -179,6 +179,17 @@ export async function listQuotes(
   context: AuthContext,
   status?: QuoteStatusValue,
 ) {
+  if (status === "SENT" || status === "EXPIRED" || !status) {
+    await prisma.quote.updateMany({
+      where: {
+        companyId: context.companyId,
+        status: "SENT",
+        expiresAt: { lte: new Date() },
+      },
+      data: { status: "EXPIRED" },
+    });
+  }
+
   const quotes = await prisma.quote.findMany({
     where: { companyId: context.companyId, ...(status ? { status } : {}) },
     orderBy: { createdAt: "desc" },
@@ -196,13 +207,32 @@ export async function getQuote(context: AuthContext, quoteId: string) {
   if (!quote) {
     throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
   }
+
+  if (
+    quote.status === "SENT" &&
+    quote.expiresAt &&
+    quote.expiresAt.getTime() <= Date.now()
+  ) {
+    await prisma.quote.updateMany({
+      where: { id: quoteId, status: "SENT" },
+      data: { status: "EXPIRED" },
+    });
+    quote.status = "EXPIRED";
+  }
+
   return jsonSafe(quote);
 }
 
 export async function sendQuote(context: AuthContext, quoteId: string) {
   const quote = await prisma.quote.findFirst({
     where: { id: quoteId, companyId: context.companyId },
-    select: { id: true, status: true, shareToken: true, jobId: true },
+    select: {
+      id: true,
+      status: true,
+      shareToken: true,
+      jobId: true,
+      expiresAt: true,
+    },
   });
   if (!quote) {
     throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
@@ -212,6 +242,13 @@ export async function sendQuote(context: AuthContext, quoteId: string) {
       "QUOTE_NOT_SENDABLE",
       "Quote cannot be sent in its current state",
       409,
+    );
+  }
+  if (quote.expiresAt && quote.expiresAt.getTime() <= Date.now()) {
+    throw new AppError(
+      "QUOTE_EXPIRED",
+      "Cannot send an expired quote. Update expiration date first",
+      422,
     );
   }
 
@@ -265,7 +302,138 @@ export async function getPublicQuote(shareToken: string) {
   if (!quote) {
     throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
   }
+
+  const now = new Date();
+  const isPastExpiry =
+    quote.expiresAt !== null && quote.expiresAt.getTime() <= now.getTime();
+  const isExpired =
+    quote.status === "EXPIRED" ||
+    (quote.status !== "APPROVED" &&
+      quote.status !== "DECLINED" &&
+      isPastExpiry);
+
+  if (isExpired) {
+    if (quote.status !== "EXPIRED") {
+      await prisma.quote.updateMany({
+        where: { id: quote.id, status: { in: ["DRAFT", "SENT"] } },
+        data: { status: "EXPIRED" },
+      });
+    }
+    throw new AppError("QUOTE_EXPIRED", "This quote link has expired", 410);
+  }
+
   return jsonSafe(quote);
+}
+
+interface ProcessQuoteResponseOptions {
+  quoteId: string;
+  companyId: string;
+  jobId: string | null;
+  action: QuoteApprovalActionValue;
+  source: "CUSTOMER" | "STAFF";
+  actorUserId?: string;
+  now?: Date;
+}
+
+async function processQuoteResponse(options: ProcessQuoteResponseOptions) {
+  const { quoteId, companyId, jobId, action, source, actorUserId } = options;
+  const now = options.now ?? new Date();
+
+  await prisma.$transaction(async (transaction) => {
+    const result = await transaction.quote.updateMany({
+      where: {
+        id: quoteId,
+        companyId,
+        status: "SENT",
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      data: {
+        status: action,
+        ...(action === "APPROVED" ? { approvedAt: now } : { declinedAt: now }),
+      },
+    });
+
+    if (result.count !== 1) {
+      const current = await transaction.quote.findFirst({
+        where: { id: quoteId, companyId },
+        select: { status: true, expiresAt: true },
+      });
+      if (current?.status === action) {
+        return;
+      }
+      if (
+        current?.status === "EXPIRED" ||
+        (current?.expiresAt && current.expiresAt.getTime() <= now.getTime())
+      ) {
+        throw new AppError("QUOTE_EXPIRED", "This quote link has expired", 410);
+      }
+      throw new AppError(
+        "QUOTE_ALREADY_RESOLVED",
+        "Quote has already been resolved",
+        409,
+      );
+    }
+
+    await transaction.quoteApprovalEvent.create({
+      data: {
+        companyId,
+        quoteId,
+        actorUserId: actorUserId ?? null,
+        action,
+        source,
+      },
+    });
+
+    if (action === "APPROVED" && jobId) {
+      const job = await transaction.job.findFirst({
+        where: { id: jobId, companyId },
+        select: {
+          id: true,
+          status: true,
+          scheduledStart: true,
+        },
+      });
+
+      if (job && job.status === "QUOTING") {
+        const nextStatus = job.scheduledStart ? "SCHEDULED" : "NEW";
+        await transaction.job.update({
+          where: { id: job.id },
+          data: { status: nextStatus },
+        });
+
+        let historyActorId = actorUserId;
+        if (!historyActorId) {
+          const fallbackMember = await transaction.companyMember.findFirst({
+            where: { companyId, role: "OWNER", status: "ACTIVE" },
+            select: { userId: true },
+          });
+          historyActorId = fallbackMember?.userId;
+        }
+
+        if (historyActorId) {
+          await transaction.jobStatusHistory.create({
+            data: {
+              companyId,
+              jobId: job.id,
+              actorUserId: historyActorId,
+              fromStatus: "QUOTING",
+              toStatus: nextStatus,
+              reason:
+                source === "STAFF"
+                  ? "Quote approved by staff"
+                  : "Quote approved by customer via shared link",
+            },
+          });
+        }
+      }
+    }
+  });
+
+  void notificationPublisher.publish({
+    type: action === "APPROVED" ? "QUOTE_APPROVED" : "QUOTE_DECLINED",
+    companyId,
+    quoteId,
+  });
 }
 
 export async function respondToPublicQuote(
@@ -274,14 +442,41 @@ export async function respondToPublicQuote(
 ) {
   const quote = await prisma.quote.findUnique({
     where: { shareToken },
-    select: { id: true, companyId: true, status: true },
+    select: {
+      id: true,
+      companyId: true,
+      status: true,
+      expiresAt: true,
+      jobId: true,
+    },
   });
   if (!quote) {
     throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
   }
+
   if (quote.status === action) {
     return getPublicQuote(shareToken);
   }
+
+  const now = new Date();
+  const isPastExpiry =
+    quote.expiresAt !== null && quote.expiresAt.getTime() <= now.getTime();
+  const isExpired =
+    quote.status === "EXPIRED" ||
+    (quote.status !== "APPROVED" &&
+      quote.status !== "DECLINED" &&
+      isPastExpiry);
+
+  if (isExpired) {
+    if (quote.status !== "EXPIRED") {
+      await prisma.quote.updateMany({
+        where: { id: quote.id, status: { in: ["DRAFT", "SENT"] } },
+        data: { status: "EXPIRED" },
+      });
+    }
+    throw new AppError("QUOTE_EXPIRED", "This quote link has expired", 410);
+  }
+
   if (quote.status !== "SENT") {
     throw new AppError(
       "QUOTE_ALREADY_RESOLVED",
@@ -290,35 +485,92 @@ export async function respondToPublicQuote(
     );
   }
 
-  const now = new Date();
-  await prisma.$transaction(async (transaction) => {
-    const result = await transaction.quote.updateMany({
-      where: { id: quote.id, status: "SENT" },
-      data: {
-        status: action,
-        ...(action === "APPROVED" ? { approvedAt: now } : { declinedAt: now }),
-      },
-    });
-    if (result.count !== 1) {
-      throw new AppError(
-        "QUOTE_ALREADY_RESOLVED",
-        "Quote has already been resolved",
-        409,
-      );
-    }
-    await transaction.quoteApprovalEvent.create({
-      data: {
-        companyId: quote.companyId,
-        quoteId: quote.id,
-        action,
-        source: "CUSTOMER",
-      },
-    });
-  });
-  void notificationPublisher.publish({
-    type: action === "APPROVED" ? "QUOTE_APPROVED" : "QUOTE_DECLINED",
-    companyId: quote.companyId,
+  await processQuoteResponse({
     quoteId: quote.id,
+    companyId: quote.companyId,
+    jobId: quote.jobId,
+    action,
+    source: "CUSTOMER",
+    now,
   });
+
   return getPublicQuote(shareToken);
+}
+
+export async function respondToQuote(
+  context: AuthContext,
+  quoteId: string,
+  action: QuoteApprovalActionValue,
+) {
+  const quote = await prisma.quote.findFirst({
+    where: { id: quoteId, companyId: context.companyId },
+    select: {
+      id: true,
+      companyId: true,
+      status: true,
+      expiresAt: true,
+      jobId: true,
+    },
+  });
+  if (!quote) {
+    throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
+  }
+
+  if (quote.status === action) {
+    return getQuote(context, quoteId);
+  }
+
+  const now = new Date();
+  const isPastExpiry =
+    quote.expiresAt !== null && quote.expiresAt.getTime() <= now.getTime();
+  const isExpired =
+    quote.status === "EXPIRED" ||
+    (quote.status !== "APPROVED" &&
+      quote.status !== "DECLINED" &&
+      isPastExpiry);
+
+  if (isExpired) {
+    if (quote.status !== "EXPIRED") {
+      await prisma.quote.updateMany({
+        where: { id: quote.id, status: { in: ["DRAFT", "SENT"] } },
+        data: { status: "EXPIRED" },
+      });
+    }
+    throw new AppError("QUOTE_EXPIRED", "This quote has expired", 410);
+  }
+
+  if (quote.status !== "SENT") {
+    throw new AppError(
+      "QUOTE_ALREADY_RESOLVED",
+      "Quote has already been resolved",
+      409,
+    );
+  }
+
+  await processQuoteResponse({
+    quoteId: quote.id,
+    companyId: quote.companyId,
+    jobId: quote.jobId,
+    action,
+    source: "STAFF",
+    actorUserId: context.userId,
+    now,
+  });
+
+  return getQuote(context, quoteId);
+}
+
+export async function sweepExpiredQuotes(
+  now = new Date(),
+): Promise<{ expiredCount: number }> {
+  const result = await prisma.quote.updateMany({
+    where: {
+      status: { in: ["DRAFT", "SENT"] },
+      expiresAt: { lte: now },
+    },
+    data: {
+      status: "EXPIRED",
+    },
+  });
+  return { expiredCount: result.count };
 }

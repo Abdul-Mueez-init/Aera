@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
+import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
@@ -24,6 +25,7 @@ class CompleteJobScreen extends ConsumerStatefulWidget {
 class _CompleteJobScreenState extends ConsumerState<CompleteJobScreen> {
   final _summaryController = TextEditingController();
   bool _submitting = false;
+  bool _autoInvoice = false;
   String? _error;
 
   @override
@@ -45,7 +47,11 @@ class _CompleteJobScreenState extends ConsumerState<CompleteJobScreen> {
     });
 
     try {
-      await ref.read(jobsRepositoryProvider).completeJob(widget.jobId, summary);
+      await ref.read(jobsRepositoryProvider).completeJob(
+        widget.jobId,
+        summary,
+        autoInvoice: _autoInvoice,
+      );
       ref.invalidate(jobDetailProvider(widget.jobId));
       ref.invalidate(jobsListProvider);
       ref.invalidate(technicianTodayProvider);
@@ -132,6 +138,28 @@ class _CompleteJobScreenState extends ConsumerState<CompleteJobScreen> {
                 hintText: 'What was diagnosed and fixed?',
                 controller: _summaryController,
                 maxLines: 5,
+              ),
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(
+                  color: AeraColors.surfaceSubtle,
+                  borderRadius: AeraRadii.borderMd,
+                ),
+                child: CheckboxListTile(
+                  value: _autoInvoice,
+                  onChanged: (val) => setState(() => _autoInvoice = val ?? false),
+                  title: Text(
+                    'Generate invoice draft immediately',
+                    style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    'Creates a draft invoice from approved quote or logged parts',
+                    style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft),
+                  ),
+                  activeColor: AeraColors.accent,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                ),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 10),

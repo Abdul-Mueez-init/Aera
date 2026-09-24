@@ -151,20 +151,40 @@ export async function acceptInvitation(
 
   const passwordHash = await hashPassword(password);
 
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: member.userId },
-      data: { passwordHash, isActive: true },
-    }),
-    prisma.companyMember.update({
-      where: { id: member.id },
+  const accepted = await prisma.$transaction(async (tx) => {
+    const updateResult = await tx.companyMember.updateMany({
+      where: {
+        id: member.id,
+        status: "INVITED",
+        invitationTokenHash: tokenHash,
+        invitationTokenExpiresAt: { gt: new Date() },
+      },
       data: {
         status: "ACTIVE",
         invitationTokenHash: null,
         invitationTokenExpiresAt: null,
       },
-    }),
-  ]);
+    });
+
+    if (updateResult.count === 0) {
+      return false;
+    }
+
+    await tx.user.update({
+      where: { id: member.userId },
+      data: { passwordHash, isActive: true },
+    });
+
+    return true;
+  });
+
+  if (!accepted) {
+    throw new AppError(
+      "INVITATION_INVALID_OR_EXPIRED",
+      "This invitation link is invalid or has expired",
+      400,
+    );
+  }
 
   return { userId: member.userId, companyId: member.companyId };
 }

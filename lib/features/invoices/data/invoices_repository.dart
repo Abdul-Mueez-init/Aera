@@ -282,8 +282,18 @@ class InvoicesRepository {
 
   /// Idempotent server-side — if an invoice already exists for [jobId] it
   /// is returned instead of erroring. Callers don't need to pre-check.
-  Future<Invoice> generateFromJob(String jobId) async {
-    final res = await _client.post('/api/v1/invoices/from-job/$jobId');
+  /// If the job has no approved quote and no parts ($0 total), set
+  /// [allowZeroAmount] to true to explicitly confirm a zero-cost invoice.
+  Future<Invoice> generateFromJob(
+    String jobId, {
+    bool? allowZeroAmount,
+  }) async {
+    final res = await _client.post(
+      '/api/v1/invoices/from-job/$jobId',
+      body: {
+        if (allowZeroAmount != null) 'allowZeroAmount': allowZeroAmount,
+      },
+    );
     return Invoice.fromJson(res as Map<String, dynamic>);
   }
 

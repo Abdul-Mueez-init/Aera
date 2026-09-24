@@ -20,7 +20,10 @@ export interface JobAuthorizationTarget {
   status?: JobStatusValue;
 }
 
-const technicianFieldTransitions: Record<JobStatusValue, readonly JobStatusValue[]> = {
+const technicianFieldTransitions: Record<
+  JobStatusValue,
+  readonly JobStatusValue[]
+> = {
   NEW: [],
   QUOTING: [],
   SCHEDULED: ["EN_ROUTE"],

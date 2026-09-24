@@ -10,6 +10,8 @@ import {
   assertCanTransitionJob,
   assertCanViewJob,
 } from "./job.policy.js";
+import { generateInvoiceFromJob } from "../invoices/invoice.service.js";
+import { getNextJobNumber } from "../../common/counters/counter.service.js";
 
 export type JobStatusValue =
   | "NEW"
@@ -178,11 +180,7 @@ export async function createJob(context: AuthContext, input: JobInput) {
   await assertJobReferences(context.companyId, input);
 
   return prisma.$transaction(async (transaction) => {
-    const maximum = await transaction.job.aggregate({
-      where: { companyId: context.companyId },
-      _max: { jobNumber: true },
-    });
-    const jobNumber = (maximum._max.jobNumber ?? 0) + 1;
+    const jobNumber = await getNextJobNumber(context.companyId, transaction);
     const job = await transaction.job.create({
       data: {
         companyId: context.companyId,
@@ -269,6 +267,22 @@ export async function getJob(context: AuthContext, jobId: string) {
           createdAt: true,
         },
       },
+      invoices: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          invoiceNumber: true,
+          status: true,
+          subtotalMinor: true,
+          discountMinor: true,
+          taxMinor: true,
+          totalMinor: true,
+          amountPaidMinor: true,
+          balanceDueMinor: true,
+          currency: true,
+          createdAt: true,
+        },
+      },
     },
   });
 
@@ -333,73 +347,82 @@ export async function assignJob(
   jobId: string,
   technicianId: string | null,
 ) {
-  const job = await prisma.job.findFirst({
-    where: { id: jobId, companyId: context.companyId },
-    select: {
-      id: true,
-      status: true,
-      scheduledStart: true,
-      scheduledEnd: true,
-    },
-  });
-  if (!job) {
-    throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
-  }
-  if (job.status === "COMPLETED" || job.status === "CANCELLED") {
-    throw new AppError("JOB_IMMUTABLE", "Final jobs cannot be assigned", 409);
-  }
-
-  if (technicianId) {
-    const technician = await prisma.companyMember.findFirst({
-      where: {
-        companyId: context.companyId,
-        userId: technicianId,
-        role: "TECHNICIAN",
-        status: "ACTIVE",
+  return prisma.$transaction(async (transaction) => {
+    const job = await transaction.job.findFirst({
+      where: { id: jobId, companyId: context.companyId },
+      select: {
+        id: true,
+        status: true,
+        scheduledStart: true,
+        scheduledEnd: true,
       },
     });
-    if (!technician) {
-      throw new AppError(
-        "JOB_INVALID_ASSIGNEE",
-        "Active technician not found",
-        422,
-      );
+    if (!job) {
+      throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
     }
-  }
+    if (job.status === "COMPLETED" || job.status === "CANCELLED") {
+      throw new AppError("JOB_IMMUTABLE", "Final jobs cannot be assigned", 409);
+    }
 
-  const conflicts =
-    technicianId && job.scheduledStart && job.scheduledEnd
-      ? await prisma.job.findMany({
-          where: {
-            companyId: context.companyId,
-            id: { not: jobId },
-            assignedTechnicianId: technicianId,
-            scheduledStart: { lt: job.scheduledEnd },
-            scheduledEnd: { gt: job.scheduledStart },
-            status: { notIn: ["CANCELLED", "COMPLETED"] },
-          },
-          select: { id: true, jobNumber: true },
-        })
-      : [];
+    if (technicianId) {
+      const technician = await transaction.companyMember.findFirst({
+        where: {
+          companyId: context.companyId,
+          userId: technicianId,
+          role: "TECHNICIAN",
+          status: "ACTIVE",
+        },
+      });
+      if (!technician) {
+        throw new AppError(
+          "JOB_INVALID_ASSIGNEE",
+          "Active technician not found",
+          422,
+        );
+      }
+    }
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { assignedTechnicianId: technicianId },
+    const conflicts =
+      technicianId && job.scheduledStart && job.scheduledEnd
+        ? await transaction.job.findMany({
+            where: {
+              companyId: context.companyId,
+              id: { not: jobId },
+              assignedTechnicianId: technicianId,
+              scheduledStart: { lt: job.scheduledEnd },
+              scheduledEnd: { gt: job.scheduledStart },
+              status: { notIn: ["CANCELLED", "COMPLETED"] },
+            },
+            select: { id: true, jobNumber: true },
+          })
+        : [];
+
+    await transaction.job.update({
+      where: { id: jobId },
+      data: { assignedTechnicianId: technicianId },
+    });
+
+    return {
+      job,
+      conflicts,
+      technicianId,
+    };
+  }).then(async ({ job, conflicts, technicianId }) => {
+    void notificationPublisher.publish({
+      type: "JOB_ASSIGNED",
+      companyId: context.companyId,
+      jobId,
+      recipientUserId: technicianId ?? undefined,
+    });
+    return {
+      job: await getJob(context, jobId),
+      warnings: conflicts.map((conflict) => ({
+        code: "TECHNICIAN_SCHEDULE_CONFLICT",
+        jobId: conflict.id,
+        jobNumber: conflict.jobNumber,
+      })),
+    };
   });
-  void notificationPublisher.publish({
-    type: "JOB_ASSIGNED",
-    companyId: context.companyId,
-    jobId,
-    recipientUserId: technicianId ?? undefined,
-  });
-  return {
-    job: await getJob(context, jobId),
-    warnings: conflicts.map((conflict) => ({
-      code: "TECHNICIAN_SCHEDULE_CONFLICT",
-      jobId: conflict.id,
-      jobNumber: conflict.jobNumber,
-    })),
-  };
 }
 
 export async function transitionJob(
@@ -577,13 +600,45 @@ export async function addJobPart(
   return jsonSafe(part);
 }
 
+export interface CompleteJobOptions {
+  autoInvoice?: boolean;
+  allowZeroAmountInvoice?: boolean;
+}
+
 export async function completeJob(
   context: AuthContext,
   jobId: string,
   summary: string,
+  options?: CompleteJobOptions,
 ) {
-  const job = await assertExecutableJob(context, jobId);
-  if (job.status !== "IN_PROGRESS" && job.status !== "WAITING_PARTS") {
+  const existingJob = await prisma.job.findFirst({
+    where: { id: jobId, companyId: context.companyId },
+    select: {
+      id: true,
+      companyId: true,
+      status: true,
+      assignedTechnicianId: true,
+    },
+  });
+  if (!existingJob) {
+    throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+  }
+
+  // Idempotent completion: if already completed, optionally ensure autoInvoice and return job
+  if (existingJob.status === "COMPLETED") {
+    if (options?.autoInvoice) {
+      await generateInvoiceFromJob(context, jobId, {
+        allowZeroAmount: options.allowZeroAmountInvoice,
+      });
+    }
+    return getJob(context, jobId);
+  }
+
+  assertCanExecuteJobWork(context, existingJob);
+  if (
+    existingJob.status !== "IN_PROGRESS" &&
+    existingJob.status !== "WAITING_PARTS"
+  ) {
     throw new AppError(
       "JOB_INVALID_STATUS_TRANSITION",
       "Only an active job can be completed",
@@ -594,7 +649,11 @@ export async function completeJob(
   const now = new Date();
   await prisma.$transaction(async (transaction) => {
     const result = await transaction.job.updateMany({
-      where: { id: jobId, companyId: context.companyId, status: job.status },
+      where: {
+        id: jobId,
+        companyId: context.companyId,
+        status: existingJob.status,
+      },
       data: {
         status: "COMPLETED",
         completedAt: now,
@@ -608,16 +667,29 @@ export async function completeJob(
         409,
       );
     }
+    const reason = options?.autoInvoice
+      ? "Technician completed field work; generated draft invoice"
+      : "Technician completed field work";
+
     await transaction.jobStatusHistory.create({
       data: {
         companyId: context.companyId,
         jobId,
         actorUserId: context.userId,
-        fromStatus: job.status,
+        fromStatus: existingJob.status,
         toStatus: "COMPLETED",
-        reason: "Technician completed field work",
+        reason,
       },
     });
+
+    if (options?.autoInvoice) {
+      await generateInvoiceFromJob(
+        context,
+        jobId,
+        { allowZeroAmount: options.allowZeroAmountInvoice },
+        transaction,
+      );
+    }
   });
   return getJob(context, jobId);
 }

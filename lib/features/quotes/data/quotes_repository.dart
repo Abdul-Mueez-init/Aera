@@ -290,4 +290,12 @@ class QuotesRepository {
     final res = await _client.post('/api/v1/quotes/$quoteId/send');
     return Quote.fromJson(res as Map<String, dynamic>);
   }
+
+  Future<Quote> respondToQuote(String quoteId, {required bool approve}) async {
+    final res = await _client.post(
+      '/api/v1/quotes/$quoteId/respond',
+      body: {'action': approve ? 'APPROVED' : 'DECLINED'},
+    );
+    return Quote.fromJson(res as Map<String, dynamic>);
+  }
 }

@@ -119,7 +119,11 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/create-invoice',
-      builder: (context, state) => const CreateInvoiceScreen(),
+      builder: (context, state) {
+        final jobId = state.uri.queryParameters['jobId'] ??
+            (state.extra is String ? state.extra as String : null);
+        return CreateInvoiceScreen(initialJobId: jobId);
+      },
     ),
 
     // Commercial & Portals

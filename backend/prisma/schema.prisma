@@ -165,6 +165,7 @@ model Company {
     notifications  Notification[]
   deviceTokens   DeviceToken[]
   aiConversations AiConversation[]
+  counters       CompanyCounter[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -593,4 +594,18 @@ model AiMessage {
 
   @@index([companyId, conversationId, createdAt])
   @@map("ai_messages")
+}
+
+model CompanyCounter {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @db.Uuid
+  kind      String
+  lastValue Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, kind], name: "companyId_kind")
+  @@index([companyId, kind])
+  @@map("company_counters")
 }

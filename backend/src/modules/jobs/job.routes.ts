@@ -84,6 +84,8 @@ const partSchema = z.object({
 });
 const completionSchema = z.object({
   summary: z.string().trim().min(1).max(4000),
+  autoInvoice: z.boolean().optional(),
+  allowZeroAmountInvoice: z.boolean().optional(),
 });
 
 function sendValidationError(response: Response, error: z.ZodError) {
@@ -259,6 +261,10 @@ router.post("/:jobId/complete", requireAuth, async (request, response) => {
       request.auth!,
       routeId(request.params.jobId),
       parsed.data.summary,
+      {
+        autoInvoice: parsed.data.autoInvoice,
+        allowZeroAmountInvoice: parsed.data.allowZeroAmountInvoice,
+      },
     ),
   });
 });

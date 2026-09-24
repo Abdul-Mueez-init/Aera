@@ -282,16 +282,25 @@ export async function rotateRefreshSession(
     Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
   );
 
-  await prisma.$transaction([
-    prisma.refreshSession.update({
-      where: { id: session.id },
+  const rotated = await prisma.$transaction(async (tx) => {
+    const updateResult = await tx.refreshSession.updateMany({
+      where: {
+        id: session.id,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
       data: {
         revokedAt: new Date(),
         lastUsedAt: new Date(),
         replacedBySessionId: replacementId,
       },
-    }),
-    prisma.refreshSession.create({
+    });
+
+    if (updateResult.count === 0) {
+      return false;
+    }
+
+    await tx.refreshSession.create({
       data: {
         id: replacementId,
         companyId: session.companyId,
@@ -299,8 +308,18 @@ export async function rotateRefreshSession(
         tokenHash: hashRefreshToken(replacementToken),
         expiresAt,
       },
-    }),
-  ]);
+    });
+
+    return true;
+  });
+
+  if (!rotated) {
+    throw new AppError(
+      "AUTH_SESSION_ALREADY_CONSUMED",
+      "Refresh session has already been consumed",
+      401,
+    );
+  }
 
   const context: AuthContext = {
     userId: session.userId,

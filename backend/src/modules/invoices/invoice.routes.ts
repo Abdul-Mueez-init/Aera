@@ -67,15 +67,21 @@ router.get(
   },
 );
 
+const fromJobSchema = z.object({
+  allowZeroAmount: z.boolean().optional(),
+});
+
 router.post(
   "/from-job/:jobId",
   requireAuth,
   requireRole(...managerRoles),
   async (request, response) => {
+    const parsed = fromJobSchema.safeParse(request.body ?? {});
     response.status(201).json({
       data: await generateInvoiceFromJob(
         request.auth!,
         routeId(request.params.jobId),
+        parsed.success ? parsed.data : undefined,
       ),
     });
   },

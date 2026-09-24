@@ -11,6 +11,8 @@ import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_status_chip.dart';
 import '../auth/providers/auth_provider.dart';
+import '../invoices/data/invoices_repository.dart';
+import '../invoices/providers/invoices_provider.dart';
 import 'data/jobs_repository.dart';
 import 'providers/jobs_provider.dart';
 
@@ -59,6 +61,66 @@ class JobDetailScreen extends ConsumerStatefulWidget {
 
 class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
   bool _updating = false;
+  bool _generatingInvoice = false;
+
+  Future<void> _generateInvoiceForJob({bool allowZeroAmount = false}) async {
+    setState(() => _generatingInvoice = true);
+    try {
+      final invoice = await ref
+          .read(invoicesRepositoryProvider)
+          .generateFromJob(widget.jobId, allowZeroAmount: allowZeroAmount);
+      ref.invalidate(jobDetailProvider(widget.jobId));
+      ref.invalidate(invoicesListProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invoice ${invoice.invoiceNumber} created')),
+        );
+        context.push('/invoices/${invoice.id}');
+      }
+    } on ApiException catch (e) {
+      if (e.code == 'INVOICE_ZERO_AMOUNT') {
+        if (!mounted) return;
+        final confirmZero = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: AeraColors.surface,
+            shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
+            title: const Text('Zero-Cost Invoice Confirmation'),
+            content: const Text(
+              'This job has no approved quote and no logged parts (\$0 total). Do you want to generate a zero-cost courtesy / warranty invoice?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Confirm Zero-Cost'),
+              ),
+            ],
+          ),
+        );
+        if (confirmZero == true && mounted) {
+          await _generateInvoiceForJob(allowZeroAmount: true);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(e.message)));
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not generate invoice')));
+      }
+    } finally {
+      if (mounted) setState(() => _generatingInvoice = false);
+    }
+  }
 
   Future<void> _transition(String status) async {
     setState(() => _updating = true);
@@ -563,7 +625,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                     isLoading: _updating,
                     onPressed: _updating ? null : _completeJob,
                   )
-                else if (job.status == 'COMPLETED')
+                else if (job.status == 'COMPLETED') ...[
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -588,7 +650,78 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                         ),
                       ],
                     ),
-                  )
+                  ),
+                  if (job.invoices.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    AeraCard(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.receipt_long,
+                                    size: 18,
+                                    color: AeraColors.accent,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Invoice ${job.invoices.first.invoiceNumber}',
+                                    style: AeraTypography.bodyMedium.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              AeraStatusChip(
+                                label: job.invoices.first.status,
+                                type: job.invoices.first.status == 'PAID'
+                                    ? AeraStatusType.paid
+                                    : job.invoices.first.status == 'ISSUED'
+                                        ? AeraStatusType.info
+                                        : AeraStatusType.pending,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Total: \$${(job.invoices.first.totalMinor / 100).toStringAsFixed(2)}  •  Balance: \$${(job.invoices.first.balanceDueMinor / 100).toStringAsFixed(2)}',
+                            style: AeraTypography.bodySm.copyWith(
+                              color: AeraColors.inkSoft,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: AeraButton(
+                              text: 'View Invoice',
+                              variant: AeraButtonVariant.secondary,
+                              onPressed: () => context.push(
+                                '/invoices/${job.invoices.first.id}',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else if (ref.watch(currentRoleProvider) != 'TECHNICIAN') ...[
+                    const SizedBox(height: 12),
+                    AeraButton(
+                      text: 'Generate Invoice',
+                      icon: const Icon(
+                        Icons.receipt,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      isLoading: _generatingInvoice,
+                      onPressed: () => _generateInvoiceForJob(),
+                    ),
+                  ],
+                ]
                 else if (job.status == 'CANCELLED')
                   Container(
                     padding: const EdgeInsets.all(14),
@@ -642,7 +775,8 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                       child: AeraButton(
                         text: 'Create Invoice',
                         variant: AeraButtonVariant.outline,
-                        onPressed: () => context.push('/create-invoice'),
+                        onPressed: () =>
+                            context.push('/create-invoice?jobId=${job.id}'),
                       ),
                     ),
                   ],
