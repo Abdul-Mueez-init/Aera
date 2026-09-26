@@ -133,6 +133,8 @@ model User {
    notifications Notification[] @relation("NotificationRecipients")
   deviceTokens  DeviceToken[]  @relation("DeviceTokenOwners")
   aiConversations AiConversation[] @relation("AiConversationOwners")
+  presignedUploads PresignedUpload[] @relation("PresignedUploadRequesters")
+  paymentOperations PaymentOperation[] @relation("PaymentOperationCreators")
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -166,6 +168,8 @@ model Company {
   deviceTokens   DeviceToken[]
   aiConversations AiConversation[]
   counters       CompanyCounter[]
+  presignedUploads PresignedUpload[]
+  paymentOperations PaymentOperation[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -284,6 +288,7 @@ model Job {
   quotes                Quote[]
   invoices              Invoice[]
   reviews               CustomerReview[]
+  presignedUploads      PresignedUpload[]
 
   @@unique([companyId, jobNumber])
   @@index([companyId, status, scheduledStart])
@@ -451,6 +456,7 @@ model Invoice {
   creator         User?         @relation("InvoiceCreators", fields: [createdBy], references: [id], onDelete: SetNull)
   items           InvoiceItem[]
   payments        Payment[]
+  paymentOperations PaymentOperation[]
 
   @@unique([companyId, invoiceNumber])
   @@unique([companyId, jobId])
@@ -608,4 +614,59 @@ model CompanyCounter {
   @@unique([companyId, kind], name: "companyId_kind")
   @@index([companyId, kind])
   @@map("company_counters")
+}
+
+model PresignedUpload {
+  id         String    @id @default(uuid()) @db.Uuid
+  companyId  String    @db.Uuid
+  jobId      String    @db.Uuid
+  userId     String    @db.Uuid
+  objectKey  String
+  mimeType   String
+  expiresAt  DateTime
+  confirmedAt DateTime?
+  createdAt  DateTime  @default(now())
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user       User      @relation("PresignedUploadRequesters", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([objectKey])
+  @@index([companyId, jobId, expiresAt])
+  @@index([expiresAt])
+  @@map("presigned_uploads")
+}
+
+enum PaymentOperationStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model PaymentOperation {
+  id              String                 @id @default(uuid()) @db.Uuid
+  companyId       String                 @db.Uuid
+  invoiceId       String                 @db.Uuid
+  userId          String                 @db.Uuid
+  amountMinor     BigInt
+  currency        String                 @db.Char(3)
+  method          PaymentMethod
+  provider        String
+  reference       String?
+  idempotencyKey  String
+  status          PaymentOperationStatus @default(PENDING)
+  providerPaymentId String?
+  errorMessage    String?
+  retryCount      Int                    @default(0)
+  completedAt     DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice         Invoice                @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  user            User                   @relation("PaymentOperationCreators", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, invoiceId, status])
+  @@index([status, createdAt])
+  @@map("payment_operations")
 }

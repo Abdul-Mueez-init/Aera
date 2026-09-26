@@ -536,11 +536,27 @@ export async function presignJobPhoto(
   mimeType: string,
 ): Promise<SignedUploadResult> {
   await assertExecutableJob(context, jobId);
-  return supabaseStorageAdapter.createSignedUploadUrl({
+  
+  const result = await supabaseStorageAdapter.createSignedUploadUrl({
     companyId: context.companyId,
     jobId,
     mimeType,
   });
+
+  // Store presigned upload record for later validation
+  const expiresAt = new Date(result.expiresAt);
+  await prisma.presignedUpload.create({
+    data: {
+      companyId: context.companyId,
+      jobId,
+      userId: context.userId,
+      objectKey: result.objectKey,
+      mimeType,
+      expiresAt,
+    },
+  });
+
+  return result;
 }
 
 export async function addJobPhoto(
@@ -549,6 +565,85 @@ export async function addJobPhoto(
   input: JobPhotoInput,
 ) {
   await assertExecutableJob(context, jobId);
+  
+  // Validate against presigned upload record
+  const presignedUpload = await prisma.presignedUpload.findUnique({
+    where: { objectKey: input.objectKey.trim() },
+  });
+
+  if (!presignedUpload) {
+    throw new AppError(
+      "INVALID_UPLOAD",
+      "This upload was not authorized through the proper presigned upload process",
+      403,
+    );
+  }
+
+  // Verify the presigned upload belongs to the correct company, job, and user
+  if (
+    presignedUpload.companyId !== context.companyId ||
+    presignedUpload.jobId !== jobId ||
+    presignedUpload.userId !== context.userId
+  ) {
+    throw new AppError(
+      "INVALID_UPLOAD",
+      "This upload does not belong to the current context",
+      403,
+    );
+  }
+
+  // Check if the presigned upload has expired
+  if (new Date() > presignedUpload.expiresAt) {
+    throw new AppError(
+      "UPLOAD_EXPIRED",
+      "This upload authorization has expired",
+      410,
+    );
+  }
+
+  // Check if this upload has already been confirmed
+  if (presignedUpload.confirmedAt) {
+    throw new AppError(
+      "UPLOAD_ALREADY_CONFIRMED",
+      "This upload has already been confirmed and cannot be reused",
+      409,
+    );
+  }
+
+  // Verify the object exists in storage
+  const verification = await supabaseStorageAdapter.verifyUpload({
+    objectKey: input.objectKey.trim(),
+    expectedMimeType: presignedUpload.mimeType,
+    expectedMaxSizeBytes: input.sizeBytes,
+  });
+
+  if (!verification.exists) {
+    throw new AppError(
+      "UPLOAD_NOT_FOUND",
+      "The uploaded object was not found in storage",
+      404,
+    );
+  }
+
+  // Verify client-supplied MIME type matches what was presigned
+  if (input.mimeType !== presignedUpload.mimeType) {
+    throw new AppError(
+      "MIME_TYPE_MISMATCH",
+      "The uploaded file type does not match the authorized type",
+      422,
+    );
+  }
+
+  // Verify size is within acceptable limits
+  if (input.sizeBytes > 10_000_000) {
+    throw new AppError(
+      "FILE_TOO_LARGE",
+      "Photo size exceeds the 10MB limit",
+      413,
+    );
+  }
+
+  // Create the photo record
   const photo = await prisma.jobPhoto.create({
     data: {
       companyId: context.companyId,
@@ -570,6 +665,13 @@ export async function addJobPhoto(
       createdAt: true,
     },
   });
+
+  // Mark the presigned upload as confirmed
+  await prisma.presignedUpload.update({
+    where: { id: presignedUpload.id },
+    data: { confirmedAt: new Date() },
+  });
+
   return jsonSafe(photo);
 }
 

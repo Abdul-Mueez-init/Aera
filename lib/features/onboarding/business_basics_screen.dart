@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
@@ -7,21 +9,49 @@ import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_text_field.dart';
+import '../auth/providers/auth_provider.dart';
 
-class BusinessBasicsScreen extends StatefulWidget {
+class BusinessBasicsScreen extends ConsumerStatefulWidget {
   const BusinessBasicsScreen({super.key});
 
   @override
-  State<BusinessBasicsScreen> createState() => _BusinessBasicsScreenState();
+  ConsumerState<BusinessBasicsScreen> createState() => _BusinessBasicsScreenState();
 }
 
-class _BusinessBasicsScreenState extends State<BusinessBasicsScreen> {
-  final _businessNameController =
-      TextEditingController(text: 'Northstar Climate Solutions');
-  final _phoneController =
-      TextEditingController(text: '+92 (42) 3578-9000');
-  final _taxIdController = TextEditingController(text: 'NTN-8492019-3');
-  String _selectedCurrency = 'PKR (Rs)';
+class _BusinessBasicsScreenState extends ConsumerState<BusinessBasicsScreen> {
+  final _businessNameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _taxIdController = TextEditingController();
+  String _selectedCurrency = 'USD';
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedData();
+  }
+
+  Future<void> _loadSavedData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final companyName = prefs.getString('onboarding_business_name');
+    final phone = prefs.getString('onboarding_phone');
+    final taxId = prefs.getString('onboarding_tax_id');
+    final currency = prefs.getString('onboarding_currency');
+
+    if (companyName != null) {
+      _businessNameController.text = companyName;
+    }
+    if (phone != null) {
+      _phoneController.text = phone;
+    }
+    if (taxId != null) {
+      _taxIdController.text = taxId;
+    }
+    if (currency != null) {
+      setState(() => _selectedCurrency = currency);
+    }
+  }
 
   @override
   void dispose() {
@@ -176,21 +206,21 @@ class _BusinessBasicsScreenState extends State<BusinessBasicsScreen> {
                               Row(
                                 children: [
                                   Text(
-                                    'Northstar Mark',
+                                    'Company Logo',
                                     style: AeraTypography.h3.copyWith(fontSize: 14),
                                   ),
                                   const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: AeraColors.successSoft,
+                                      color: AeraColors.surfaceSubtle,
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
-                                      'Draft saved',
+                                      'Optional',
                                       style: AeraTypography.label.copyWith(
                                         fontSize: 10,
-                                        color: AeraColors.success,
+                                        color: AeraColors.inkSoft,
                                       ),
                                     ),
                                   ),
@@ -247,11 +277,11 @@ class _BusinessBasicsScreenState extends State<BusinessBasicsScreen> {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      _currencyChip('PKR (Rs)', 'PKR (Rs)'),
+                      _currencyChip('USD', 'USD'),
                       const SizedBox(width: 10),
-                      _currencyChip('USD (\Strict)', 'USD (\$)'),
+                      _currencyChip('EUR', 'EUR'),
                       const SizedBox(width: 10),
-                      _currencyChip('EUR (€)', 'EUR (€)'),
+                      _currencyChip('GBP', 'GBP'),
                     ],
                   ),
                 ],
@@ -259,11 +289,44 @@ class _BusinessBasicsScreenState extends State<BusinessBasicsScreen> {
             ),
             const SizedBox(height: 24),
 
+            // Error message
+            if (_errorMessage != null)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AeraColors.danger.withOpacity(0.1),
+                  borderRadius: AeraRadii.borderMd,
+                  border: Border.all(color: AeraColors.danger),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: AeraColors.danger, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: AeraTypography.bodySm.copyWith(color: AeraColors.danger),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             // Continue Button
             AeraButton(
-              text: 'Save & Continue to Territory',
-              icon: const Icon(Icons.arrow_forward, size: 18, color: Colors.white),
-              onPressed: () => context.push('/onboarding/service-area'),
+              text: _isLoading ? 'Saving...' : 'Save & Continue to Territory',
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Icon(Icons.arrow_forward, size: 18, color: Colors.white),
+              onPressed: _isLoading ? null : _handleSaveAndContinue,
             ),
             const SizedBox(height: 20),
           ],
@@ -286,6 +349,14 @@ class _BusinessBasicsScreenState extends State<BusinessBasicsScreen> {
 
   Widget _currencyChip(String label, String value) {
     final isSelected = _selectedCurrency == value;
+    String displayLabel;
+    if (value == 'USD') {
+      displayLabel = 'USD ($)';
+    } else if (value == 'EUR') {
+      displayLabel = 'EUR (€)';
+    } else {
+      displayLabel = 'GBP (£)';
+    }
 
     return Expanded(
       child: InkWell(
@@ -303,7 +374,7 @@ class _BusinessBasicsScreenState extends State<BusinessBasicsScreen> {
             ),
           ),
           child: Text(
-            label,
+            displayLabel,
             style: AeraTypography.label.copyWith(
               fontWeight: FontWeight.w700,
               color: isSelected ? AeraColors.accent : AeraColors.ink,
@@ -312,5 +383,39 @@ class _BusinessBasicsScreenState extends State<BusinessBasicsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleSaveAndContinue() async {
+    final businessName = _businessNameController.text.trim();
+    if (businessName.isEmpty) {
+      setState(() => _errorMessage = 'Business name is required');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Company is already created during registration
+      // Save business details locally for now
+      // TODO: Add backend endpoint to update company details
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('onboarding_business_name', businessName);
+      await prefs.setString('onboarding_phone', _phoneController.text.trim());
+      await prefs.setString('onboarding_tax_id', _taxIdController.text.trim());
+      await prefs.setString('onboarding_currency', _selectedCurrency);
+
+      if (mounted) {
+        context.push('/onboarding/service-area');
+      }
+    } catch (e) {
+      setState(() => _errorMessage = 'Failed to save business details. Please try again.');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 }

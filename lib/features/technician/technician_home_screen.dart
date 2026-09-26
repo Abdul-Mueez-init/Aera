@@ -169,7 +169,7 @@ class _TechJobCard extends StatelessWidget {
 
     return AeraCard(
       padding: const EdgeInsets.all(16),
-      onTap: () => context.push('/jobs/${job.id}'),
+      onTap: () => context.push('/technician/jobs/${job.id}/brief'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -248,7 +248,7 @@ class _TechJobCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Open job',
+                  'View brief',
                   style: AeraTypography.label.copyWith(
                     color: AeraColors.accent,
                   ),

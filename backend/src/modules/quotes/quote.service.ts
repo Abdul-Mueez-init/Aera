@@ -3,6 +3,13 @@ import { AppError } from "../../common/errors.js";
 import type { AuthContext } from "../../common/auth/auth.types.js";
 import { prisma } from "../../db/prisma.js";
 import { notificationPublisher } from "../notifications/notification.port.js";
+import {
+  calculateLineItemTotal,
+  calculateSubtotal,
+  calculateTax,
+  calculateTotal,
+  validateMonetaryCalculations,
+} from "../../common/money/money.service.js";
 
 export type QuoteStatusValue =
   "DRAFT" | "SENT" | "APPROVED" | "DECLINED" | "EXPIRED";
@@ -10,7 +17,7 @@ export type QuoteApprovalActionValue = "APPROVED" | "DECLINED";
 
 export interface QuoteItemInput {
   description: string;
-  quantity: number;
+  quantity: string; // Changed to string for exact decimal arithmetic
   unitPriceMinor: number;
 }
 
@@ -79,21 +86,24 @@ const quoteSelect = {
 } as const;
 
 function calculateTotals(input: CreateQuoteInput) {
-  const subtotalMinor = input.items.reduce(
-    (total, item) => total + Math.round(item.quantity * item.unitPriceMinor),
-    0,
+  // Use exact integer arithmetic for all money calculations
+  const subtotalMinor = calculateSubtotal(
+    input.items.map((item) => ({
+      unitPriceMinor: BigInt(item.unitPriceMinor),
+      quantity: item.quantity,
+    })),
   );
-  const discountMinor = input.discountMinor ?? 0;
+  const discountMinor = BigInt(input.discountMinor ?? 0);
   const taxableMinor = subtotalMinor - discountMinor;
-  const taxMinor = Math.round(
-    (taxableMinor * (input.taxRateBps ?? 0)) / 10_000,
-  );
+  const taxMinor = calculateTax(taxableMinor, input.taxRateBps ?? 0);
+  const totalMinor = calculateTotal(subtotalMinor, discountMinor, taxMinor);
+  
   return {
-    subtotalMinor,
-    discountMinor,
-    taxMinor,
+    subtotalMinor: Number(subtotalMinor),
+    discountMinor: Number(discountMinor),
+    taxMinor: Number(taxMinor),
     taxRateBps: input.taxRateBps ?? 0,
-    totalMinor: taxableMinor + taxMinor,
+    totalMinor: Number(totalMinor),
   };
 }
 
@@ -131,12 +141,13 @@ async function assertQuoteReferences(
 }
 
 function assertTotals(totals: ReturnType<typeof calculateTotals>) {
-  if (
-    totals.discountMinor < 0 ||
-    totals.discountMinor > totals.subtotalMinor ||
-    totals.taxRateBps < 0 ||
-    totals.taxRateBps > 10_000
-  ) {
+  try {
+    validateMonetaryCalculations(
+      BigInt(totals.subtotalMinor),
+      BigInt(totals.discountMinor),
+      totals.taxRateBps,
+    );
+  } catch (error) {
     throw new AppError("QUOTE_INVALID_TOTALS", "Quote totals are invalid", 422);
   }
 }
@@ -164,7 +175,10 @@ export async function createQuote(
             description: item.description.trim(),
             quantity: item.quantity,
             unitPriceMinor: BigInt(item.unitPriceMinor),
-            totalMinor: BigInt(Math.round(item.quantity * item.unitPriceMinor)),
+            totalMinor: calculateLineItemTotal(
+              BigInt(item.unitPriceMinor),
+              item.quantity,
+            ),
             sortOrder: index,
           })),
         },

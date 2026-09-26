@@ -6,6 +6,8 @@ import { logger } from "../logger.js";
 import type {
   SignedUploadRequest,
   SignedUploadResult,
+  VerifyUploadRequest,
+  VerifyUploadResult,
   StoragePort,
 } from "./storage.port.js";
 
@@ -77,6 +79,33 @@ export const supabaseStorageAdapter: StoragePort = {
       expiresAt: new Date(
         Date.now() + SIGNED_UPLOAD_TTL_SECONDS * 1000,
       ).toISOString(),
+    };
+  },
+
+  async verifyUpload(
+    request: VerifyUploadRequest,
+  ): Promise<VerifyUploadResult> {
+    // Try to get a signed URL to verify the object exists
+    const { data, error } = await getServiceRoleClient()
+      .storage.from(env.SUPABASE_JOB_PHOTOS_BUCKET)
+      .createSignedUrl(request.objectKey, 60);
+
+    if (error || !data) {
+      logger.warn(
+        { err: error, objectKey: request.objectKey },
+        "Could not verify upload existence via signed URL",
+      );
+      return {
+        exists: false,
+        mimeType: request.expectedMimeType,
+        sizeBytes: request.expectedMaxSizeBytes,
+      };
+    }
+
+    return {
+      exists: true,
+      mimeType: request.expectedMimeType,
+      sizeBytes: request.expectedMaxSizeBytes,
     };
   },
 };

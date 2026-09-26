@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
@@ -16,11 +17,32 @@ class ServiceAreaScreen extends StatefulWidget {
 
 class _ServiceAreaScreenState extends State<ServiceAreaScreen> {
   double _radiusKm = 35.0;
-  final Set<String> _selectedZones = {
-    'Gulberg & Cantt',
-    'DHA Phases 1-8',
-    'Johar Town & Model Town',
-  };
+  final Set<String> _selectedZones = {};
+  static const String _radiusKey = 'onboarding_service_radius';
+  static const String _zonesKey = 'onboarding_service_zones';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedData();
+  }
+
+  Future<void> _loadSavedData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _radiusKm = prefs.getDouble(_radiusKey) ?? 35.0;
+      final savedZones = prefs.getStringList(_zonesKey);
+      if (savedZones != null) {
+        _selectedZones.addAll(savedZones);
+      }
+    });
+  }
+
+  Future<void> _saveData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_radiusKey, _radiusKm);
+    await prefs.setStringList(_zonesKey, _selectedZones.toList());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -304,7 +326,10 @@ class _ServiceAreaScreenState extends State<ServiceAreaScreen> {
                     divisions: 14,
                     activeColor: AeraColors.accent,
                     inactiveColor: AeraColors.surfaceContainerHigh,
-                    onChanged: (val) => setState(() => _radiusKm = val),
+                    onChanged: (val) {
+                      setState(() => _radiusKm = val);
+                      _saveData();
+                    },
                   ),
                   const SizedBox(height: 8),
 
@@ -368,6 +393,7 @@ class _ServiceAreaScreenState extends State<ServiceAreaScreen> {
             _selectedZones.remove(zone);
           }
         });
+        _saveData();
       },
       selectedColor: AeraColors.accentSoft,
       backgroundColor: AeraColors.surface,

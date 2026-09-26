@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
@@ -15,13 +16,8 @@ class ServicesScreen extends StatefulWidget {
 }
 
 class _ServicesScreenState extends State<ServicesScreen> {
-  final Set<String> _selectedServices = {
-    'AC Repair',
-    'AC Installation',
-    'Preventive Maintenance',
-    'Emergency Diagnostics',
-    'Duct Cleaning & Sealing',
-  };
+  final Set<String> _selectedServices = {};
+  static const String _servicesKey = 'onboarding_services';
 
   final List<_ServiceItem> _services = const [
     _ServiceItem('AC Repair', 'High Demand', Icons.toys_outlined),
@@ -33,6 +29,27 @@ class _ServicesScreenState extends State<ServicesScreen> {
     _ServiceItem('Commercial Chillers', 'VRF & Industrial', Icons.severe_cold),
     _ServiceItem('Refrigerant Leak Repair', 'Pressure & Gas Testing', Icons.plumbing),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedServices();
+  }
+
+  Future<void> _loadSavedServices() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedServices = prefs.getStringList(_servicesKey);
+    if (savedServices != null) {
+      setState(() {
+        _selectedServices.addAll(savedServices);
+      });
+    }
+  }
+
+  Future<void> _saveServices() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_servicesKey, _selectedServices.toList());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -148,6 +165,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                         _selectedServices.addAll(_services.map((s) => s.title));
                       }
                     });
+                    _saveServices();
                   },
                   icon: const Icon(Icons.done_all, size: 16, color: AeraColors.accent),
                   label: Text(
@@ -181,6 +199,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                         _selectedServices.add(service.title);
                       }
                     });
+                    _saveServices();
                   },
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,

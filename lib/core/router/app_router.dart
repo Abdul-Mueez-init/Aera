@@ -39,6 +39,8 @@ import '../../features/portal/customer_home_screen.dart';
 
 import '../../features/field/technician_tracking_screen.dart';
 import '../../features/technician/technician_home_screen.dart';
+import '../../features/technician/job_brief_screen.dart';
+import '../../features/technician/en_route_screen.dart';
 import '../../features/technician/work_in_progress_screen.dart';
 import '../../features/technician/job_evidence_screen.dart';
 import '../../features/technician/complete_job_screen.dart';
@@ -181,6 +183,20 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/technician-home',
       builder: (context, state) => const TechnicianHomeScreen(),
+    ),
+    GoRoute(
+      path: '/technician/jobs/:jobId/brief',
+      builder: (context, state) {
+        final jobId = state.pathParameters['jobId'] ?? '';
+        return JobBriefScreen(jobId: jobId);
+      },
+    ),
+    GoRoute(
+      path: '/technician/jobs/:jobId/en-route',
+      builder: (context, state) {
+        final jobId = state.pathParameters['jobId'] ?? '';
+        return EnRouteScreen(jobId: jobId);
+      },
     ),
     GoRoute(
       path: '/technician/jobs/:jobId/work',

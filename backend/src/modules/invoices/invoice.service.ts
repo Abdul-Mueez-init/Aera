@@ -2,12 +2,24 @@ import { AppError } from "../../common/errors.js";
 import type { AuthContext } from "../../common/auth/auth.types.js";
 import { env } from "../../config/env.js";
 import { prisma } from "../../db/prisma.js";
+import { logger } from "../../common/logger.js";
 import {
   manualPaymentProvider,
   type PaymentProvider,
 } from "../payments/payment.port.js";
+import {
+  createPaymentOperation,
+  processPaymentOperation,
+} from "../payments/payment-operation.service.js";
 import { notificationPublisher } from "../notifications/notification.port.js";
 import { getNextInvoiceNumber } from "../../common/counters/counter.service.js";
+import {
+  calculateLineItemTotal,
+  calculateSubtotal,
+  calculateTax,
+  calculateTotal,
+  validateMonetaryCalculations,
+} from "../../common/money/money.service.js";
 
 export type InvoiceStatusValue =
   "DRAFT" | "ISSUED" | "PARTIALLY_PAID" | "PAID" | "VOID" | "OVERDUE";
@@ -89,12 +101,7 @@ function isUniqueConstraintError(error: unknown): boolean {
   );
 }
 
-function multiplyMinorByQuantity(unitPriceMinor: bigint, quantity: string) {
-  const [whole, fraction = ""] = quantity.split(".");
-  const scale = 10n ** BigInt(fraction.length);
-  const numerator = BigInt(`${whole}${fraction}`);
-  return (unitPriceMinor * numerator + scale / 2n) / scale;
-}
+// multiplyMinorByQuantity is now imported from money.service.ts
 
 async function nextInvoiceNumber(
   transaction: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
@@ -211,7 +218,7 @@ export async function generateInvoiceFromJob(
       description: part.name,
       quantity: part.quantity,
       unitPriceMinor: part.unitPriceMinor,
-      totalMinor: multiplyMinorByQuantity(
+      totalMinor: calculateLineItemTotal(
         part.unitPriceMinor,
         part.quantity.toString(),
       ),
@@ -398,25 +405,44 @@ export async function recordPayment(
   input: PaymentInput,
   provider: PaymentProvider = manualPaymentProvider,
 ) {
-  const existingPayment = await prisma.payment.findUnique({
+  // Check for existing payment operation first (idempotency)
+  const existingOperation = await prisma.paymentOperation.findUnique({
     where: {
       companyId_idempotencyKey: {
         companyId: context.companyId,
         idempotencyKey: input.idempotencyKey,
       },
     },
-    select: { invoiceId: true },
+    select: { invoiceId: true, status: true },
   });
-  if (existingPayment) {
-    if (existingPayment.invoiceId !== invoiceId) {
+
+  if (existingOperation) {
+    if (existingOperation.invoiceId !== invoiceId) {
       throw new AppError(
         "PAYMENT_IDEMPOTENCY_CONFLICT",
         "Idempotency key was used for another invoice",
         409,
       );
     }
-    return getInvoice(context, invoiceId);
+    // If operation exists and is completed, return current invoice state
+    if (existingOperation.status === "COMPLETED") {
+      return getInvoice(context, invoiceId);
+    }
+    if (existingOperation.status === "FAILED") {
+      throw new AppError(
+        "PAYMENT_OPERATION_FAILED",
+        "Previous payment operation failed",
+        500,
+      );
+    }
+    // Operation is still processing
+    throw new AppError(
+      "PAYMENT_OPERATION_PENDING",
+      "Payment operation is still being processed",
+      409,
+    );
   }
+
   if (input.amountMinor <= 0) {
     throw new AppError(
       "PAYMENT_INVALID_AMOUNT",
@@ -425,35 +451,62 @@ export async function recordPayment(
     );
   }
 
-  try {
-    const result = await prisma.$transaction(async (transaction) => {
-      const invoice = await transaction.invoice.findFirst({
-        where: { id: invoiceId, companyId: context.companyId },
-        select: { status: true, balanceDueMinor: true, currency: true },
-      });
-      if (!invoice)
-        throw new AppError("RESOURCE_NOT_FOUND", "Invoice not found", 404);
-      if (invoice.status === "DRAFT" || invoice.status === "VOID") {
-        throw new AppError(
-          "INVOICE_NOT_PAYABLE",
-          "Invoice is not payable",
-          409,
-        );
-      }
-      if (invoice.currency !== input.currency.toUpperCase()) {
-        throw new AppError(
-          "PAYMENT_CURRENCY_MISMATCH",
-          "Payment currency does not match invoice",
-          422,
-        );
-      }
+  // Validate invoice first (outside transaction)
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, companyId: context.companyId },
+    select: { status: true, balanceDueMinor: true, currency: true },
+  });
+  if (!invoice)
+    throw new AppError("RESOURCE_NOT_FOUND", "Invoice not found", 404);
+  if (invoice.status === "DRAFT" || invoice.status === "VOID") {
+    throw new AppError(
+      "INVOICE_NOT_PAYABLE",
+      "Invoice is not payable",
+      409,
+    );
+  }
+  if (invoice.currency !== input.currency.toUpperCase()) {
+    throw new AppError(
+      "PAYMENT_CURRENCY_MISMATCH",
+      "Payment currency does not match invoice",
+      422,
+    );
+  }
 
-      const providerResult = await provider.recordPayment({
-        amountMinor: BigInt(input.amountMinor),
-        currency: input.currency,
-        method: input.method,
-        reference: input.reference,
-      });
+  // Create payment operation record (outbox pattern)
+  const paymentOperation = await createPaymentOperation(
+    context.companyId,
+    invoiceId,
+    context.userId,
+    BigInt(input.amountMinor),
+    input.currency.toUpperCase(),
+    input.method,
+    provider.name,
+    input.reference?.trim(),
+    input.idempotencyKey,
+  );
+
+  // Process the payment operation (external provider call)
+  // This happens OUTSIDE the database transaction
+  try {
+    await processPaymentOperation(paymentOperation.id, provider);
+  } catch (providerError) {
+    // Provider failed - operation is marked as FAILED and will be retried
+    // We don't update the invoice balance until provider succeeds
+    logger.error(
+      { paymentOperationId: paymentOperation.id, error: providerError },
+      "Payment provider call failed",
+    );
+    throw new AppError(
+      "PAYMENT_PROVIDER_ERROR",
+      "Payment provider failed to process payment",
+      502,
+    );
+  }
+
+  // Provider succeeded - now update invoice balance and create payment record in transaction
+  try {
+    await prisma.$transaction(async (transaction) => {
       const update = await transaction.invoice.updateMany({
         where: {
           id: invoiceId,
@@ -480,6 +533,13 @@ export async function recordPayment(
           422,
         );
       }
+
+      // Get the completed operation to get providerPaymentId
+      const completedOperation = await transaction.paymentOperation.findUnique({
+        where: { id: paymentOperation.id },
+        select: { providerPaymentId: true },
+      });
+
       await transaction.payment.create({
         data: {
           companyId: context.companyId,
@@ -489,19 +549,18 @@ export async function recordPayment(
           currency: input.currency.toUpperCase(),
           method: input.method,
           provider: provider.name,
-          providerPaymentId: providerResult.providerPaymentId,
+          providerPaymentId: completedOperation?.providerPaymentId,
           reference: input.reference?.trim(),
           idempotencyKey: input.idempotencyKey,
         },
       });
-      return true;
     });
-    void result;
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       return getInvoice(context, invoiceId);
     }
     throw error;
   }
+
   return getInvoice(context, invoiceId);
 }

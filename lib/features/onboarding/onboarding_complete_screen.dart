@@ -1,16 +1,62 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
+import '../auth/providers/auth_provider.dart';
 
-class OnboardingCompleteScreen extends StatelessWidget {
+class OnboardingCompleteScreen extends ConsumerStatefulWidget {
   const OnboardingCompleteScreen({super.key});
 
   @override
+  ConsumerState<OnboardingCompleteScreen> createState() => _OnboardingCompleteScreenState();
+}
+
+class _OnboardingCompleteScreenState extends ConsumerState<OnboardingCompleteScreen> {
+  String _companyName = 'Your Company';
+  String _serviceRadius = 'Not configured';
+  int _serviceCount = 0;
+  int _zoneCount = 0;
+  int _invitedMembers = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOnboardingData();
+  }
+
+  Future<void> _loadOnboardingData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final companyName = prefs.getString('onboarding_business_name');
+    final radius = prefs.getDouble('onboarding_service_radius');
+    final zones = prefs.getStringList('onboarding_service_zones');
+    final services = prefs.getStringList('onboarding_services');
+    final invited = prefs.getInt('onboarding_invited_count');
+
+    setState(() {
+      _companyName = companyName ?? ref.read(currentCompanyProvider)?.name ?? 'Your Company';
+      _serviceRadius = radius != null ? '${radius.toInt()} km' : 'Not configured';
+      _serviceCount = services?.length ?? 0;
+      _zoneCount = zones?.length ?? 0;
+      _invitedMembers = invited ?? 0;
+    });
+  }
+
+  Future<void> _clearOnboardingData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('onboarding_service_radius');
+    await prefs.remove('onboarding_service_zones');
+    await prefs.remove('onboarding_services');
+    await prefs.remove('onboarding_invited_count');
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final companyName = _companyName;
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       body: SafeArea(
@@ -84,7 +130,7 @@ class OnboardingCompleteScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Northstar Climate Solutions is configured for real-time dispatch, field evidence, and instant customer billing.',
+                    '$companyName is configured for real-time dispatch, field evidence, and instant customer billing.',
                     textAlign: TextAlign.center,
                     style: AeraTypography.bodySm.copyWith(
                       color: AeraColors.inkSoft,
@@ -152,25 +198,25 @@ class OnboardingCompleteScreen extends StatelessWidget {
                   _manifestRow(
                     Icons.corporate_fare,
                     'Organization & Base',
-                    'Northstar Climate Solutions • Lahore Metro',
+                    companyName,
                   ),
                   const SizedBox(height: 10),
                   _manifestRow(
                     Icons.share_location,
                     'Service Perimeter',
-                    '35 km radius dispatch zone active',
+                    '$_serviceRadius radius • $_zoneCount zones configured',
                   ),
                   const SizedBox(height: 10),
                   _manifestRow(
                     Icons.hvac,
                     'Catalog Configured',
-                    '8 active HVAC commercial & home tiers',
+                    '$_serviceCount service offerings configured',
                   ),
                   const SizedBox(height: 10),
                   _manifestRow(
                     Icons.badge,
                     'Field Crew Ready',
-                    '3 crew members configured & dispatched',
+                    '$_invitedMembers team members invited',
                   ),
                 ],
               ),
@@ -181,7 +227,12 @@ class OnboardingCompleteScreen extends StatelessWidget {
             AeraButton(
               text: 'Launch Dispatch Console',
               icon: const Icon(Icons.dashboard_outlined, size: 18, color: Colors.white),
-              onPressed: () => context.go('/dashboard'),
+              onPressed: () async {
+                await _clearOnboardingData();
+                if (mounted) {
+                  context.go('/dashboard');
+                }
+              },
             ),
             const SizedBox(height: 20),
           ],
