@@ -50,7 +50,7 @@ class _JobBriefScreenState extends ConsumerState<JobBriefScreen> {
           .transitionStatus(widget.jobId, 'EN_ROUTE');
       _refreshEverywhere();
       if (mounted) {
-        context.push('/technician/jobs/${widget.jobId}/work');
+        context.push('/technician/jobs/${widget.jobId}/en-route');
       }
     } catch (e) {
       _showError(e);

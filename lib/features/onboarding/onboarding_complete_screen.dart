@@ -37,13 +37,15 @@ class _OnboardingCompleteScreenState extends ConsumerState<OnboardingCompleteScr
     final services = prefs.getStringList('onboarding_services');
     final invited = prefs.getInt('onboarding_invited_count');
 
-    setState(() {
-      _companyName = companyName ?? ref.read(currentCompanyProvider)?.name ?? 'Your Company';
-      _serviceRadius = radius != null ? '${radius.toInt()} km' : 'Not configured';
-      _serviceCount = services?.length ?? 0;
-      _zoneCount = zones?.length ?? 0;
-      _invitedMembers = invited ?? 0;
-    });
+    if (mounted) {
+      setState(() {
+        _companyName = companyName ?? ref.read(currentCompanyProvider)?.name ?? 'Your Company';
+        _serviceRadius = radius != null ? '${radius.toInt()} km' : 'Not configured';
+        _serviceCount = services?.length ?? 0;
+        _zoneCount = zones?.length ?? 0;
+        _invitedMembers = invited ?? 0;
+      });
+    }
   }
 
   Future<void> _clearOnboardingData() async {
@@ -52,6 +54,10 @@ class _OnboardingCompleteScreenState extends ConsumerState<OnboardingCompleteScr
     await prefs.remove('onboarding_service_zones');
     await prefs.remove('onboarding_services');
     await prefs.remove('onboarding_invited_count');
+    await prefs.remove('onboarding_business_name');
+    await prefs.remove('onboarding_phone');
+    await prefs.remove('onboarding_tax_id');
+    await prefs.remove('onboarding_currency');
   }
 
   @override
@@ -229,9 +235,8 @@ class _OnboardingCompleteScreenState extends ConsumerState<OnboardingCompleteScr
               icon: const Icon(Icons.dashboard_outlined, size: 18, color: Colors.white),
               onPressed: () async {
                 await _clearOnboardingData();
-                if (mounted) {
-                  context.go('/dashboard');
-                }
+                if (!mounted) return;
+                context.go('/dashboard');
               },
             ),
             const SizedBox(height: 20),

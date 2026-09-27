@@ -220,13 +220,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       backgroundColor: AeraColors.canvas,
       appBar: AppBar(
         title: const Text('Notification Center'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.apps),
-            tooltip: 'Screen Catalog',
-            onPressed: () => Scaffold.of(context).openEndDrawer(),
-          ),
-        ],
+        // Screen catalog drawer is only available in main app shell
+        // Removed broken openEndDrawer call
       ),
       body: RefreshIndicator(
         onRefresh: () async {

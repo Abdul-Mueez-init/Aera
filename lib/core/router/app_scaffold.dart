@@ -106,7 +106,8 @@ class _ScreenCatalogDrawer extends StatelessWidget {
 
                   _categoryHeader('Batch 5: Field, AI & Settings'),
                   _item(context, 'Technician Home', '/technician-home'),
-                  _item(context, 'Technician Tracking', '/technician-tracking'),
+                  // Technician Tracking requires token and jobId parameters - disabled in catalog
+                  // _item(context, 'Technician Tracking', '/technician-tracking'),
                   _item(context, 'AI Operations Assistant', '/ai-assistant'),
                   _item(context, 'AI Insight Detail', '/ai-insight/ins-1'),
                   _item(context, 'Notifications', '/notifications'),

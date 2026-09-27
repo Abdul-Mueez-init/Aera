@@ -418,8 +418,15 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                             ),
                           ),
                           TextButton(
-                            onPressed: () =>
-                                context.push('/technician-tracking'),
+                            onPressed: () {
+                              // TODO: Implement proper technician tracking with token and jobId
+                              // This requires the actual portal token and current job ID
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Technician tracking requires valid portal token'),
+                                ),
+                              );
+                            },
                             child: Text(
                               'Directions',
                               style: AeraTypography.label.copyWith(

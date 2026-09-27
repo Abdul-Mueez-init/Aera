@@ -9,7 +9,6 @@ import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_text_field.dart';
-import '../auth/providers/auth_provider.dart';
 
 class BusinessBasicsScreen extends ConsumerStatefulWidget {
   const BusinessBasicsScreen({super.key});
@@ -351,11 +350,11 @@ class _BusinessBasicsScreenState extends ConsumerState<BusinessBasicsScreen> {
     final isSelected = _selectedCurrency == value;
     String displayLabel;
     if (value == 'USD') {
-      displayLabel = 'USD ($)';
+      displayLabel = 'USD';
     } else if (value == 'EUR') {
-      displayLabel = 'EUR (€)';
+      displayLabel = 'EUR';
     } else {
-      displayLabel = 'GBP (£)';
+      displayLabel = 'GBP';
     }
 
     return Expanded(

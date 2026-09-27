@@ -166,11 +166,8 @@ class _AiOperationsAssistantScreenState
               tooltip: 'New conversation',
               onPressed: _startNewConversation,
             ),
-          IconButton(
-            icon: const Icon(Icons.apps),
-            tooltip: 'Screen Catalog',
-            onPressed: () => Scaffold.of(context).openEndDrawer(),
-          ),
+          // Screen catalog drawer is only available in main app shell
+          // Removed broken openEndDrawer call
         ],
       ),
       body: Column(

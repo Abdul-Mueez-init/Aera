@@ -13,13 +13,8 @@ class MoreScreen extends StatelessWidget {
       backgroundColor: AeraColors.canvas,
       appBar: AppBar(
         title: const Text('Operations Hub'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.apps),
-            tooltip: 'Screen Catalog',
-            onPressed: () => Scaffold.of(context).openEndDrawer(),
-          ),
-        ],
+        // Screen catalog drawer is only available in main app shell
+        // Removed broken openEndDrawer call
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -150,13 +145,14 @@ class MoreScreen extends StatelessWidget {
             subtitle: 'Live SLA buffer breach simulation',
             route: '/ai-insight/ins-1',
           ),
-          _navItem(
-            context,
-            icon: Icons.location_on,
-            title: 'Live Technician GPS Tracking',
-            subtitle: 'Van #12 (Ahmed Raza) • 18 min away',
-            route: '/technician-tracking',
-          ),
+          // Technician tracking requires valid token and jobId - disabled
+          // _navItem(
+          //   context,
+          //   icon: Icons.location_on,
+          //   title: 'Live Technician GPS Tracking',
+          //   subtitle: 'Van #12 (Ahmed Raza) • 18 min away',
+          //   route: '/technician-tracking',
+          // ),
           _navItem(
             context,
             icon: Icons.engineering,
@@ -191,25 +187,8 @@ class MoreScreen extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // Screen Catalog Shortcut
-          OutlinedButton.icon(
-            onPressed: () => Scaffold.of(context).openEndDrawer(),
-            icon: const Icon(Icons.apps, size: 18, color: AeraColors.accent),
-            label: const Text(
-              'Open Full 34-Screen Catalog Drawer',
-              style: TextStyle(
-                color: AeraColors.accent,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              side: const BorderSide(color: AeraColors.accent),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
+          // Screen catalog drawer is only available in main app shell
+          // Removed broken openEndDrawer shortcut button
           const SizedBox(height: 24),
         ],
       ),

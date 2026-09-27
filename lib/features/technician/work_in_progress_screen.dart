@@ -288,14 +288,7 @@ class _WorkInProgressScreenState extends ConsumerState<WorkInProgressScreen> {
 
               // Status controls — same commands job_detail_screen.dart uses,
               // framed for the technician's step-by-step field workflow.
-              if (job.status == 'EN_ROUTE')
-                AeraButton(
-                  text: 'Arrived — Start Job',
-                  icon: const Icon(Icons.check, size: 18, color: Colors.white),
-                  isLoading: _busy,
-                  onPressed: _busy ? null : () => _transition('IN_PROGRESS'),
-                )
-              else if (job.status == 'IN_PROGRESS')
+              if (job.status == 'IN_PROGRESS')
                 AeraButton(
                   text: 'Pause — Waiting on Parts',
                   variant: AeraButtonVariant.secondary,
