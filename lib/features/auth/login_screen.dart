@@ -270,7 +270,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             // SSO Container
             AeraCard(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              backgroundColor: AeraColors.surfaceSubtle.withOpacity(0.7),
+              backgroundColor: AeraColors.surfaceSubtle.withValues(alpha: 0.7),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [

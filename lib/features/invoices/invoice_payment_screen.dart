@@ -355,7 +355,7 @@ class InvoicePaymentScreen extends ConsumerWidget {
                       color: AeraColors.successSoft,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: AeraColors.success.withOpacity(0.3),
+                        color: AeraColors.success.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Column(

@@ -95,7 +95,7 @@ class _SplashScreenState extends State<SplashScreen>
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: AeraColors.surfaceSubtle.withOpacity(0.8),
+                      color: AeraColors.surfaceSubtle.withValues(alpha: 0.8),
                       borderRadius: AeraRadii.borderXl,
                       border: Border.all(color: AeraColors.line, width: 0.5),
                     ),
@@ -171,7 +171,7 @@ class _SplashScreenState extends State<SplashScreen>
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AeraColors.accentSoft.withOpacity(0.7),
+                      color: AeraColors.accentSoft.withValues(alpha: 0.7),
                       borderRadius: AeraRadii.borderFull,
                     ),
                     child: Row(
@@ -217,7 +217,7 @@ class _SplashScreenState extends State<SplashScreen>
                           'Calibrating routes',
                           style: AeraTypography.bodySm.copyWith(
                             fontSize: 11,
-                            color: AeraColors.inkSoft.withOpacity(0.7),
+                            color: AeraColors.inkSoft.withValues(alpha: 0.7),
                           ),
                         ),
                         Text(

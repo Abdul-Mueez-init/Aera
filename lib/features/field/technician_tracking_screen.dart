@@ -197,7 +197,7 @@ class TechnicianTrackingScreen extends ConsumerWidget {
                       color: AeraColors.dangerSoft,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: AeraColors.danger.withOpacity(0.3),
+                        color: AeraColors.danger.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Column(

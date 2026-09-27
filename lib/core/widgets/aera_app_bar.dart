@@ -28,7 +28,7 @@ class AeraAppBar extends StatelessWidget implements PreferredSizeWidget {
     final canPop = Navigator.of(context).canPop();
 
     return AppBar(
-      backgroundColor: AeraColors.surface.withOpacity(0.85),
+      backgroundColor: AeraColors.surface.withValues(alpha: 0.85),
       elevation: 0,
       scrolledUnderElevation: 1,
       centerTitle: false,

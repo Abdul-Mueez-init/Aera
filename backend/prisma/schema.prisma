@@ -293,6 +293,8 @@ model Job {
   @@unique([companyId, jobNumber])
   @@index([companyId, status, scheduledStart])
   @@index([companyId, assignedTechnicianId, scheduledStart])
+  @@index([companyId, customerId])
+  @@index([companyId, serviceAddressId])
   @@map("jobs")
 }
 
@@ -310,6 +312,7 @@ model JobStatusHistory {
   actor       User      @relation("JobStatusActors", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([companyId, jobId, createdAt(sort: Desc)])
+  @@index([companyId, actorUserId])
   @@map("job_status_history")
 }
 
@@ -327,6 +330,7 @@ model JobNote {
   author      User              @relation("JobNoteAuthors", fields: [authorUserId], references: [id], onDelete: Restrict)
 
   @@index([companyId, jobId, createdAt(sort: Desc)])
+  @@index([companyId, authorUserId])
   @@map("job_notes")
 }
 
@@ -346,6 +350,7 @@ model JobPhoto {
   uploader   User         @relation("JobPhotoUploaders", fields: [uploadedBy], references: [id], onDelete: Restrict)
 
   @@index([companyId, jobId, createdAt(sort: Desc)])
+  @@index([companyId, uploadedBy])
   @@map("job_photos")
 }
 
@@ -393,6 +398,7 @@ model Quote {
 
   @@index([companyId, status, createdAt(sort: Desc)])
   @@index([companyId, customerId, createdAt(sort: Desc)])
+  @@index([companyId, jobId])
   @@map("quotes")
 }
 
@@ -462,6 +468,7 @@ model Invoice {
   @@unique([companyId, jobId])
   @@index([companyId, status, dueAt])
   @@index([companyId, jobId])
+  @@index([companyId, createdBy])
   @@map("invoices")
 }
 
@@ -501,6 +508,7 @@ model Payment {
 
   @@unique([companyId, idempotencyKey])
   @@index([companyId, invoiceId, receivedAt(sort: Desc)])
+  @@index([companyId, createdBy])
   @@map("payments")
 }
 
@@ -518,6 +526,7 @@ model CustomerPortalToken {
   creator     User?    @relation("PortalTokenCreators", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@index([companyId, customerId, revokedAt, expiresAt])
+  @@index([companyId, createdBy])
   @@map("customer_portal_tokens")
 }
 

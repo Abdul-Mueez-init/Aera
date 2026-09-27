@@ -175,7 +175,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AeraColors.surfaceSubtle.withOpacity(0.7),
+                      color: AeraColors.surfaceSubtle.withValues(alpha: 0.7),
                       borderRadius: AeraRadii.borderMd,
                     ),
                     child: Column(

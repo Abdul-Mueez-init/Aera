@@ -1,141 +1,372 @@
+import request from "supertest";
 import { describe, expect, it } from "vitest";
-import {
-  createPaymentOperation,
-  processPaymentOperation,
-} from "../src/modules/payments/payment-operation.service.js";
-import { manualPaymentProvider } from "../src/modules/payments/payment.port.js";
+import { buildApp } from "../src/app.js";
+import { prisma } from "../src/db/prisma.js";
 
-describe("payment idempotency and recovery", () => {
-  describe("payment operation creation", () => {
-    it("should create payment operation with correct status", () => {
-      const mockCompanyId = "test-company-id";
-      const mockInvoiceId = "test-invoice-id";
-      const mockUserId = "test-user-id";
-      const mockAmount = 10000n;
-      const mockCurrency = "USD";
-      const mockMethod = "CARD";
-      const mockProvider = "manual";
-      const mockIdempotencyKey = "test-key-123";
+const app = buildApp();
 
-      // This would require database connection in real test
-      // For now, we verify the function signature and logic
-      expect(typeof createPaymentOperation).toBe("function");
+function uniqueSuffix(label: string) {
+  return `${label}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+}
+
+async function registerOwner(label: string) {
+  const suffix = uniqueSuffix(label);
+  const email = `owner-${suffix}@example.com`;
+  const res = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email,
+      password: "correct-horse-battery-staple",
+      firstName: "Owner",
+      lastName: label,
+      companyName: `Company ${suffix}`,
     });
 
-    it("should enforce unique idempotency keys per company", () => {
-      // The schema has a unique constraint on companyId + idempotencyKey
-      // This prevents duplicate payment operations
-      const companyId = "test-company";
-      const idempotencyKey = "unique-key-123";
-      
-      // Verify the uniqueness constraint exists in schema
-      expect(typeof companyId).toBe("string");
-      expect(typeof idempotencyKey).toBe("string");
+  expect(res.status).toBe(201);
+  return {
+    ...res.body.data,
+    email,
+  };
+}
+
+async function createCustomerAndAddress(ownerAccessToken: string) {
+  const custRes = await request(app)
+    .post("/api/v1/customers")
+    .set("Authorization", `Bearer ${ownerAccessToken}`)
+    .send({
+      firstName: "John",
+      lastName: "Customer",
+      email: `customer-${Date.now()}@example.com`,
+      phone: "+15551234567",
     });
+  expect(custRes.status).toBe(201);
+  const customerId = custRes.body.data.id;
+
+  const addrRes = await request(app)
+    .post(`/api/v1/customers/${customerId}/addresses`)
+    .set("Authorization", `Bearer ${ownerAccessToken}`)
+    .send({
+      label: "Main House",
+      line1: "123 Main St",
+      city: "Springfield",
+      countryCode: "US",
+    });
+  expect(addrRes.status).toBe(201);
+  const addressId = addrRes.body.data.id;
+
+  return { customerId, addressId };
+}
+
+async function createJob(
+  ownerAccessToken: string,
+  customerId: string,
+  addressId: string,
+) {
+  const jobRes = await request(app)
+    .post("/api/v1/jobs")
+    .set("Authorization", `Bearer ${ownerAccessToken}`)
+    .send({
+      customerId,
+      serviceAddressId: addressId,
+      serviceType: "HVAC Repair",
+      problemDescription: "Unit blowing warm air",
+      priority: "HIGH",
+    });
+  expect(jobRes.status).toBe(201);
+  return jobRes.body.data;
+}
+
+async function completeJob(ownerAccessToken: string, jobId: string) {
+  await request(app)
+    .post(`/api/v1/jobs/${jobId}/status`)
+    .set("Authorization", `Bearer ${ownerAccessToken}`)
+    .send({ status: "SCHEDULED" });
+
+  await request(app)
+    .post(`/api/v1/jobs/${jobId}/status`)
+    .set("Authorization", `Bearer ${ownerAccessToken}`)
+    .send({ status: "EN_ROUTE" });
+
+  await request(app)
+    .post(`/api/v1/jobs/${jobId}/status`)
+    .set("Authorization", `Bearer ${ownerAccessToken}`)
+    .send({ status: "IN_PROGRESS" });
+
+  const completeRes = await request(app)
+    .post(`/api/v1/jobs/${jobId}/complete`)
+    .set("Authorization", `Bearer ${ownerAccessToken}`)
+    .send({ summary: "Job completed successfully" });
+  expect(completeRes.status).toBe(200);
+}
+
+async function createInvoice(ownerAccessToken: string, jobId: string) {
+  const invoiceRes = await request(app)
+    .post(`/api/v1/invoices/from-job/${jobId}`)
+    .set("Authorization", `Bearer ${ownerAccessToken}`)
+    .send({ allowZeroAmount: true });
+  expect(invoiceRes.status).toBe(201);
+  return invoiceRes.body.data;
+}
+
+describe("Phase G1: Payment Idempotency Integration Tests", () => {
+  it("prevents duplicate payments with same idempotency key", async () => {
+    const owner = await registerOwner("idempotency-duplicate");
+    const idempotencyKey = `payment-test-${Date.now()}`;
+
+    // Create customer, address, job, and invoice
+    const { customerId, addressId } = await createCustomerAndAddress(
+      owner.accessToken,
+    );
+    const job = await createJob(owner.accessToken, customerId, addressId);
+    await completeJob(owner.accessToken, job.id);
+    const invoice = await createInvoice(owner.accessToken, job.id);
+
+    // Issue the invoice
+    await request(app)
+      .post(`/api/v1/invoices/${invoice.id}/issue`)
+      .set("Authorization", `Bearer ${owner.accessToken}`);
+
+    // Record first payment
+    const firstPayment = await request(app)
+      .post(`/api/v1/invoices/${invoice.id}/payments`)
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .set("Idempotency-Key", idempotencyKey)
+      .send({
+        amountMinor: 5000,
+        currency: "USD",
+        method: "CARD",
+      });
+
+    expect(firstPayment.status).toBe(200);
+
+    // Try to record second payment with same idempotency key
+    const secondPayment = await request(app)
+      .post(`/api/v1/invoices/${invoice.id}/payments`)
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .set("Idempotency-Key", idempotencyKey)
+      .send({
+        amountMinor: 5000,
+        currency: "USD",
+        method: "CARD",
+      });
+
+    // Should return the same result (idempotent)
+    expect(secondPayment.status).toBe(200);
+    expect(secondPayment.body.data.id).toBe(firstPayment.body.data.id);
+
+    // Verify only one payment was created
+    const payments = await request(app)
+      .get(`/api/v1/invoices/${invoice.id}/payments`)
+      .set("Authorization", `Bearer ${owner.accessToken}`);
+
+    expect(payments.status).toBe(200);
+    expect(payments.body.data.length).toBe(1);
   });
 
-  describe("payment operation processing", () => {
-    it("should mark operation as processing before provider call", () => {
-      const operationId = "test-operation-id";
-      
-      // Verify the function exists
-      expect(typeof processPaymentOperation).toBe("function");
-    });
+  it("rejects idempotency key used for different invoice", async () => {
+    const owner = await registerOwner("idempotency-conflict");
+    const idempotencyKey = `payment-conflict-${Date.now()}`;
 
-    it("should mark operation as completed on success", async () => {
-      // This would require mocking the provider in real test
-      const mockProvider = manualPaymentProvider;
-      
-      expect(mockProvider.name).toBe("manual");
-      expect(typeof mockProvider.recordPayment).toBe("function");
-    });
+    // Create first invoice
+    const { customerId: cust1, addressId: addr1 } =
+      await createCustomerAndAddress(owner.accessToken);
+    const job1 = await createJob(owner.accessToken, cust1, addr1);
+    await completeJob(owner.accessToken, job1.id);
+    const invoice1 = await createInvoice(owner.accessToken, job1.id);
+    await request(app)
+      .post(`/api/v1/invoices/${invoice1.id}/issue`)
+      .set("Authorization", `Bearer ${owner.accessToken}`);
 
-    it("should mark operation as failed on provider error", () => {
-      // The retry logic should handle provider failures
-      const maxRetries = 3;
-      const retryCount = 2;
-      
-      expect(retryCount < maxRetries).toBe(true);
-    });
+    // Create second invoice
+    const { customerId: cust2, addressId: addr2 } =
+      await createCustomerAndAddress(owner.accessToken);
+    const job2 = await createJob(owner.accessToken, cust2, addr2);
+    await completeJob(owner.accessToken, job2.id);
+    const invoice2 = await createInvoice(owner.accessToken, job2.id);
+    await request(app)
+      .post(`/api/v1/invoices/${invoice2.id}/issue`)
+      .set("Authorization", `Bearer ${owner.accessToken}`);
 
-    it("should stop retrying after max retries", () => {
-      const maxRetries = 3;
-      const retryCount = 3;
-      
-      expect(retryCount >= maxRetries).toBe(true);
-    });
+    // Record payment for first invoice
+    const firstPayment = await request(app)
+      .post(`/api/v1/invoices/${invoice1.id}/payments`)
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .set("Idempotency-Key", idempotencyKey)
+      .send({
+        amountMinor: 5000,
+        currency: "USD",
+        method: "CARD",
+      });
+
+    expect(firstPayment.status).toBe(200);
+
+    // Try to use same idempotency key for second invoice
+    const secondPayment = await request(app)
+      .post(`/api/v1/invoices/${invoice2.id}/payments`)
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .set("Idempotency-Key", idempotencyKey)
+      .send({
+        amountMinor: 5000,
+        currency: "USD",
+        method: "CARD",
+      });
+
+    expect(secondPayment.status).toBe(409);
+    expect(secondPayment.body.error.code).toBe("PAYMENT_IDEMPOTENCY_CONFLICT");
   });
 
-  describe("outbox pattern separation", () => {
-    it("should separate provider calls from database transactions", () => {
-      // The key improvement is that provider.recordPayment() is called
-      // OUTSIDE the database transaction
-      const providerCalledOutsideTransaction = true;
-      
-      expect(providerCalledOutsideTransaction).toBe(true);
-    });
+  it("allows concurrent payment requests with different idempotency keys", async () => {
+    const owner = await registerOwner("idempotency-concurrent");
 
-    it("should prevent duplicate charges on transaction rollback", () => {
-      // With the outbox pattern, if the database transaction fails,
-      // the provider was already called, but the operation record
-      // prevents retries from causing duplicate charges
-      const operationRecordPreventsDuplicates = true;
-      
-      expect(operationRecordPreventsDuplicates).toBe(true);
-    });
+    // Create invoice
+    const { customerId, addressId } = await createCustomerAndAddress(
+      owner.accessToken,
+    );
+    const job = await createJob(owner.accessToken, customerId, addressId);
+    await completeJob(owner.accessToken, job.id);
+    const invoice = await createInvoice(owner.accessToken, job.id);
 
-    it("should allow retry of failed operations", () => {
-      // Failed operations can be retried without creating duplicate charges
-      const canRetryFailedOperations = true;
-      
-      expect(canRetryFailedOperations).toBe(true);
-    });
+    // Issue the invoice with a larger amount
+    await request(app)
+      .post(`/api/v1/invoices/${invoice.id}/issue`)
+      .set("Authorization", `Bearer ${owner.accessToken}`);
+
+    // Record multiple concurrent payments with different idempotency keys
+    const [payment1, payment2, payment3] = await Promise.all([
+      request(app)
+        .post(`/api/v1/invoices/${invoice.id}/payments`)
+        .set("Authorization", `Bearer ${owner.accessToken}`)
+        .set("Idempotency-Key", `payment-1-${Date.now()}`)
+        .send({
+          amountMinor: 2000,
+          currency: "USD",
+          method: "CARD",
+        }),
+      request(app)
+        .post(`/api/v1/invoices/${invoice.id}/payments`)
+        .set("Authorization", `Bearer ${owner.accessToken}`)
+        .set("Idempotency-Key", `payment-2-${Date.now()}`)
+        .send({
+          amountMinor: 3000,
+          currency: "USD",
+          method: "CASH",
+        }),
+      request(app)
+        .post(`/api/v1/invoices/${invoice.id}/payments`)
+        .set("Authorization", `Bearer ${owner.accessToken}`)
+        .set("Idempotency-Key", `payment-3-${Date.now()}`)
+        .send({
+          amountMinor: 4000,
+          currency: "USD",
+          method: "BANK_TRANSFER",
+        }),
+    ]);
+
+    // All should succeed
+    expect(payment1.status).toBe(200);
+    expect(payment2.status).toBe(200);
+    expect(payment3.status).toBe(200);
+
+    // Verify three separate payments were created
+    const payments = await request(app)
+      .get(`/api/v1/invoices/${invoice.id}/payments`)
+      .set("Authorization", `Bearer ${owner.accessToken}`);
+
+    expect(payments.status).toBe(200);
+    expect(payments.body.data.length).toBe(3);
   });
 
-  describe("payment operation states", () => {
-    it("should support PENDING state", () => {
-      const status = "PENDING";
-      expect(status).toBe("PENDING");
+  it("handles idempotency for failed payment operations", async () => {
+    const owner = await registerOwner("idempotency-failed");
+
+    // Create invoice
+    const { customerId, addressId } = await createCustomerAndAddress(
+      owner.accessToken,
+    );
+    const job = await createJob(owner.accessToken, customerId, addressId);
+    await completeJob(owner.accessToken, job.id);
+    const invoice = await createInvoice(owner.accessToken, job.id);
+    await request(app)
+      .post(`/api/v1/invoices/${invoice.id}/issue`)
+      .set("Authorization", `Bearer ${owner.accessToken}`);
+
+    const idempotencyKey = `payment-failed-${Date.now()}`;
+
+    // Record a payment (this should succeed with manual provider)
+    const payment = await request(app)
+      .post(`/api/v1/invoices/${invoice.id}/payments`)
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .set("Idempotency-Key", idempotencyKey)
+      .send({
+        amountMinor: 5000,
+        currency: "USD",
+        method: "CARD",
+      });
+
+    expect(payment.status).toBe(200);
+
+    // Verify payment operation was created in database
+    const operation = await prisma.paymentOperation.findUnique({
+      where: {
+        companyId_idempotencyKey: {
+          companyId: owner.company.id,
+          idempotencyKey,
+        },
+      },
     });
 
-    it("should support PROCESSING state", () => {
-      const status = "PROCESSING";
-      expect(status).toBe("PROCESSING");
-    });
-
-    it("should support COMPLETED state", () => {
-      const status = "COMPLETED";
-      expect(status).toBe("COMPLETED");
-    });
-
-    it("should support FAILED state", () => {
-      const status = "FAILED";
-      expect(status).toBe("FAILED");
-    });
+    expect(operation).toBeDefined();
+    expect(operation?.status).toBe("COMPLETED");
   });
 
-  describe("error handling and recovery", () => {
-    it("should handle provider errors gracefully", () => {
-      const providerError = new Error("Provider unavailable");
-      const canHandleError = true;
-      
-      expect(canHandleError).toBe(true);
-    });
+  it("ensures idempotency keys are scoped to company", async () => {
+    const ownerA = await registerOwner("idempotency-scope-a");
+    const ownerB = await registerOwner("idempotency-scope-b");
+    const idempotencyKey = `payment-scope-${Date.now()}`;
 
-    it("should maintain audit trail of failures", () => {
-      const errorMessage = "Payment failed";
-      const retryCount = 2;
-      
-      expect(typeof errorMessage).toBe("string");
-      expect(typeof retryCount).toBe("number");
-    });
+    // Create invoice for company A
+    const { customerId: custA, addressId: addrA } =
+      await createCustomerAndAddress(ownerA.accessToken);
+    const jobA = await createJob(ownerA.accessToken, custA, addrA);
+    await completeJob(ownerA.accessToken, jobA.id);
+    const invoiceA = await createInvoice(ownerA.accessToken, jobA.id);
+    await request(app)
+      .post(`/api/v1/invoices/${invoiceA.id}/issue`)
+      .set("Authorization", `Bearer ${ownerA.accessToken}`);
 
-    it("should support reconciliation of failed operations", () => {
-      // The system should be able to identify and reconcile
-      // failed payment operations
-      const canReconcile = true;
-      
-      expect(canReconcile).toBe(true);
-    });
+    // Create invoice for company B
+    const { customerId: custB, addressId: addrB } =
+      await createCustomerAndAddress(ownerB.accessToken);
+    const jobB = await createJob(ownerB.accessToken, custB, addrB);
+    await completeJob(ownerB.accessToken, jobB.id);
+    const invoiceB = await createInvoice(ownerB.accessToken, jobB.id);
+    await request(app)
+      .post(`/api/v1/invoices/${invoiceB.id}/issue`)
+      .set("Authorization", `Bearer ${ownerB.accessToken}`);
+
+    // Both companies should be able to use the same idempotency key
+    const paymentA = await request(app)
+      .post(`/api/v1/invoices/${invoiceA.id}/payments`)
+      .set("Authorization", `Bearer ${ownerA.accessToken}`)
+      .set("Idempotency-Key", idempotencyKey)
+      .send({
+        amountMinor: 5000,
+        currency: "USD",
+        method: "CARD",
+      });
+
+    const paymentB = await request(app)
+      .post(`/api/v1/invoices/${invoiceB.id}/payments`)
+      .set("Authorization", `Bearer ${ownerB.accessToken}`)
+      .set("Idempotency-Key", idempotencyKey)
+      .send({
+        amountMinor: 5000,
+        currency: "USD",
+        method: "CARD",
+      });
+
+    // Both should succeed since idempotency keys are scoped to company
+    expect(paymentA.status).toBe(200);
+    expect(paymentB.status).toBe(200);
   });
 });

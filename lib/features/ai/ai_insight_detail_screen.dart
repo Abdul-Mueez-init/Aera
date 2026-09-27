@@ -101,7 +101,7 @@ class AiInsightDetailScreen extends ConsumerWidget {
                     vertical: 12,
                   ),
                   itemCount: detail.messages.length + 1,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     if (index == 0) {
                       return Text(

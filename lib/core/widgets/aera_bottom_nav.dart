@@ -16,7 +16,7 @@ class AeraBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AeraColors.surface.withOpacity(0.92),
+        color: AeraColors.surface.withValues(alpha: 0.92),
         border: const Border(
           top: BorderSide(color: AeraColors.line, width: 0.75),
         ),

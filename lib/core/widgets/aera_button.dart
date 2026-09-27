@@ -57,8 +57,8 @@ class AeraButton extends StatelessWidget {
     }
 
     if (onPressed == null && !isLoading) {
-      bg = bg.withOpacity(0.4);
-      fg = fg.withOpacity(0.5);
+      bg = bg.withValues(alpha: 0.4);
+      fg = fg.withValues(alpha: 0.5);
     }
 
     Widget content = isLoading

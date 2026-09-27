@@ -14,7 +14,7 @@ class DashboardScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       appBar: AppBar(
-        backgroundColor: AeraColors.surface.withOpacity(0.85),
+        backgroundColor: AeraColors.surface.withValues(alpha: 0.85),
         elevation: 0,
         scrolledUnderElevation: 1,
         title: Row(
@@ -241,7 +241,7 @@ class DashboardScreen extends StatelessWidget {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    AeraColors.warningSoft.withOpacity(0.3),
+                    AeraColors.warningSoft.withValues(alpha: 0.3),
                     AeraColors.surface,
                   ],
                 ),
@@ -524,7 +524,7 @@ class DashboardScreen extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 14,
-                backgroundColor: color.withOpacity(0.15),
+                backgroundColor: color.withValues(alpha: 0.15),
                 child: Text(
                   initials,
                   style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700),

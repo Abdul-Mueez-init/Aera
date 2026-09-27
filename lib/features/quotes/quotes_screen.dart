@@ -56,7 +56,7 @@ class _QuotesScreenState extends ConsumerState<QuotesScreen> {
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       appBar: AppBar(
-        backgroundColor: AeraColors.surface.withOpacity(0.85),
+        backgroundColor: AeraColors.surface.withValues(alpha: 0.85),
         elevation: 0,
         scrolledUnderElevation: 1,
         title: Text(
