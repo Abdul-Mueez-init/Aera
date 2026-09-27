@@ -1,0 +1,4 @@
+#include "Generated.xcconfig"
+// Production environment configuration
+ENVIRONMENT=production
+API_BASE_URL=https://api.aera.com

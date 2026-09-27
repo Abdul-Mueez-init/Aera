@@ -1,9 +1,8 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'api_response.dart';
+import '../config/app_config.dart';
 
 typedef TokenRefreshCallback = Future<String?> Function();
 
@@ -14,27 +13,13 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 class ApiClient {
   ApiClient({String? baseUrl, http.Client? client})
       : _client = client ?? http.Client(),
-        baseUrl = baseUrl ?? _defaultBaseUrl();
+        baseUrl = baseUrl ?? AppConfig.apiBaseUrl;
 
   final http.Client _client;
   final String baseUrl;
   String? _accessToken;
   TokenRefreshCallback? _onTokenRefresh;
   bool _refreshInFlight = false;
-
-  static String _defaultBaseUrl() {
-    if (kIsWeb) {
-      return 'http://127.0.0.1:4000';
-    }
-    try {
-      if (Platform.isAndroid) {
-        return 'http://10.0.2.2:4000';
-      }
-    } catch (_) {
-      // Platform check may throw in some environments
-    }
-    return 'http://127.0.0.1:4000';
-  }
 
   void setAccessToken(String? token) {
     _accessToken = token;

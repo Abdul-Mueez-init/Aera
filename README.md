@@ -50,6 +50,56 @@ Start the Flutter shell in a second terminal:
 flutter run
 ```
 
+### Environment Configuration
+
+The Flutter app supports three environments: development, staging, and production. API configuration is environment-aware:
+
+**Development (default):**
+- Android: `http://10.0.2.2:4000` (emulator localhost)
+- iOS: `http://127.0.0.1:4000`
+- Web: `http://127.0.0.1:4000`
+
+**Staging:**
+- All platforms: `https://staging-api.aera.com`
+
+**Production:**
+- All platforms: `https://api.aera.com`
+
+### Build Commands
+
+**Android builds:**
+```powershell
+# Development
+flutter run --flavor development --dart-define=ENVIRONMENT=development
+
+# Staging
+flutter run --flavor staging --dart-define=ENVIRONMENT=staging
+
+# Production
+flutter run --flavor production --dart-define=ENVIRONMENT=production
+
+# Release builds
+flutter build apk --flavor production --dart-define=ENVIRONMENT=production
+flutter build appbundle --flavor production --dart-define=ENVIRONMENT=production
+```
+
+**iOS builds:**
+```powershell
+# Development
+flutter run --dart-define=ENVIRONMENT=development
+
+# Staging
+flutter run --dart-define=ENVIRONMENT=staging
+
+# Production
+flutter run --dart-define=ENVIRONMENT=production
+```
+
+**Custom API URL:**
+```powershell
+flutter run --dart-define=ENVIRONMENT=staging --dart-define=API_BASE_URL=https://custom-api.example.com
+```
+
 Health endpoints:
 
 - `GET /health`

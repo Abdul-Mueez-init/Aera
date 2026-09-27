@@ -1,0 +1,4 @@
+#include "Generated.xcconfig"
+// Development environment configuration
+ENVIRONMENT=development
+API_BASE_URL=
