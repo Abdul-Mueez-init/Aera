@@ -3,14 +3,39 @@
 Aera is a mobile-first field-service operations platform for HVAC businesses.
 The repository contains the Flutter client and a versioned Node.js REST API backed by PostgreSQL.
 
+## Project Overview
+
+Aera helps HVAC businesses manage:
+- **Customer Management:** Track customer information, service addresses, and history
+- **Job Scheduling:** Schedule, assign, and track service jobs
+- **Technician Dispatch:** Real-time job assignment and technician tracking
+- **Quoting & Invoicing:** Generate quotes, create invoices, and track payments
+- **Customer Portal:** Self-service portal for customers to view status and approve quotes
+- **AI Assistant:** AI-powered insights and operational recommendations
+
+## Architecture
+
+The application follows a modern multi-tier architecture:
+
+- **Frontend:** Flutter (cross-platform mobile app)
+- **Backend:** Node.js/Express with TypeScript
+- **Database:** PostgreSQL via Supabase
+- **ORM:** Prisma for type-safe database access
+- **Authentication:** JWT-based with refresh tokens
+- **Multi-tenancy:** Company-scoped data isolation
+
+For detailed architecture documentation, see [docs/architecture.md](docs/architecture.md).
+
 ## Prerequisites
 
-- Flutter stable with Dart 3.12 or newer.
-- Node.js 22 LTS.
-- pnpm 12.3.4.
-- A Supabase project with PostgreSQL enabled.
+- Flutter stable with Dart 3.12 or newer
+- Node.js 22 LTS
+- pnpm 12.3.4
+- A Supabase project with PostgreSQL enabled
 
-## Local setup
+## Local Setup
+
+### 1. Install Dependencies
 
 Install all workspace dependencies from the repository root:
 
@@ -18,6 +43,8 @@ Install all workspace dependencies from the repository root:
 pnpm install
 flutter pub get
 ```
+
+### 2. Configure Environment
 
 Create the backend environment file and replace the placeholders with the Supabase connection strings from the project's Connect dialog. Use the pooled URL for `DATABASE_URL` and the direct URL for `DIRECT_URL`:
 
@@ -27,6 +54,8 @@ Copy-Item backend/.env.example backend/.env
 
 Set `JWT_SECRET` to a unique random value of at least 32 characters. Never commit `backend/.env` or reuse this secret across environments.
 
+### 3. Database Migration
+
 Apply the checked-in migration to the Supabase database:
 
 ```powershell
@@ -34,7 +63,31 @@ pnpm --filter backend prisma:migrate:deploy
 pnpm --filter backend prisma:generate
 ```
 
-## Run locally
+### 4. Seed Demo Data (Optional)
+
+For demo/testing purposes, seed the database with deterministic demo data:
+
+```powershell
+pnpm --filter backend seed:demo
+```
+
+This creates:
+- 1 demo company
+- 6 demo users (1 admin, 1 dispatcher, 4 technicians)
+- 5 demo customers
+- 15 demo jobs (various statuses)
+- 8 demo quotes (various statuses)
+- 6 demo invoices (various statuses)
+
+**Demo Credentials:**
+- Email: admin@aera.demo
+- Password: Demo123!
+
+**Note:** Skip this step for production deployments.
+
+## Run Locally
+
+### Start Backend
 
 Start the API with one command:
 
@@ -44,10 +97,64 @@ pnpm --filter backend dev
 
 The API listens on `http://127.0.0.1:4000`.
 
-Start the Flutter shell in a second terminal:
+### Start Flutter
+
+Start the Flutter app in a second terminal:
 
 ```powershell
 flutter run
+```
+
+The app will launch on your connected device or emulator.
+
+## Environment Configuration
+
+The Flutter app supports three environments: development, staging, and production. API configuration is environment-aware:
+
+**Development (default):**
+- Android: `http://10.0.2.2:4000` (emulator localhost)
+- iOS: `http://127.0.0.1:4000`
+- Web: `http://127.0.0.1:4000`
+
+**Staging:**
+- All platforms: `https://staging-api.aera.com`
+
+**Production:**
+- All platforms: `https://api.aera.com`
+
+### Build Commands
+
+**Android builds:**
+```powershell
+# Development
+flutter run --flavor development --dart-define=ENVIRONMENT=development
+
+# Staging
+flutter run --flavor staging --dart-define=ENVIRONMENT=staging
+
+# Production
+flutter run --flavor production --dart-define=ENVIRONMENT=production
+
+# Release builds
+flutter build apk --flavor production --dart-define=ENVIRONMENT=production
+flutter build appbundle --flavor production --dart-define=ENVIRONMENT=production
+```
+
+**iOS builds:**
+```powershell
+# Development
+flutter run --dart-define=ENVIRONMENT=development
+
+# Staging
+flutter run --dart-define=ENVIRONMENT=staging
+
+# Production
+flutter run --dart-define=ENVIRONMENT=production
+```
+
+**Custom API URL:**
+```powershell
+flutter run --dart-define=ENVIRONMENT=staging --dart-define=API_BASE_URL=https://custom-api.example.com
 ```
 
 ### Environment Configuration
@@ -100,53 +207,153 @@ flutter run --dart-define=ENVIRONMENT=production
 flutter run --dart-define=ENVIRONMENT=staging --dart-define=API_BASE_URL=https://custom-api.example.com
 ```
 
-Health endpoints:
+## API Endpoints
 
-- `GET /health`
-- `GET /api/v1/health`
-- `GET /api/v1/readiness`
+### Health Endpoints
+- `GET /health` - Basic health check
+- `GET /api/v1/health` - Versioned health check
+- `GET /api/v1/readiness` - Readiness probe
 
-Phase 2 authentication endpoints:
+### Authentication Endpoints
+- `POST /api/v1/auth/register` - Register new user
+- `POST /api/v1/auth/login` - User login
+- `POST /api/v1/auth/refresh` - Refresh access token
+- `POST /api/v1/auth/logout` - User logout
+- `GET /api/v1/auth/me` - Get current user
 
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/refresh`
-- `POST /api/v1/auth/logout`
-- `GET /api/v1/auth/me`
-- `POST /api/v1/companies`
-- `GET /api/v1/companies/:companyId`
-- `GET /api/v1/customers`
-- `POST /api/v1/customers`
-- `GET /api/v1/customers/:customerId`
-- `PATCH /api/v1/customers/:customerId`
-- `DELETE /api/v1/customers/:customerId`
-- `POST /api/v1/customers/:customerId/addresses`
-- `GET /api/v1/jobs`
-- `POST /api/v1/jobs`
-- `GET /api/v1/jobs/:jobId`
-- `PATCH /api/v1/jobs/:jobId`
-- `POST /api/v1/jobs/:jobId/assign`
-- `POST /api/v1/jobs/:jobId/status`
-- `POST /api/v1/jobs/:jobId/notes`
-- `GET /api/v1/jobs/:jobId/history`
-- `GET /api/v1/schedule?date=YYYY-MM-DD`
-- `GET /api/v1/schedule/workload?date=YYYY-MM-DD`
-- `POST /api/v1/schedule/jobs/:jobId/schedule`
-- `POST /api/v1/schedule/jobs/:jobId/reschedule`
+### Company Endpoints
+- `POST /api/v1/companies` - Create company
+- `GET /api/v1/companies/:companyId` - Get company details
 
-## Quality checks
+### Customer Endpoints
+- `GET /api/v1/customers` - List customers
+- `POST /api/v1/customers` - Create customer
+- `GET /api/v1/customers/:customerId` - Get customer details
+- `PATCH /api/v1/customers/:customerId` - Update customer
+- `DELETE /api/v1/customers/:customerId` - Delete customer
+- `POST /api/v1/customers/:customerId/addresses` - Add service address
+
+### Job Endpoints
+- `GET /api/v1/jobs` - List jobs
+- `POST /api/v1/jobs` - Create job
+- `GET /api/v1/jobs/:jobId` - Get job details
+- `PATCH /api/v1/jobs/:jobId` - Update job
+- `POST /api/v1/jobs/:jobId/assign` - Assign technician
+- `POST /api/v1/jobs/:jobId/status` - Update job status
+- `POST /api/v1/jobs/:jobId/notes` - Add job note
+- `GET /api/v1/jobs/:jobId/history` - Get job status history
+
+### Schedule Endpoints
+- `GET /api/v1/schedule?date=YYYY-MM-DD` - Get daily schedule
+- `GET /api/v1/schedule/workload?date=YYYY-MM-DD` - Get technician workload
+- `POST /api/v1/schedule/jobs/:jobId/schedule` - Schedule job
+- `POST /api/v1/schedule/jobs/:jobId/reschedule` - Reschedule job
+
+### Quote Endpoints
+- `GET /api/v1/quotes` - List quotes
+- `POST /api/v1/quotes` - Create quote
+- `GET /api/v1/quotes/:quoteId` - Get quote details
+- `PATCH /api/v1/quotes/:quoteId` - Update quote
+- `POST /api/v1/quotes/:quoteId/send` - Send quote to customer
+
+### Invoice Endpoints
+- `GET /api/v1/invoices` - List invoices
+- `POST /api/v1/invoices` - Create invoice
+- `GET /api/v1/invoices/:invoiceId` - Get invoice details
+- `PATCH /api/v1/invoices/:invoiceId` - Update invoice
+- `POST /api/v1/invoices/:invoiceId/payments` - Add payment
+
+### Portal Endpoints
+- `GET /api/v1/portal/:token` - Get customer portal data
+- `POST /api/v1/portal/:token/reviews` - Submit customer review
+
+For complete API documentation, see [docs/phase_H1_api_documentation.md](docs/phase_H1_api_documentation.md).
+
+## Quality Checks
 
 Run the same checks used by CI:
 
 ```powershell
+# Backend checks
 pnpm --filter backend prisma:validate
 pnpm --filter backend lint
 pnpm --filter backend format:check
 pnpm --filter backend typecheck
 pnpm --filter backend test
 pnpm --filter backend build
+
+# Flutter checks
 flutter analyze
 flutter test
 ```
 
-The implementation sequence and product boundaries are defined in [docs/plan.md](docs/plan.md), [docs/architecture.md](docs/architecture.md), and [docs/rules.md](docs/rules.md).
+## Troubleshooting
+
+### Common Issues
+
+**Issue:** "Prisma Client generation failed"
+- **Solution:** Ensure `DATABASE_URL` and `DIRECT_URL` are set correctly in `backend/.env`
+- **Solution:** Run `pnpm --filter backend prisma:generate` after migration
+
+**Issue:** "Flutter pub get fails"
+- **Solution:** Ensure Flutter is installed and in PATH
+- **Solution:** Run `flutter doctor` to check Flutter installation
+- **Solution:** Try `flutter clean` then `flutter pub get`
+
+**Issue:** "Database connection error"
+- **Solution:** Verify Supabase project is active
+- **Solution:** Check connection strings in `backend/.env`
+- **Solution:** Ensure Supabase project has PostgreSQL enabled
+
+**Issue:** "Module not found" errors
+- **Solution:** Run `pnpm install` from repository root
+- **Solution:** Delete `node_modules` and reinstall
+- **Solution:** Ensure pnpm version is 12.3.4
+
+**Issue:** "Flutter device not found"
+- **Solution:** Run `flutter devices` to list available devices
+- **Solution:** Start an emulator with `flutter emulators`
+- **Solution:** Connect a physical device with USB debugging enabled
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. Check the documentation in the `docs/` folder
+2. Review the architecture and implementation plans
+3. Check existing test files for usage examples
+4. Verify your environment matches the prerequisites
+
+## Documentation
+
+- **[docs/plan.md](docs/plan.md)** - Implementation phases and sequencing
+- **[docs/architecture.md](docs/architecture.md)** - System architecture and API contract
+- **[docs/rules.md](docs/rules.md)** - Engineering rules and quality standards
+- **[docs/PRD.md](docs/PRD.md)** - Product requirements and invariants
+- **[docs/schema.md](docs/schema.md)** - Database schema and integrity rules
+- **[docs/design.md](docs/design.md)** - Design tokens and visual language
+
+## Phase Documentation
+
+The project is organized into implementation phases. Current phase documentation:
+
+- **[docs/phase_H1_hardening_completion.md](docs/phase_H1_hardening_completion.md)** - Phase 12 hardening checklist
+- **[docs/phase_H1_state_verification.md](docs/phase_H1_state_verification.md)** - UI state verification
+- **[docs/phase_H1_animation_interaction_review.md](docs/phase_H1_animation_interaction_review.md)** - Animation and interaction review
+- **[docs/phase_H1_demo_seed_data.md](docs/phase_H1_demo_seed_data.md)** - Demo seed data documentation
+- **[docs/phase_G5_security_performance_evidence.md](docs/phase_G5_security_performance_evidence.md)** - Security and performance evidence
+- **[docs/phase_G5_clean_checkout_setup.md](docs/phase_G5_clean_checkout_setup.md)** - Clean checkout setup verification
+- **[docs/phase_G5_accessibility_checklist.md](docs/phase_G5_accessibility_checklist.md)** - Accessibility guidelines
+- **[docs/phase_G5_query_plan_review.md](docs/phase_G5_query_plan_review.md)** - Database query performance
+
+## License
+
+[Add your license here]
+
+## Contributing
+
+[Add contribution guidelines here]
+
+## Support
+
+For support, questions, or issues, please [add contact information or issue tracker link here].

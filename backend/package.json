@@ -15,7 +15,8 @@
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
-    "prisma:migrate:deploy": "prisma migrate deploy"
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "seed:demo": "tsx src/seed/seed-demo-data.ts"
   },
   "keywords": [],
   "author": "",
