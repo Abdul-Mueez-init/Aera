@@ -4,6 +4,7 @@ import express from "express";
 import helmet from "helmet";
 import { errorHandler } from "./common/errors.js";
 import { logger } from "./common/logger.js";
+import { tagRequestId } from "./common/observability.js";
 import { prisma } from "./db/prisma.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { companyRouter } from "./modules/companies/company.routes.js";
@@ -29,6 +30,7 @@ export function buildApp() {
     const startedAt = Date.now();
 
     response.setHeader("x-request-id", requestId);
+    tagRequestId(requestId);
     response.on("finish", () => {
       logger.info(
         {

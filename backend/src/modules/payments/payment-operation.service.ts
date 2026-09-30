@@ -1,9 +1,9 @@
 import { prisma } from "../../db/prisma.js";
 import { logger } from "../../common/logger.js";
+import { captureBackgroundError } from "../../common/observability.js";
 import type { PaymentProvider, PaymentRequest } from "./payment.port.js";
 
 const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 1000; // 1 second
 
 export async function createPaymentOperation(
   companyId: string,
@@ -106,6 +106,10 @@ export async function processPaymentOperation(
         { operationId, errorMessage, retryCount: newRetryCount },
         "Payment operation failed permanently after max retries",
       );
+      captureBackgroundError(error, "payment-operation", {
+        operationId,
+        retryCount: newRetryCount,
+      });
     } else {
       // Mark as failed for retry
       await prisma.paymentOperation.update({

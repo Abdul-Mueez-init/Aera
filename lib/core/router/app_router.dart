@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
+import '../config/app_config.dart';
 import 'app_scaffold.dart';
 import '../../features/auth/splash_screen.dart';
 import '../../features/auth/welcome_screen.dart';
@@ -53,8 +55,18 @@ import '../../features/more/more_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
+// Build observers list, only adding SentryNavigatorObserver when Sentry is enabled
+List<NavigatorObserver> _buildObservers() {
+  final observers = <NavigatorObserver>[];
+  if (AppConfig.isSentryEnabled) {
+    observers.add(SentryNavigatorObserver());
+  }
+  return observers;
+}
+
 final GoRouter appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
+  observers: _buildObservers(),
   initialLocation: '/dashboard',
   routes: [
     // Auth Routes

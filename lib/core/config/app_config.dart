@@ -7,6 +7,27 @@ class AppConfig {
     defaultValue: 'development',
   );
 
+  // Phase 12 — crash/error reporting (Sentry). Left unset in local/dev/test:
+  // sentry_bootstrap.dart then skips initialisation and the SDK is a no-op,
+  // so no DSN is required to run the app or the test suite.
+  static const String sentryDsn = String.fromEnvironment(
+    'SENTRY_DSN',
+    defaultValue: '',
+  );
+
+  // Optional: the git commit SHA or version of the deploy, so issues map to a release.
+  // Format: aera-mobile@<version>+<build> or just the commit SHA. Set in CI/CD pipeline.
+  static const String appRelease = String.fromEnvironment(
+    'APP_RELEASE',
+    defaultValue: '',
+  );
+
+  // Fraction of requests traced for performance data (0 to 1). Errors are always
+  // captured regardless of this value. Keep this low on free plans.
+  static const double tracesSampleRate = 0.1;
+
+  static bool get isSentryEnabled => sentryDsn.isNotEmpty;
+
   static String get apiBaseUrl {
     final envBaseUrl = String.fromEnvironment(
       'API_BASE_URL',

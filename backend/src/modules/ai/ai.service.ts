@@ -1,5 +1,6 @@
 import { AppError } from "../../common/errors.js";
 import { logger } from "../../common/logger.js";
+import { captureBackgroundError } from "../../common/observability.js";
 import { prisma } from "../../db/prisma.js";
 import type { Prisma } from "../../generated/prisma/index.js";
 import {
@@ -297,6 +298,9 @@ async function runAssistantTurn(input: RunAssistantTurnInput) {
       { err: error, conversationId: input.conversationId },
       "Failed to load AI conversation history",
     );
+    captureBackgroundError(error, "ai", {
+      conversationId: input.conversationId,
+    });
     return null;
   }
 
@@ -311,6 +315,9 @@ async function runAssistantTurn(input: RunAssistantTurnInput) {
       { err: error, conversationId: input.conversationId },
       "AI gateway turn failed",
     );
+    captureBackgroundError(error, "ai", {
+      conversationId: input.conversationId,
+    });
     return null;
   }
 
@@ -366,6 +373,9 @@ async function runAssistantTurn(input: RunAssistantTurnInput) {
       { err: error, conversationId: input.conversationId },
       "Failed to persist AI assistant reply",
     );
+    captureBackgroundError(error, "ai", {
+      conversationId: input.conversationId,
+    });
     return null;
   }
 }

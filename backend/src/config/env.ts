@@ -8,6 +8,13 @@ const optionalNonEmptyString = z
   .optional()
   .or(z.literal("").transform(() => undefined));
 
+const optionalUrl = z
+  .string()
+  .trim()
+  .url()
+  .optional()
+  .or(z.literal("").transform(() => undefined));
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -85,6 +92,19 @@ const envSchema = z.object({
   // analogue). Reaching the cap degrades to an honest "couldn't finish"
   // message rather than looping forever against the model API.
   AI_MAX_TOOL_ITERATIONS: z.coerce.number().int().positive().max(10).default(4),
+  // Phase 12 — crash/error reporting (Sentry). Left unset in local/dev/test:
+  // src/instrument.ts then skips initialisation and the SDK is a no-op, so no
+  // DSN is required to run the app or the test suite. The DSN is not a
+  // secret-grade credential, but keep it out of Git anyway.
+  SENTRY_DSN: optionalUrl,
+  // Defaults to NODE_ENV. Set to "staging" / "production" per deployment so
+  // issues are separated by environment inside one Sentry project.
+  SENTRY_ENVIRONMENT: optionalNonEmptyString,
+  // Ties issues to a deploy, e.g. the git commit SHA injected by CI/hosting.
+  SENTRY_RELEASE: optionalNonEmptyString,
+  // Fraction of requests that produce performance traces (0 to 1). Errors are
+  // always captured regardless of this value.
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.1),
 });
 
 const parsed = envSchema.safeParse(process.env);

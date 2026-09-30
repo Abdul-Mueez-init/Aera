@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../errors.js";
 import { prisma } from "../../db/prisma.js";
 import { verifyAccessToken } from "./tokens.js";
+import { attachPrincipalToScope } from "../observability.js";
 
 export async function requireAuth(
   request: Request,
@@ -123,6 +124,8 @@ export async function requireAuth(
       companyId: session.companyId,
       role: membership.role,
     };
+
+    attachPrincipalToScope(request.auth);
 
     next();
   } catch (error) {

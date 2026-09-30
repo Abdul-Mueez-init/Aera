@@ -1,5 +1,6 @@
 import { prisma } from "../../db/prisma.js";
 import { logger } from "../../common/logger.js";
+import { captureBackgroundError } from "../../common/observability.js";
 import { inProcessQueue } from "../../queue/in-process-queue.adapter.js";
 import { resendEmailAdapter } from "./resend-email.adapter.js";
 import { buildNotificationEmail } from "./email-templates.js";
@@ -160,6 +161,10 @@ async function dispatchEmailNotification(
         },
         "Failed to send notification email to recipient",
       );
+      captureBackgroundError(error, "notification-email", {
+        eventType: event.type,
+        recipientUserId: recipient.userId,
+      });
     }
   }
 }
@@ -201,6 +206,9 @@ async function dispatchPushNotification(
         { err: error, eventType: event.type },
         "Failed to send push notification to a device token",
       );
+      captureBackgroundError(error, "notification-push", {
+        eventType: event.type,
+      });
     }
   }
 }
@@ -240,6 +248,10 @@ async function dispatchSmsNotification(
         },
         "Failed to send notification SMS to recipient",
       );
+      captureBackgroundError(error, "notification-sms", {
+        eventType: event.type,
+        recipientUserId: recipient.userId,
+      });
     }
   }
 }

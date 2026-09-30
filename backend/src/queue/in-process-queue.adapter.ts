@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { logger } from "../common/logger.js";
+import { captureBackgroundError } from "../common/observability.js";
 import type {
   EnqueueOptions,
   QueueHandler,
@@ -126,6 +127,14 @@ export class InProcessQueue implements QueuePort {
             ? "Queue job failed; retrying"
             : "Queue job failed after all attempts; dropping",
         );
+        if (!willRetry) {
+          captureBackgroundError(error, "queue", {
+            jobType: job.type,
+            jobId: job.id,
+            attempts,
+            maxAttempts: job.maxAttempts,
+          });
+        }
         if (willRetry) {
           await delay(
             RETRY_DELAYS_MS[Math.min(attempts - 1, RETRY_DELAYS_MS.length - 1)],

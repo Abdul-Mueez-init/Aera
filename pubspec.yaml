@@ -14,8 +14,6 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
 # Read more about iOS versioning at
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-# In Windows, build-name is used as the major, minor, and patch parts
-# of the product and file versions while build-number is used as the build suffix.
 version: 1.0.0+1
 
 environment:
@@ -46,26 +44,29 @@ dependencies:
   image_picker: ^1.1.2
   # New in Phase E1: maps integration and phone calls for technician workflow
   url_launcher: ^6.3.1
+  sentry_flutter: ^8.14.2
+  # Phase 12 — crash/error reporting (Sentry): sentry_dart_plugin for symbol upload
+  sentry_dart_plugin: ^3.4.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
+  # encourage good coding practices. The lint set provided by the
+  # activated via the `analysis_options.yaml` file located at the root of
+  # your project. See that file for information about deactivating
+  # specific lint rules or activating additional ones.
   flutter_lints: ^6.0.0
 
 # For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
+# following page: https://dart.dev/tools/pub/pub
 
 # The following section is specific to Flutter packages.
 flutter:
 
   # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
+  # included in your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
 
@@ -99,3 +100,13 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Phase 12 — crash/error reporting (Sentry): sentry_dart_plugin configuration
+# This configuration is used by sentry_dart_plugin for symbol upload in CI/CD
+sentry:
+  upload_source_maps: false
+  upload_debug_symbols: false
+  upload_minidumps: false
+  project: aera
+  org: student-cj9
+  auth_token: $SENTRY_ORG_AUTH_TOKEN

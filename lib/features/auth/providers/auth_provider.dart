@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import '../data/auth_repository.dart';
+import '../../../core/config/app_config.dart';
 
 final authNotifierProvider =
     StateNotifierProvider<AuthNotifier, AsyncValue<AuthSession?>>((ref) {
@@ -34,6 +36,17 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
     try {
       final session = await _repo.restoreSession();
       state = AsyncValue.data(session);
+
+      // Attach user context to Sentry for restored session
+      if (AppConfig.isSentryEnabled && session != null) {
+        await Sentry.configureScope((scope) {
+          scope.setUser(SentryUser(
+            id: session.user.id,
+          ));
+          scope.setTag('company_id', session.company.id);
+          scope.setTag('role', session.role);
+        });
+      }
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
@@ -44,6 +57,18 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
     try {
       final session = await _repo.login(email, password);
       state = AsyncValue.data(session);
+
+      // Attach user context to Sentry for this session
+      if (AppConfig.isSentryEnabled) {
+        await Sentry.configureScope((scope) {
+          scope.setUser(SentryUser(
+            id: session.user.id,
+          ));
+          scope.setTag('company_id', session.company.id);
+          scope.setTag('role', session.role);
+        });
+      }
+
       return session;
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -77,6 +102,16 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
 
   Future<void> logout() async {
     await _repo.logout();
+
+    // Clear user context from Sentry
+    if (AppConfig.isSentryEnabled) {
+      await Sentry.configureScope((scope) {
+        scope.setUser(null);
+        scope.removeTag('company_id');
+        scope.removeTag('role');
+      });
+    }
+
     state = const AsyncValue.data(null);
   }
 }

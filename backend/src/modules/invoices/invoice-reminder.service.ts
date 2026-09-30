@@ -1,4 +1,5 @@
 import { logger } from "../../common/logger.js";
+import { captureBackgroundError } from "../../common/observability.js";
 import { env } from "../../config/env.js";
 import { prisma } from "../../db/prisma.js";
 import { notificationPublisher } from "../notifications/notification.port.js";
@@ -133,6 +134,7 @@ export function startInvoiceReminderScheduler(): () => void {
       logger.info(result, "Invoice reminder sweep completed");
     } catch (error) {
       logger.error({ err: error }, "Invoice reminder sweep failed");
+      captureBackgroundError(error, "invoice-reminder-sweep");
     } finally {
       running = false;
     }

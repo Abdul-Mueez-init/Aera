@@ -269,6 +269,103 @@ flutter run --dart-define=ENVIRONMENT=staging --dart-define=API_BASE_URL=https:/
 
 For complete API documentation, see [docs/phase_H1_api_documentation.md](docs/phase_H1_api_documentation.md).
 
+## Error Reporting
+
+Aera uses Sentry for crash and error reporting in both the backend and Flutter app. This helps identify and fix unexpected errors quickly.
+
+### What is Captured
+
+**Backend (Node.js/Express):**
+- 5xx errors and unexpected exceptions
+- Unhandled promise rejections
+- Background job failures
+- Request ID, company ID, role, and opaque user ID for context
+- Performance traces (configurable sample rate)
+
+**Flutter:**
+- App crashes and unhandled errors
+- Non-fatal exceptions
+- Navigation breadcrumbs (with sensitive tokens redacted)
+- User context (opaque user ID, company ID, role tags)
+- Performance traces (configurable sample rate)
+
+### What is NOT Captured
+
+**Privacy and Security (both platforms):**
+- ❌ Authorization headers (Bearer tokens, API keys)
+- ❌ Cookies and session data
+- ❌ Request/response bodies
+- ❌ Personal information (email, name, phone, address)
+- ❌ Portal capability tokens (URLs redacted)
+- ❌ Shared quote capability tokens (URLs redacted)
+- ❌ Payment tokens (URLs redacted)
+- ❌ Tracking tokens (URLs redacted)
+- ❌ Sensitive query parameters (key, token, api_key, access_token)
+- ❌ Screenshots (Flutter)
+- ❌ View hierarchy (Flutter)
+- ❌ Session replay (Flutter)
+
+**Expected errors are not reported:**
+- ❌ 4xx client errors (400, 401, 403, 404, 409, 422)
+- ❌ Validation errors
+- ❌ Authentication failures (wrong password, expired token)
+- ❌ Expected business logic errors
+
+### Configuration
+
+**Backend Environment Variables** (in `backend/.env`):
+```bash
+# Sentry DSN for Express/Node.js project
+SENTRY_DSN="https://your-dsn@sentry.io/project-id"
+
+# Environment: development, staging, or production
+SENTRY_ENVIRONMENT="development"
+
+# Release identifier: git commit SHA or aera-api@<sha>
+SENTRY_RELEASE=""
+
+# Performance tracing sample rate (0 to 1)
+SENTRY_TRACES_SAMPLE_RATE=0.1
+```
+
+**Flutter Build-Time Defines**:
+```bash
+# Sentry DSN for Flutter project
+--dart-define=SENTRY_DSN="https://your-dsn@sentry.io/project-id"
+
+# Environment: development, staging, or production
+--dart-define=ENVIRONMENT="development"
+
+# Release identifier: aera-mobile@<version>+<build>
+--dart-define=APP_RELEASE="aera-mobile@1.0.0+1"
+```
+
+### No DSN Behavior
+
+When `SENTRY_DSN` is not set (empty string), Sentry is completely disabled and has zero performance impact. The application behaves identically to before Sentry integration.
+
+### Symbol Upload (Release Builds)
+
+For Flutter release builds, debug symbols are uploaded to Sentry for better stack traces:
+
+```bash
+flutter build apk --obfuscate --split-debug-info=./debug-info \
+  --dart-define=ENVIRONMENT=production \
+  --dart-define=SENTRY_DSN="..." \
+  --dart-define=APP_RELEASE="aera-mobile@1.0.0+1"
+```
+
+The `sentry_dart_plugin` is configured in `pubspec.yaml` and requires the `SENTRY_ORG_AUTH_TOKEN` environment variable (CI secret only) for symbol upload.
+
+**Note:** Backend source maps are not currently uploaded since the server runs TypeScript directly via `tsx`. If deployment switches to compiled JavaScript with `tsc`, source map upload should be revisited.
+
+### Alerts
+
+Alerts are configured in the Sentry UI for:
+- New production issues
+- Issue regressions
+- Recommended for `production` and `staging` environments only
+
 ## Quality Checks
 
 Run the same checks used by CI:
