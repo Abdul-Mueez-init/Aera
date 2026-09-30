@@ -79,12 +79,12 @@ async function createQuote(
       items: [
         {
           description: "Replaced 45uF Run Capacitor",
-          quantity: 1,
+          quantity: "1",
           unitPriceMinor: 8500,
         },
         {
           description: "System diagnostic and performance verification",
-          quantity: 1,
+          quantity: "1",
           unitPriceMinor: 12000,
         },
       ],

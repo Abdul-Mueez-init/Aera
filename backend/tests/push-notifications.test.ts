@@ -233,7 +233,7 @@ describe("buildPushMessage", () => {
         items: [
           {
             description: "Compressor replacement",
-            quantity: 1,
+            quantity: "1",
             unitPriceMinor: 50000,
           },
         ],

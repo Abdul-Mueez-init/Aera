@@ -91,6 +91,15 @@ export async function scheduleJob(
       );
     }
 
+    // Lock the technician row to serialize concurrent scheduling for the same technician
+    // We update a dummy field to force a row-level lock
+    if (job.assignedTechnicianId) {
+      await transaction.user.update({
+        where: { id: job.assignedTechnicianId },
+        data: { updatedAt: new Date() },
+      });
+    }
+
     const conflicts = await findConflicts(
       context.companyId,
       jobId,

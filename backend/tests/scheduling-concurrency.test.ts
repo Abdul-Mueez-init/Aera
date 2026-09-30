@@ -208,13 +208,14 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
 
     // Create second job with overlapping time and assign same technician
     const job2 = await createJob(auth, customerId, serviceAddressId);
-    await request(app)
-      .post(`/api/v1/jobs/${job2}/schedule`)
+    const schedule2 = await request(app)
+      .post(`/api/v1/schedule/jobs/${job2}/schedule`)
       .set(auth)
       .send({
         scheduledStart: new Date("2026-09-25T11:00:00.000Z"),
         scheduledEnd: new Date("2026-09-25T13:00:00.000Z"),
       });
+    expect(schedule2.status).toBe(200);
     
     const assign = await request(app)
       .post(`/api/v1/jobs/${job2}/assign`)

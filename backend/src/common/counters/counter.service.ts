@@ -10,40 +10,41 @@ async function getNextCounterInTransaction(
   kind: keyof CounterKind,
   transaction: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
 ): Promise<number> {
-  // Use FOR UPDATE to lock the row for this company/kind combination
-  const counter = await transaction.companyCounter.findUnique({
-    where: {
-      companyId_kind: {
-        companyId,
-        kind,
-      },
-    },
-  });
+  // Use raw SQL with FOR UPDATE to lock the row for this company/kind combination
+  const counter = await transaction.$queryRaw<Array<{ id: string; lastValue: number }>>`
+    SELECT id, "lastValue" FROM company_counters
+    WHERE "companyId" = ${companyId} AND kind = ${kind}
+    FOR UPDATE
+  `;
 
-  if (counter) {
+  if (counter.length > 0) {
     // Increment existing counter
     const updated = await transaction.companyCounter.update({
+      where: { id: counter[0].id },
+      data: { lastValue: counter[0].lastValue + 1 },
+    });
+    return updated.lastValue;
+  } else {
+    // Create new counter starting at 1 using upsert to handle race conditions
+    const upserted = await transaction.companyCounter.upsert({
       where: {
         companyId_kind: {
           companyId,
           kind,
         },
       },
-      data: {
-        lastValue: counter.lastValue + 1,
-      },
-    });
-    return updated.lastValue;
-  } else {
-    // Create new counter starting at 1
-    const created = await transaction.companyCounter.create({
-      data: {
+      create: {
         companyId,
         kind,
         lastValue: 1,
       },
+      update: {
+        lastValue: {
+          increment: 1,
+        },
+      },
     });
-    return created.lastValue;
+    return upserted.lastValue;
   }
 }
 

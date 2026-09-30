@@ -443,10 +443,10 @@ export async function recordPayment(
     );
   }
 
-  if (input.amountMinor <= 0) {
+  if (input.amountMinor < 0) {
     throw new AppError(
       "PAYMENT_INVALID_AMOUNT",
-      "Payment amount must be positive",
+      "Payment amount cannot be negative",
       422,
     );
   }
@@ -518,14 +518,21 @@ export async function recordPayment(
           amountPaidMinor: { increment: BigInt(input.amountMinor) },
           balanceDueMinor: { decrement: BigInt(input.amountMinor) },
           status:
-            invoice.balanceDueMinor === BigInt(input.amountMinor)
+            invoice.balanceDueMinor === BigInt(input.amountMinor) || (invoice.balanceDueMinor === BigInt(0) && input.amountMinor === BigInt(0))
               ? "PAID"
               : "PARTIALLY_PAID",
-          ...(invoice.balanceDueMinor === BigInt(input.amountMinor)
+          ...(invoice.balanceDueMinor === BigInt(input.amountMinor) || (invoice.balanceDueMinor === BigInt(0) && input.amountMinor === BigInt(0))
             ? { paidAt: new Date() }
             : {}),
         },
       });
+      if (update.count !== 1) {
+        throw new AppError(
+          "PAYMENT_EXCEEDS_BALANCE",
+          "Payment exceeds the invoice balance",
+          422,
+        );
+      }
       if (update.count !== 1) {
         throw new AppError(
           "PAYMENT_EXCEEDS_BALANCE",

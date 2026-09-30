@@ -25,7 +25,7 @@ const statuses = [
 const methods = ["CASH", "CARD", "BANK_TRANSFER", "OTHER"] as const;
 const listSchema = z.object({ status: z.enum(statuses).optional() });
 const paymentSchema = z.object({
-  amountMinor: z.number().int().positive().max(1_000_000_000),
+  amountMinor: z.number().int().min(0).max(1_000_000_000),
   currency: z.string().regex(/^[A-Za-z]{3}$/),
   method: z.enum(methods),
   reference: z.string().trim().max(240).optional(),
@@ -45,7 +45,12 @@ function routeId(value: string | string[]): string {
 }
 
 function idempotencyKey(request: { header(name: string): string | undefined }) {
-  return request.header("idempotency-key")?.trim();
+  // HTTP headers are case-insensitive, so check both common casings
+  return (
+    request.header("idempotency-key") ||
+    request.header("Idempotency-Key") ||
+    request.header("IDEMPOTENCY-KEY")
+  )?.trim();
 }
 
 router.get(

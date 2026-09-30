@@ -20,5 +20,7 @@ export default defineConfig({
       "**/.{git,cache,output,temp}/**",
     ],
     globals: true,
+    isolate: false,
+    pool: 4,
   },
 });

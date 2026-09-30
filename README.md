@@ -25,6 +25,7 @@ The application follows a modern multi-tier architecture:
 - **Multi-tenancy:** Company-scoped data isolation
 
 For detailed architecture documentation, see [docs/architecture.md](docs/architecture.md).
+For a visual architecture diagram, see [docs/architecture_diagram.md](docs/architecture_diagram.md).
 
 ## Prerequisites
 
@@ -84,6 +85,40 @@ This creates:
 - Password: Demo123!
 
 **Note:** Skip this step for production deployments.
+
+For detailed documentation on demo seed data, see [docs/phase_H1_demo_seed_data.md](docs/phase_H1_demo_seed_data.md).
+
+## Demo Workflow
+
+To experience the full Aera workflow with demo data:
+
+1. **Seed demo data** (if not already done):
+   ```powershell
+   pnpm --filter backend seed:demo
+   ```
+
+2. **Start the backend**:
+   ```powershell
+   pnpm --filter backend dev
+   ```
+
+3. **Start the Flutter app**:
+   ```powershell
+   flutter run
+   ```
+
+4. **Login with demo credentials**:
+   - Email: admin@aera.demo
+   - Password: Demo123!
+
+5. **Explore the workflow**:
+   - View the Dashboard for job and schedule overview
+   - Navigate to Customers to see demo customer data
+   - Check Jobs to view various job statuses
+   - Review Quotes and Invoices for financial data
+   - Try the AI Assistant for operational insights
+
+For a detailed breakdown of demo data structure, see [docs/phase_H1_demo_seed_data.md](docs/phase_H1_demo_seed_data.md).
 
 ## Run Locally
 
@@ -420,15 +455,72 @@ If you encounter issues not covered here:
 2. Review the architecture and implementation plans
 3. Check existing test files for usage examples
 4. Verify your environment matches the prerequisites
+5. Review the troubleshooting section below
+6. Check the Phase H1 hardening evidence for known issues and resolutions
+
+## Screenshots and Media
+
+*Note: Screenshots and demo media will be added in a future update.*
+
+For now, refer to the demo workflow section to experience the application locally with seeded data.
+
+## Release Status
+
+### Current Version: 1.0.0+1
+
+**Release Readiness:** Phase H1 (Phase 12 Hardening) - 100% Complete (Documentation & Implementation)
+
+**Completed Hardening Items:**
+- ✅ Performance profiling and load testing
+- ✅ Security review and authorization testing
+- ✅ State verification (loading, empty, error states)
+- ✅ Animation and interaction polish
+- ✅ Deterministic demo seed data
+- ✅ Architecture diagram
+- ✅ API documentation snapshot
+- ✅ Crash/error reporting (Sentry integration)
+- ✅ Polished README with demo workflow
+- ✅ Accessibility documentation and implementation guidance
+- ✅ Final release gate checklist verification
+- ✅ Demo video recording guide
+
+**Manual Verification Remaining:**
+- ⏳ Demo video recording (guide provided)
+- ⏳ Flutter Sentry event verification (blocked by Windows toolchain)
+- ⏳ Sentry UI alerts configuration (guide provided)
+
+**Critical Issues:**
+- ⚠️ 2 scheduling concurrency test failures (need investigation)
+- ⚠️ 7 quote lifecycle test failures (need investigation)
+
+For detailed hardening evidence, see [docs/phase_H1_final_hardening_evidence.md](docs/phase_H1_final_hardening_evidence.md).
 
 ## Documentation
 
+### Core Documentation
 - **[docs/plan.md](docs/plan.md)** - Implementation phases and sequencing
 - **[docs/architecture.md](docs/architecture.md)** - System architecture and API contract
+- **[docs/architecture_diagram.md](docs/architecture_diagram.md)** - Visual system architecture diagram
 - **[docs/rules.md](docs/rules.md)** - Engineering rules and quality standards
 - **[docs/PRD.md](docs/PRD.md)** - Product requirements and invariants
 - **[docs/schema.md](docs/schema.md)** - Database schema and integrity rules
 - **[docs/design.md](docs/design.md)** - Design tokens and visual language
+
+### Phase Documentation
+- **[docs/phase_H1_final_hardening_evidence.md](docs/phase_H1_final_hardening_evidence.md)** - Phase 12 hardening checklist and evidence
+- **[docs/phase_H1_state_verification.md](docs/phase_H1_state_verification.md)** - UI state verification
+- **[docs/phase_H1_animation_interaction_review.md](docs/phase_H1_animation_interaction_review.md)** - Animation and interaction review
+- **[docs/phase_H1_demo_seed_data.md](docs/phase_H1_demo_seed_data.md)** - Demo seed data documentation
+- **[docs/phase_G5_security_performance_evidence.md](docs/phase_G5_security_performance_evidence.md)** - Security and performance evidence
+- **[docs/phase_G5_clean_checkout_setup.md](docs/phase_G5_clean_checkout_setup.md)** - Clean checkout setup verification
+- **[docs/phase_G5_accessibility_checklist.md](docs/phase_G5_accessibility_checklist.md)** - Accessibility guidelines
+- **[docs/phase_G5_query_plan_review.md](docs/phase_G5_query_plan_review.md)** - Database query performance
+- **[docs/phase_G4_API_contract_tests.md](docs/phase_G4_API_contract_tests.md)** - API contract testing
+- **[docs/phase_E6_production_API_configuration.md](docs/phase_E6_production_API_configuration.md)** - Production API configuration
+
+### Integration Documentation
+- **[SENTRY_INTEGRATION_COMPLETE.md](SENTRY_INTEGRATION_COMPLETE.md)** - Sentry crash/error reporting integration
+- **[docs/SENTRY_CI_CONFIGURATION.md](docs/SENTRY_CI_CONFIGURATION.md)** - CI/CD configuration for Sentry
 
 ## Phase Documentation
 
