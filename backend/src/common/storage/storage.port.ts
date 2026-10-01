@@ -26,7 +26,5 @@ export interface StoragePort {
   createSignedUploadUrl(
     request: SignedUploadRequest,
   ): Promise<SignedUploadResult>;
-  verifyUpload(
-    request: VerifyUploadRequest,
-  ): Promise<VerifyUploadResult>;
+  verifyUpload(request: VerifyUploadRequest): Promise<VerifyUploadResult>;
 }

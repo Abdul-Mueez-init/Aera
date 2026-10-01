@@ -44,9 +44,9 @@ class AppConfig {
   static String _defaultBaseUrl() {
     switch (environment) {
       case 'production':
-        return 'https://api.aera.com';
+        throw StateError('API_BASE_URL must be set for production builds');
       case 'staging':
-        return 'https://staging-api.aera.com';
+        throw StateError('API_BASE_URL must be set for staging builds');
       case 'development':
       default:
         return _developmentBaseUrl();

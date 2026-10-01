@@ -11,7 +11,9 @@ async function getNextCounterInTransaction(
   transaction: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
 ): Promise<number> {
   // Use raw SQL with FOR UPDATE to lock the row for this company/kind combination
-  const counter = await transaction.$queryRaw<Array<{ id: string; lastValue: number }>>`
+  const counter = await transaction.$queryRaw<
+    Array<{ id: string; lastValue: number }>
+  >`
     SELECT id, "lastValue" FROM company_counters
     WHERE "companyId" = ${companyId} AND kind = ${kind}
     FOR UPDATE
@@ -56,8 +58,8 @@ export async function getNextCounter(
   if (existingTx) {
     return getNextCounterInTransaction(companyId, kind, existingTx);
   }
-  return prisma.$transaction(async (transaction) => 
-    getNextCounterInTransaction(companyId, kind, transaction)
+  return prisma.$transaction(async (transaction) =>
+    getNextCounterInTransaction(companyId, kind, transaction),
   );
 }
 

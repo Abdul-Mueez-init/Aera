@@ -9,19 +9,19 @@ const app = buildApp();
 beforeAll(async () => {
   try {
     // Check if company_counters table exists
-    const result = await prisma.$queryRaw`
+    const result = await prisma.$queryRaw<{ exists: boolean }[]>`
       SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public'
         AND table_name = 'company_counters'
       );
     `;
-    
+
     const tableExists = result[0].exists;
-    
+
     if (!tableExists) {
-      console.log('Creating company_counters table for tests...');
-      
+      console.log("Creating company_counters table for tests...");
+
       // Create the table manually
       await prisma.$executeRaw`
         CREATE TABLE "company_counters" (
@@ -34,27 +34,27 @@ beforeAll(async () => {
           CONSTRAINT "company_counters_pkey" PRIMARY KEY ("id")
         );
       `;
-      
+
       // Create indexes
       await prisma.$executeRaw`
         CREATE UNIQUE INDEX "company_counters_companyId_kind_key" ON "company_counters"("companyId", "kind");
       `;
-      
+
       await prisma.$executeRaw`
         CREATE INDEX "company_counters_companyId_kind_idx" ON "company_counters"("companyId", "kind");
       `;
-      
+
       // Add foreign key
       await prisma.$executeRaw`
         ALTER TABLE "company_counters" ADD CONSTRAINT "company_counters_companyId_fkey" 
         FOREIGN KEY ("companyId") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       `;
-      
+
       // Enable RLS
       await prisma.$executeRaw`
         ALTER TABLE "company_counters" ENABLE ROW LEVEL SECURITY;
       `;
-      
+
       // Seed existing companies with counters
       await prisma.$executeRaw`
         INSERT INTO "company_counters" ("id", "companyId", "kind", "lastValue", "createdAt", "updatedAt")
@@ -62,19 +62,21 @@ beforeAll(async () => {
         FROM "companies"
         ON CONFLICT ("companyId", "kind") DO NOTHING;
       `;
-      
+
       await prisma.$executeRaw`
         INSERT INTO "company_counters" ("id", "companyId", "kind", "lastValue", "createdAt", "updatedAt")
         SELECT gen_random_uuid(), "id", 'INVOICE_NUMBER', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         FROM "companies"
         ON CONFLICT ("companyId", "kind") DO NOTHING;
       `;
-      
-      console.log('company_counters table created successfully');
+
+      console.log("company_counters table created successfully");
     }
-    
+
     // Check if payment_operations table exists and recreate if needed
-    console.log('Recreating payment_operations table to ensure correct schema...');
+    console.log(
+      "Recreating payment_operations table to ensure correct schema...",
+    );
     await prisma.$executeRaw`
       DROP TABLE IF EXISTS "payment_operations";
     `;
@@ -107,10 +109,10 @@ beforeAll(async () => {
         CONSTRAINT "payment_operations_pkey" PRIMARY KEY ("id")
       );
     `;
-    
-    console.log('payment_operations table created successfully');
+
+    console.log("payment_operations table created successfully");
   } catch (error) {
-    console.error('Error setting up test database:', error);
+    console.error("Error setting up test database:", error);
     // Don't fail the test suite if setup fails
   }
 });
@@ -199,13 +201,15 @@ async function createQuote(
         },
       ],
     });
-  
+
   // Handle quote validation errors gracefully
   if (quote.status === 422) {
-    console.log("Quote creation failed with 422, skipping job-linked quote flow");
+    console.log(
+      "Quote creation failed with 422, skipping job-linked quote flow",
+    );
     throw new Error("Quote creation failed with validation error");
   }
-  
+
   expect(quote.status).toBe(201);
   return quote.body.data;
 }
@@ -218,10 +222,7 @@ async function sendQuote(auth: { Authorization: string }, quoteId: string) {
   return res.body.data;
 }
 
-async function scheduleJob(
-  auth: { Authorization: string },
-  jobId: string,
-) {
+async function scheduleJob(auth: { Authorization: string }, jobId: string) {
   const scheduledStart = new Date(Date.now() + 172800 * 1000); // 2 days from now
   const scheduledEnd = new Date(Date.now() + 176400 * 1000); // 2 days + 1 hour
   const res = await request(app)
@@ -264,7 +265,12 @@ async function addJobNote(
 async function addJobPart(
   auth: { Authorization: string },
   jobId: string,
-  part: { name: string; quantity: number; unitPriceMinor: number; currency?: string },
+  part: {
+    name: string;
+    quantity: number;
+    unitPriceMinor: number;
+    currency?: string;
+  },
 ) {
   const res = await request(app)
     .post(`/api/v1/jobs/${jobId}/parts`)
@@ -354,14 +360,14 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     // STEP 1: Register owner and create company
     const owner = await registerOwner("c2c-full-flow");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const ownerCompanyName = owner.companyName;
 
     // Verify company creation
     expect(owner.companyId).toBeDefined();
     expect(owner.userId).toBeDefined();
 
     // STEP 2: Create customer with service address
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
     expect(customerId).toBeDefined();
     expect(serviceAddressId).toBeDefined();
 
@@ -404,7 +410,9 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
       expect(approveRes.body.data.status).toBe("APPROVED");
 
       // Verify job advanced from QUOTING to NEW
-      const jobAfterQuote = await request(app).get(`/api/v1/jobs/${jobId}`).set(auth);
+      const jobAfterQuote = await request(app)
+        .get(`/api/v1/jobs/${jobId}`)
+        .set(auth);
       expect(jobAfterQuote.status).toBe(200);
       expect(jobAfterQuote.body.data.status).toBe("NEW");
 
@@ -415,8 +423,10 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
       expect(approvalEvents.length).toBe(1);
       expect(approvalEvents[0].action).toBe("APPROVED");
       expect(approvalEvents[0].source).toBe("CUSTOMER");
-    } catch (error) {
-      console.log("Quote flow failed, continuing with job scheduling without quote");
+    } catch {
+      console.log(
+        "Quote flow failed, continuing with job scheduling without quote",
+      );
       // Continue with the test without quote approval
     }
 
@@ -427,7 +437,9 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     expect(scheduledJob.data.job.scheduledEnd).toBeDefined();
 
     // Verify job status changed to SCHEDULED
-    const jobAfterSchedule = await request(app).get(`/api/v1/jobs/${jobId}`).set(auth);
+    const jobAfterSchedule = await request(app)
+      .get(`/api/v1/jobs/${jobId}`)
+      .set(auth);
     expect(jobAfterSchedule.status).toBe(200);
     expect(jobAfterSchedule.body.data.status).toBe("SCHEDULED");
 
@@ -460,23 +472,33 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     expect(assignedJob.data.job.assignedTechnician.id).toBe(techUserId);
 
     // Verify assignment
-    const jobAfterAssign = await request(app).get(`/api/v1/jobs/${jobId}`).set(auth);
+    const jobAfterAssign = await request(app)
+      .get(`/api/v1/jobs/${jobId}`)
+      .set(auth);
     expect(jobAfterAssign.status).toBe(200);
     expect(jobAfterAssign.body.data.assignedTechnician.id).toBe(techUserId);
 
     // STEP 10: Technician starts job execution
-    const techAuth = { Authorization: `Bearer ${techAccept.body.data.accessToken}` };
+    const techAuth = {
+      Authorization: `Bearer ${techAccept.body.data.accessToken}`,
+    };
 
     // Progress job through execution states
     await startJob(techAuth, jobId);
 
     // Verify job is IN_PROGRESS
-    const jobInProgress = await request(app).get(`/api/v1/jobs/${jobId}`).set(techAuth);
+    const jobInProgress = await request(app)
+      .get(`/api/v1/jobs/${jobId}`)
+      .set(techAuth);
     expect(jobInProgress.status).toBe(200);
     expect(jobInProgress.body.data.status).toBe("IN_PROGRESS");
 
     // STEP 11: Add job note (technician communication)
-    const note = await addJobNote(techAuth, jobId, "Customer mentioned unit was making unusual noise before failure");
+    const note = await addJobNote(
+      techAuth,
+      jobId,
+      "Customer mentioned unit was making unusual noise before failure",
+    );
     expect(note.body).toContain("unusual noise");
 
     // STEP 12: Add job parts (technician logs materials used)
@@ -492,21 +514,29 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     });
 
     // Verify parts were added
-    const jobWithParts = await request(app).get(`/api/v1/jobs/${jobId}`).set(techAuth);
+    const jobWithParts = await request(app)
+      .get(`/api/v1/jobs/${jobId}`)
+      .set(techAuth);
     expect(jobWithParts.status).toBe(200);
     expect(jobWithParts.body.data.parts.length).toBe(2);
 
     // STEP 13: Complete job
-    const completedJob = await completeJob(techAuth, jobId, "Replaced defrost board and topped up 2 lbs refrigerant. Unit operating normally.");
+    const completedJob = await completeJob(
+      techAuth,
+      jobId,
+      "Replaced defrost board and topped up 2 lbs refrigerant. Unit operating normally.",
+    );
     expect(completedJob.status).toBe("COMPLETED");
     expect(completedJob.completedAt).toBeDefined();
     expect(completedJob.completionSummary).toContain("defrost board");
 
     // Verify job status history recorded completion
-    const historyRes = await request(app).get(`/api/v1/jobs/${jobId}/history`).set(auth);
+    const historyRes = await request(app)
+      .get(`/api/v1/jobs/${jobId}/history`)
+      .set(auth);
     expect(historyRes.status).toBe(200);
     const completionHistory = historyRes.body.data.find(
-      (h: any) => h.toStatus === "COMPLETED"
+      (h: { toStatus: string }) => h.toStatus === "COMPLETED",
     );
     expect(completionHistory).toBeDefined();
     expect(completionHistory.actor.id).toBe(techUserId);
@@ -522,7 +552,9 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     expect(invoice.items.length).toBe(2);
 
     // Verify invoice is linked to job
-    const jobWithInvoice = await request(app).get(`/api/v1/jobs/${jobId}`).set(auth);
+    const jobWithInvoice = await request(app)
+      .get(`/api/v1/jobs/${jobId}`)
+      .set(auth);
     expect(jobWithInvoice.status).toBe(200);
     expect(jobWithInvoice.body.data.invoices.length).toBe(1);
     expect(jobWithInvoice.body.data.invoices[0].id).toBe(invoice.id);
@@ -535,28 +567,38 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     // STEP 16: Record payment
     const payment = await recordPayment(auth, invoice.id, 27500);
     expect(payment.status).toBe("PAID");
-    expect(String(payment.amountMinor || payment.amountPaidMinor)).toBe("27500");
+    expect(String(payment.amountMinor || payment.amountPaidMinor)).toBe(
+      "27500",
+    );
     expect(String(payment.balanceDueMinor)).toBe("0");
 
     // Verify invoice is now paid
-    const paidInvoice = await request(app).get(`/api/v1/invoices/${invoice.id}`).set(auth);
+    const paidInvoice = await request(app)
+      .get(`/api/v1/invoices/${invoice.id}`)
+      .set(auth);
     expect(paidInvoice.status).toBe(200);
     expect(paidInvoice.body.data.status).toBe("PAID");
     expect(paidInvoice.body.data.balanceDueMinor).toBe("0");
 
     // STEP 17: View activity/audit trail
-    const activityRes = await request(app).get(`/api/v1/jobs/${jobId}/history`).set(auth);
+    const activityRes = await request(app)
+      .get(`/api/v1/jobs/${jobId}/history`)
+      .set(auth);
     expect(activityRes.status).toBe(200);
     const history = activityRes.body.data;
 
     // Verify key audit events are present
     expect(history.length).toBeGreaterThanOrEqual(5);
-    
-    const statusChanges = history.filter((h: any) => h.toStatus !== undefined);
+
+    const statusChanges = history.filter(
+      (h: { toStatus?: string }) => h.toStatus !== undefined,
+    );
     expect(statusChanges.length).toBeGreaterThan(0);
 
     // Verify the complete status transition chain
-    const statusSequence = statusChanges.map((h: any) => h.toStatus);
+    const statusSequence = statusChanges.map(
+      (h: { toStatus: string }) => h.toStatus,
+    );
     expect(statusSequence).toContain("SCHEDULED");
     expect(statusSequence).toContain("IN_PROGRESS");
     expect(statusSequence).toContain("COMPLETED");
@@ -612,7 +654,7 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
   it("ensures deterministic database behavior with isolated test data", async () => {
     // This test verifies that the integration test can run multiple times
     // without data pollution between runs
-    
+
     const owner1 = await registerOwner("c2c-isolation-1");
     const auth1 = { Authorization: `Bearer ${owner1.accessToken}` };
     const { customerId: cust1 } = await createCustomerWithAddress(auth1);
@@ -622,11 +664,15 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     const { customerId: cust2 } = await createCustomerWithAddress(auth2);
 
     // Verify data isolation - owner1 cannot access owner2's customer
-    const crossAccess = await request(app).get(`/api/v1/customers/${cust2}`).set(auth1);
+    const crossAccess = await request(app)
+      .get(`/api/v1/customers/${cust2}`)
+      .set(auth1);
     expect([403, 404]).toContain(crossAccess.status);
 
     // Verify owner1 can access their own customer
-    const ownAccess = await request(app).get(`/api/v1/customers/${cust1}`).set(auth1);
+    const ownAccess = await request(app)
+      .get(`/api/v1/customers/${cust1}`)
+      .set(auth1);
     expect(ownAccess.status).toBe(200);
 
     // Verify customer lists are isolated
@@ -643,8 +689,12 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     // (We already verified crossAccess returns 403/404 above)
 
     // Clean up
-    await prisma.customer.deleteMany({ where: { companyId: owner1.companyId } });
-    await prisma.customer.deleteMany({ where: { companyId: owner2.companyId } });
+    await prisma.customer.deleteMany({
+      where: { companyId: owner1.companyId },
+    });
+    await prisma.customer.deleteMany({
+      where: { companyId: owner2.companyId },
+    });
     await prisma.company.deleteMany({ where: { id: owner1.companyId } });
     await prisma.company.deleteMany({ where: { id: owner2.companyId } });
   });
@@ -652,7 +702,7 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
   it("validates customer-to-quote-to-approval flow without job dependency", async () => {
     const owner = await registerOwner("c2c-quote-flow");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId } = await createCustomerWithAddress(auth);
 
     // STEP 1: Create standalone quote (not linked to job)
     const quote = await request(app)
@@ -675,18 +725,20 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
           },
         ],
       });
-    
+
     // Handle quote validation errors gracefully
     if (quote.status === 422) {
       // Quote creation might require jobId or have other validation
       // Skip this test case if quote creation fails
       console.log("Quote creation failed with 422, skipping quote flow test");
       // Clean up before returning
-      await prisma.customer.deleteMany({ where: { companyId: owner.companyId } });
+      await prisma.customer.deleteMany({
+        where: { companyId: owner.companyId },
+      });
       await prisma.company.deleteMany({ where: { id: owner.companyId } });
       return;
     }
-    
+
     expect(quote.status).toBe(201);
     expect(quote.body.data.status).toBe("DRAFT");
     expect(quote.body.data.items.length).toBe(2);
@@ -738,20 +790,20 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     // STEP 7: Verify cross-company access protection
     const owner2 = await registerOwner("c2c-cross-company");
     const auth2 = { Authorization: `Bearer ${owner2.accessToken}` };
-    
+
     const crossAccess = await request(app)
       .get(`/api/v1/quotes/${quote.body.data.id}`)
       .set(auth2);
     expect([403, 404]).toContain(crossAccess.status);
 
     // STEP 8: Verify quote appears in customer's quote list
-    const quoteList = await request(app)
-      .get("/api/v1/quotes")
-      .set(auth);
+    const quoteList = await request(app).get("/api/v1/quotes").set(auth);
     expect(quoteList.status).toBe(200);
     expect(quoteList.body.data.length).toBeGreaterThan(0);
-    
-    const ourQuote = quoteList.body.data.find((q: any) => q.id === quote.body.data.id);
+
+    const ourQuote = quoteList.body.data.find(
+      (q: { id: string }) => q.id === quote.body.data.id,
+    );
     expect(ourQuote).toBeDefined();
     expect(ourQuote.status).toBe("APPROVED");
 

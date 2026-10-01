@@ -1,13 +1,50 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { prisma } from "../src/db/prisma.js";
 
+interface Company {
+  id: string;
+  name: string;
+  slug: string;
+  timezone: string;
+  defaultCurrency: string;
+}
+
+interface Customer {
+  id: string;
+  companyId: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+}
+
+interface ServiceAddress {
+  id: string;
+  companyId: string;
+  customerId: string;
+  label: string;
+  line1: string;
+  city: string;
+  postalCode: string | null;
+  countryCode: string;
+}
+
+interface Job {
+  id: string;
+  companyId: string;
+  customerId: string;
+  serviceAddressId: string;
+  jobNumber: number;
+  serviceType: string;
+  problemDescription: string;
+}
+
 describe("Tenant Referential Integrity - Current Limitations", () => {
-  let companyA: any;
-  let companyB: any;
-  let customerA: any;
-  let customerB: any;
-  let serviceAddressA: any;
-  let serviceAddressB: any;
+  let companyA: Company;
+  let companyB: Company;
+  let customerA: Customer;
+  let customerB: Customer;
+  let serviceAddressA: ServiceAddress;
 
   beforeAll(async () => {
     // Create two companies and customers directly via Prisma
@@ -65,27 +102,15 @@ describe("Tenant Referential Integrity - Current Limitations", () => {
         countryCode: "US",
       },
     });
-
-    serviceAddressB = await prisma.serviceAddress.create({
-      data: {
-        id: crypto.randomUUID(),
-        companyId: companyB.id,
-        customerId: customerB.id,
-        label: "Home",
-        line1: "456 Oak St",
-        city: "Shelbyville",
-        postalCode: "54321",
-        countryCode: "US",
-      },
-    });
   });
 
   afterAll(async () => {
     // Cleanup in reverse order of dependencies
     await prisma.job.deleteMany({ where: { companyId: companyA.id } });
     await prisma.job.deleteMany({ where: { companyId: companyB.id } });
-    await prisma.serviceAddress.deleteMany({ where: { companyId: companyA.id } });
-    await prisma.serviceAddress.deleteMany({ where: { companyId: companyB.id } });
+    await prisma.serviceAddress.deleteMany({
+      where: { companyId: companyA.id },
+    });
     await prisma.customer.deleteMany({ where: { companyId: companyA.id } });
     await prisma.customer.deleteMany({ where: { companyId: companyB.id } });
     await prisma.company.deleteMany({ where: { id: companyA.id } });
@@ -161,7 +186,7 @@ describe("Tenant Referential Integrity - Current Limitations", () => {
   });
 
   describe("Job child entities", () => {
-    let jobA: any;
+    let jobA: Job;
 
     beforeAll(async () => {
       jobA = await prisma.job.create({
@@ -193,9 +218,9 @@ describe("Tenant Referential Integrity - Current Limitations", () => {
           },
         });
         expect.fail("Should have thrown a foreign key constraint error");
-      } catch (error: any) {
+      } catch (error) {
         // PostgreSQL foreign key violation
-        expect(error.code).toBe("P2003");
+        expect((error as { code: string }).code).toBe("P2003");
       }
     });
 
@@ -211,9 +236,9 @@ describe("Tenant Referential Integrity - Current Limitations", () => {
           },
         });
         expect.fail("Should have thrown a foreign key constraint error");
-      } catch (error: any) {
+      } catch (error) {
         // PostgreSQL foreign key violation
-        expect(error.code).toBe("P2003");
+        expect((error as { code: string }).code).toBe("P2003");
       }
     });
 

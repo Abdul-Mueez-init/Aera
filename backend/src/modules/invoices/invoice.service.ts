@@ -13,13 +13,7 @@ import {
 } from "../payments/payment-operation.service.js";
 import { notificationPublisher } from "../notifications/notification.port.js";
 import { getNextInvoiceNumber } from "../../common/counters/counter.service.js";
-import {
-  calculateLineItemTotal,
-  calculateSubtotal,
-  calculateTax,
-  calculateTotal,
-  validateMonetaryCalculations,
-} from "../../common/money/money.service.js";
+import { calculateLineItemTotal } from "../../common/money/money.service.js";
 
 export type InvoiceStatusValue =
   "DRAFT" | "ISSUED" | "PARTIALLY_PAID" | "PAID" | "VOID" | "OVERDUE";
@@ -118,7 +112,9 @@ export interface GenerateInvoiceOptions {
 async function getCompletedJobSource(
   context: AuthContext,
   jobId: string,
-  db: typeof prisma | Parameters<Parameters<typeof prisma.$transaction>[0]>[0] = prisma,
+  db:
+    | typeof prisma
+    | Parameters<Parameters<typeof prisma.$transaction>[0]>[0] = prisma,
 ) {
   const job = await db.job.findFirst({
     where: { id: jobId, companyId: context.companyId },
@@ -249,7 +245,7 @@ export async function generateInvoiceFromJob(
   const discountMinor = quote?.discountMinor ?? BigInt(0);
   const taxMinor = quote?.taxMinor ?? BigInt(0);
   const totalMinor =
-    quote?.totalMinor ?? (subtotalMinor - discountMinor + taxMinor);
+    quote?.totalMinor ?? subtotalMinor - discountMinor + taxMinor;
 
   if (totalMinor === BigInt(0) && !options.allowZeroAmount) {
     throw new AppError(
@@ -459,11 +455,7 @@ export async function recordPayment(
   if (!invoice)
     throw new AppError("RESOURCE_NOT_FOUND", "Invoice not found", 404);
   if (invoice.status === "DRAFT" || invoice.status === "VOID") {
-    throw new AppError(
-      "INVOICE_NOT_PAYABLE",
-      "Invoice is not payable",
-      409,
-    );
+    throw new AppError("INVOICE_NOT_PAYABLE", "Invoice is not payable", 409);
   }
   if (invoice.currency !== input.currency.toUpperCase()) {
     throw new AppError(
@@ -518,10 +510,12 @@ export async function recordPayment(
           amountPaidMinor: { increment: BigInt(input.amountMinor) },
           balanceDueMinor: { decrement: BigInt(input.amountMinor) },
           status:
-            invoice.balanceDueMinor === BigInt(input.amountMinor) || (invoice.balanceDueMinor === BigInt(0) && input.amountMinor === BigInt(0))
+            invoice.balanceDueMinor === BigInt(input.amountMinor) ||
+            (invoice.balanceDueMinor === 0n && input.amountMinor === 0)
               ? "PAID"
               : "PARTIALLY_PAID",
-          ...(invoice.balanceDueMinor === BigInt(input.amountMinor) || (invoice.balanceDueMinor === BigInt(0) && input.amountMinor === BigInt(0))
+          ...(invoice.balanceDueMinor === BigInt(input.amountMinor) ||
+          (invoice.balanceDueMinor === 0n && input.amountMinor === 0)
             ? { paidAt: new Date() }
             : {}),
         },

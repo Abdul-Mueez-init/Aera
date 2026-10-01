@@ -71,23 +71,21 @@ describe("Phase C4 — Job and Invoice Number Allocation Concurrency", () => {
   it("generates unique job numbers under concurrent creation", async () => {
     const owner = await registerOwner("c4-job-concurrent");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
 
     // Create 10 jobs concurrently
     const concurrentRequests = Array.from({ length: 10 }, () =>
-      request(app)
-        .post("/api/v1/jobs")
-        .set(auth)
-        .send({
-          customerId,
-          serviceAddressId,
-          serviceType: "AC Maintenance",
-          problemDescription: "Routine maintenance check",
-        }),
+      request(app).post("/api/v1/jobs").set(auth).send({
+        customerId,
+        serviceAddressId,
+        serviceType: "AC Maintenance",
+        problemDescription: "Routine maintenance check",
+      }),
     );
 
     const responses = await Promise.all(concurrentRequests);
-    
+
     // All should succeed
     responses.forEach((res) => {
       expect(res.status).toBe(201);
@@ -95,12 +93,14 @@ describe("Phase C4 — Job and Invoice Number Allocation Concurrency", () => {
     });
 
     // Extract job numbers
-    const jobNumbers = responses.map((res) => res.body.data.jobNumber as number);
-    
+    const jobNumbers = responses.map(
+      (res) => res.body.data.jobNumber as number,
+    );
+
     // All job numbers should be unique
     const uniqueNumbers = new Set(jobNumbers);
     expect(uniqueNumbers.size).toBe(10);
-    
+
     // Job numbers should be sequential (1-10)
     const sortedNumbers = [...uniqueNumbers].sort((a, b) => a - b);
     expect(sortedNumbers).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
@@ -112,13 +112,16 @@ describe("Phase C4 — Job and Invoice Number Allocation Concurrency", () => {
       orderBy: { jobNumber: "asc" },
     });
     expect(jobs.length).toBe(10);
-    expect(jobs.map((j) => j.jobNumber)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(jobs.map((j) => j.jobNumber)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    ]);
   });
 
   it("generates unique invoice numbers under concurrent creation", async () => {
     const owner = await registerOwner("c4-invoice-concurrent");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
 
     // Create 5 jobs first
     const jobIds: string[] = [];
@@ -134,7 +137,7 @@ describe("Phase C4 — Job and Invoice Number Allocation Concurrency", () => {
         });
       expect(job.status).toBe(201);
       jobIds.push(job.body.data.id);
-      
+
       // Start and complete each job
       await startJob(auth, job.body.data.id);
       await request(app)
@@ -152,7 +155,7 @@ describe("Phase C4 — Job and Invoice Number Allocation Concurrency", () => {
     );
 
     const responses = await Promise.all(concurrentRequests);
-    
+
     // All should succeed
     responses.forEach((res) => {
       expect(res.status).toBe(201);
@@ -164,11 +167,11 @@ describe("Phase C4 — Job and Invoice Number Allocation Concurrency", () => {
       const match = res.body.data.invoiceNumber.match(/\d+/);
       return match ? Number.parseInt(match[0], 10) : 0;
     });
-    
+
     // All invoice numbers should be unique
     const uniqueNumbers = new Set(invoiceNumbers);
     expect(uniqueNumbers.size).toBe(5);
-    
+
     // Invoice numbers should be sequential (1-5)
     const sortedNumbers = [...uniqueNumbers].sort((a, b) => a - b);
     expect(sortedNumbers).toEqual([1, 2, 3, 4, 5]);
@@ -180,7 +183,7 @@ describe("Phase C4 — Job and Invoice Number Allocation Concurrency", () => {
       orderBy: { invoiceNumber: "asc" },
     });
     expect(invoices.length).toBe(5);
-    
+
     const extractedNumbers = invoices.map((inv) => {
       const match = inv.invoiceNumber.match(/\d+/);
       return match ? Number.parseInt(match[0], 10) : 0;
@@ -191,7 +194,8 @@ describe("Phase C4 — Job and Invoice Number Allocation Concurrency", () => {
   it("maintains counter state correctly after sequential and concurrent operations", async () => {
     const owner = await registerOwner("c4-counter-state");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
 
     // Create 3 jobs sequentially
     for (let i = 0; i < 3; i++) {
@@ -210,15 +214,12 @@ describe("Phase C4 — Job and Invoice Number Allocation Concurrency", () => {
 
     // Create 5 jobs concurrently
     const concurrentRequests = Array.from({ length: 5 }, () =>
-      request(app)
-        .post("/api/v1/jobs")
-        .set(auth)
-        .send({
-          customerId,
-          serviceAddressId,
-          serviceType: "Concurrent Job",
-          problemDescription: "Concurrent creation",
-        }),
+      request(app).post("/api/v1/jobs").set(auth).send({
+        customerId,
+        serviceAddressId,
+        serviceType: "Concurrent Job",
+        problemDescription: "Concurrent creation",
+      }),
     );
 
     const concurrentResponses = await Promise.all(concurrentRequests);
@@ -253,34 +254,28 @@ describe("Phase C4 — Job and Invoice Number Allocation Concurrency", () => {
     const authA = { Authorization: `Bearer ${ownerA.accessToken}` };
     const authB = { Authorization: `Bearer ${ownerB.accessToken}` };
 
-    const { customerId: customerIdA, serviceAddressId: serviceAddressIdA } = 
+    const { customerId: customerIdA, serviceAddressId: serviceAddressIdA } =
       await createCustomerWithAddress(authA);
-    const { customerId: customerIdB, serviceAddressId: serviceAddressIdB } = 
+    const { customerId: customerIdB, serviceAddressId: serviceAddressIdB } =
       await createCustomerWithAddress(authB);
 
     // Create jobs for both companies concurrently
     const requestsA = Array.from({ length: 3 }, () =>
-      request(app)
-        .post("/api/v1/jobs")
-        .set(authA)
-        .send({
-          customerId: customerIdA,
-          serviceAddressId: serviceAddressIdA,
-          serviceType: "Company A Job",
-          problemDescription: "Company A work",
-        }),
+      request(app).post("/api/v1/jobs").set(authA).send({
+        customerId: customerIdA,
+        serviceAddressId: serviceAddressIdA,
+        serviceType: "Company A Job",
+        problemDescription: "Company A work",
+      }),
     );
 
     const requestsB = Array.from({ length: 3 }, () =>
-      request(app)
-        .post("/api/v1/jobs")
-        .set(authB)
-        .send({
-          customerId: customerIdB,
-          serviceAddressId: serviceAddressIdB,
-          serviceType: "Company B Job",
-          problemDescription: "Company B work",
-        }),
+      request(app).post("/api/v1/jobs").set(authB).send({
+        customerId: customerIdB,
+        serviceAddressId: serviceAddressIdB,
+        serviceType: "Company B Job",
+        problemDescription: "Company B work",
+      }),
     );
 
     const [responsesA, responsesB] = await Promise.all([
@@ -295,7 +290,7 @@ describe("Phase C4 — Job and Invoice Number Allocation Concurrency", () => {
     // Each company should have job numbers 1-3
     const jobNumbersA = responsesA.map((res) => res.body.data.jobNumber).sort();
     const jobNumbersB = responsesB.map((res) => res.body.data.jobNumber).sort();
-    
+
     expect(jobNumbersA).toEqual([1, 2, 3]);
     expect(jobNumbersB).toEqual([1, 2, 3]);
 
@@ -324,36 +319,31 @@ describe("Phase C4 — Job and Invoice Number Allocation Concurrency", () => {
   it("handles unique constraint conflicts gracefully with retry logic", async () => {
     const owner = await registerOwner("c4-conflict");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
 
     // Create a job first to establish counter
-    const firstJob = await request(app)
-      .post("/api/v1/jobs")
-      .set(auth)
-      .send({
-        customerId,
-        serviceAddressId,
-        serviceType: "First Job",
-        problemDescription: "Initial job",
-      });
+    const firstJob = await request(app).post("/api/v1/jobs").set(auth).send({
+      customerId,
+      serviceAddressId,
+      serviceType: "First Job",
+      problemDescription: "Initial job",
+    });
     expect(firstJob.status).toBe(201);
     expect(firstJob.body.data.jobNumber).toBe(1);
 
     // Create more jobs concurrently - should not cause conflicts
     const concurrentRequests = Array.from({ length: 5 }, () =>
-      request(app)
-        .post("/api/v1/jobs")
-        .set(auth)
-        .send({
-          customerId,
-          serviceAddressId,
-          serviceType: "Concurrent Job",
-          problemDescription: "Concurrent creation",
-        }),
+      request(app).post("/api/v1/jobs").set(auth).send({
+        customerId,
+        serviceAddressId,
+        serviceType: "Concurrent Job",
+        problemDescription: "Concurrent creation",
+      }),
     );
 
     const responses = await Promise.all(concurrentRequests);
-    
+
     // All should succeed without conflicts
     responses.forEach((res) => {
       expect(res.status).toBe(201);

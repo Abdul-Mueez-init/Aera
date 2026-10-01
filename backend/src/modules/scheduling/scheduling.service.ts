@@ -38,7 +38,9 @@ async function findConflicts(
   jobId: string,
   technicianId: string | null,
   input: ScheduleInput,
-  db: typeof prisma | Parameters<Parameters<typeof prisma.$transaction>[0]>[0] = prisma,
+  db:
+    | typeof prisma
+    | Parameters<Parameters<typeof prisma.$transaction>[0]>[0] = prisma,
 ) {
   if (!technicianId) {
     return [];
@@ -71,91 +73,99 @@ export async function scheduleJob(
   reschedule: boolean,
 ) {
   assertScheduleRange(input);
-  
-  return prisma.$transaction(async (transaction) => {
-    const job = await transaction.job.findFirst({
-      where: { id: jobId, companyId: context.companyId },
-      select: { id: true, status: true, assignedTechnicianId: true },
-    });
-    if (!job) {
-      throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
-    }
-    if (["COMPLETED", "CANCELLED"].includes(job.status)) {
-      throw new AppError("JOB_IMMUTABLE", "Final jobs cannot be scheduled", 409);
-    }
-    if (reschedule && job.status !== "SCHEDULED") {
-      throw new AppError(
-        "SCHEDULE_INVALID_RESCHEDULE",
-        "Only scheduled jobs can be rescheduled",
-        422,
-      );
-    }
 
-    // Lock the technician row to serialize concurrent scheduling for the same technician
-    // We update a dummy field to force a row-level lock
-    if (job.assignedTechnicianId) {
-      await transaction.user.update({
-        where: { id: job.assignedTechnicianId },
-        data: { updatedAt: new Date() },
+  return prisma
+    .$transaction(async (transaction) => {
+      const job = await transaction.job.findFirst({
+        where: { id: jobId, companyId: context.companyId },
+        select: { id: true, status: true, assignedTechnicianId: true },
       });
-    }
+      if (!job) {
+        throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+      }
+      if (["COMPLETED", "CANCELLED"].includes(job.status)) {
+        throw new AppError(
+          "JOB_IMMUTABLE",
+          "Final jobs cannot be scheduled",
+          409,
+        );
+      }
+      if (reschedule && job.status !== "SCHEDULED") {
+        throw new AppError(
+          "SCHEDULE_INVALID_RESCHEDULE",
+          "Only scheduled jobs can be rescheduled",
+          422,
+        );
+      }
 
-    const conflicts = await findConflicts(
-      context.companyId,
-      jobId,
-      job.assignedTechnicianId,
-      input,
-      transaction,
-    );
-    const nextStatus =
-      job.status === "NEW" || job.status === "QUOTING" ? "SCHEDULED" : job.status;
+      // Lock the technician row to serialize concurrent scheduling for the same technician
+      // We update a dummy field to force a row-level lock
+      if (job.assignedTechnicianId) {
+        await transaction.user.update({
+          where: { id: job.assignedTechnicianId },
+          data: { updatedAt: new Date() },
+        });
+      }
 
-    await transaction.job.update({
-      where: { id: jobId },
-      data: {
-        scheduledStart: input.scheduledStart,
-        scheduledEnd: input.scheduledEnd,
-        status: nextStatus,
-      },
-    });
-    if (nextStatus !== job.status) {
-      await transaction.jobStatusHistory.create({
+      const conflicts = await findConflicts(
+        context.companyId,
+        jobId,
+        job.assignedTechnicianId,
+        input,
+        transaction,
+      );
+      const nextStatus =
+        job.status === "NEW" || job.status === "QUOTING"
+          ? "SCHEDULED"
+          : job.status;
+
+      await transaction.job.update({
+        where: { id: jobId },
         data: {
-          companyId: context.companyId,
-          jobId,
-          actorUserId: context.userId,
-          fromStatus: job.status,
-          toStatus: "SCHEDULED",
-          reason: "Scheduled for dispatch",
+          scheduledStart: input.scheduledStart,
+          scheduledEnd: input.scheduledEnd,
+          status: nextStatus,
         },
       });
-    }
+      if (nextStatus !== job.status) {
+        await transaction.jobStatusHistory.create({
+          data: {
+            companyId: context.companyId,
+            jobId,
+            actorUserId: context.userId,
+            fromStatus: job.status,
+            toStatus: "SCHEDULED",
+            reason: "Scheduled for dispatch",
+          },
+        });
+      }
 
-    return {
-      job,
-      conflicts,
-      reschedule,
-    };
-  }).then(async ({ job, conflicts, reschedule }) => {
-    void notificationPublisher.publish({
-      type: reschedule ? "JOB_RESCHEDULED" : "JOB_SCHEDULED",
-      companyId: context.companyId,
-      jobId,
-      recipientUserId: job.assignedTechnicianId ?? undefined,
+      return {
+        job,
+        conflicts,
+        reschedule,
+      };
+    })
+    .then(async ({ job, conflicts, reschedule }) => {
+      void notificationPublisher.publish({
+        type: reschedule ? "JOB_RESCHEDULED" : "JOB_SCHEDULED",
+        companyId: context.companyId,
+        jobId,
+        recipientUserId: job.assignedTechnicianId ?? undefined,
+      });
+
+      return {
+        job: await getJob(context, jobId),
+        warnings: conflicts.map((conflict) => ({
+          code: "TECHNICIAN_SCHEDULE_CONFLICT",
+          jobId: conflict.id,
+          jobNumber: conflict.jobNumber,
+          scheduledStart: conflict.scheduledStart,
+          scheduledEnd: conflict.scheduledEnd,
+          customer: conflict.customer,
+        })),
+      };
     });
-
-    return {
-      job: await getJob(context, jobId),
-      warnings: conflicts.map((conflict) => ({
-        code: "TECHNICIAN_SCHEDULE_CONFLICT",
-        jobId: conflict.id,
-        jobNumber: conflict.jobNumber,
-        scheduledStart: conflict.scheduledStart,
-        scheduledEnd: conflict.scheduledEnd,
-        customer: conflict.customer,
-      })),
-    };
-  });
 }
 
 export async function getDaySchedule(context: AuthContext, date: string) {

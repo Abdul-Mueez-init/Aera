@@ -242,6 +242,44 @@ flutter run --dart-define=ENVIRONMENT=production
 flutter run --dart-define=ENVIRONMENT=staging --dart-define=API_BASE_URL=https://custom-api.example.com
 ```
 
+## Release Build
+
+### Backend (must be running and reachable from the phone)
+```powershell
+cd backend
+pnpm install
+pnpm prisma:generate
+pnpm prisma migrate deploy
+pnpm start
+```
+
+### Flutter, run on a USB-connected phone
+```powershell
+flutter clean
+flutter pub get
+flutter analyze
+flutter test
+flutter run --release --flavor production `
+  --dart-define=ENVIRONMENT=production `
+  --dart-define=API_BASE_URL=http://<PC-LAN-IP>:4000
+```
+
+### Build an APK instead
+```powershell
+flutter build apk --release --flavor production `
+  --dart-define=ENVIRONMENT=production `
+  --dart-define=API_BASE_URL=https://<your-api-host>
+# -> build\app\outputs\flutter-apk\app-production-release.apk
+```
+
+### Optional crash reporting
+Add `--dart-define=SENTRY_DSN=<dsn>` and `--dart-define=APP_RELEASE=aera-mobile@1.0.0+1` to enable Sentry error reporting.
+
+**Important notes:**
+- Android has 3 product flavors (development, staging, production). Always use `--flavor` for release builds.
+- Always provide `--dart-define=API_BASE_URL` for production/staging builds to avoid pointing at the wrong server.
+- Without `API_BASE_URL`, production/staging builds will fail loudly with an error.
+
 ## API Endpoints
 
 ### Health Endpoints

@@ -18,7 +18,12 @@ const statuses = ["DRAFT", "SENT", "APPROVED", "DECLINED", "EXPIRED"] as const;
 
 const itemSchema = z.object({
   description: z.string().trim().min(1).max(240),
-  quantity: z.string().regex(/^\d+(\.\d{1,4})?$/, "Quantity must be a positive decimal with up to 4 decimal places"),
+  quantity: z
+    .string()
+    .regex(
+      /^\d+(\.\d{1,4})?$/,
+      "Quantity must be a positive decimal with up to 4 decimal places",
+    ),
   unitPriceMinor: z.number().int().nonnegative().max(100_000_000),
 });
 const createSchema = z.object({

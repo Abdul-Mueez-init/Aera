@@ -13,22 +13,20 @@
  *   - Run with NODE_ENV=development
  */
 
-import { PrismaClient } from '../generated/prisma';
-import { hashPassword } from '../common/auth/password';
-import { getNextJobNumber } from '../modules/jobs/job.service';
-import { getNextQuoteNumber } from '../modules/quotes/quote.service';
-import { getNextInvoiceNumber } from '../modules/invoices/invoice.service';
+import { PrismaClient } from "../generated/prisma/index.js";
+import { hashPassword } from "../common/auth/password.js";
+import { getNextJobNumber } from "../common/counters/counter.service.js";
 
 const prisma = new PrismaClient();
 
 // Fixed seeds for deterministic data generation
 const SEEDS = {
-  company: 'aera-demo-company',
-  users: 'aera-demo-users',
-  customers: 'aera-demo-customers',
-  jobs: 'aera-demo-jobs',
-  quotes: 'aera-demo-quotes',
-  invoices: 'aera-demo-invoices',
+  company: "aera-demo-company",
+  users: "aera-demo-users",
+  customers: "aera-demo-customers",
+  jobs: "aera-demo-jobs",
+  quotes: "aera-demo-quotes",
+  invoices: "aera-demo-invoices",
 };
 
 // Simple deterministic random number generator
@@ -40,7 +38,7 @@ class SeededRandom {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32bit integer
     }
     return Math.abs(hash);
@@ -65,167 +63,168 @@ class SeededRandom {
 
   // Pick a random date within a range
   date(start: Date, end: Date): Date {
-    const time = start.getTime() + this.next() * (end.getTime() - start.getTime());
+    const time =
+      start.getTime() + this.next() * (end.getTime() - start.getTime());
     return new Date(time);
   }
 }
 
 // Demo data constants
 const COMPANY_DATA = {
-  name: 'Aera HVAC Demo',
-  slug: 'aera-hvac-demo',
-  timezone: 'Asia/Karachi',
-  defaultCurrency: 'PKR',
+  name: "Aera HVAC Demo",
+  slug: "aera-hvac-demo",
+  timezone: "Asia/Karachi",
+  defaultCurrency: "PKR",
 };
 
 const USERS = [
   {
-    email: 'admin@aera.demo',
-    firstName: 'Marcus',
-    lastName: 'Thompson',
-    role: 'OWNER' as const,
+    email: "admin@aera.demo",
+    firstName: "Marcus",
+    lastName: "Thompson",
+    role: "OWNER" as const,
   },
   {
-    email: 'dispatcher@aera.demo',
-    firstName: 'Sarah',
-    lastName: 'Ahmed',
-    role: 'DISPATCHER' as const,
+    email: "dispatcher@aera.demo",
+    firstName: "Sarah",
+    lastName: "Ahmed",
+    role: "DISPATCHER" as const,
   },
   {
-    email: 'tech1@aera.demo',
-    firstName: 'Ahmed',
-    lastName: 'Raza',
-    role: 'TECHNICIAN' as const,
+    email: "tech1@aera.demo",
+    firstName: "Ahmed",
+    lastName: "Raza",
+    role: "TECHNICIAN" as const,
   },
   {
-    email: 'tech2@aera.demo',
-    firstName: 'James',
-    lastName: 'Miller',
-    role: 'TECHNICIAN' as const,
+    email: "tech2@aera.demo",
+    firstName: "James",
+    lastName: "Miller",
+    role: "TECHNICIAN" as const,
   },
   {
-    email: 'tech3@aera.demo',
-    firstName: 'Omar',
-    lastName: 'Khan',
-    role: 'TECHNICIAN' as const,
+    email: "tech3@aera.demo",
+    firstName: "Omar",
+    lastName: "Khan",
+    role: "TECHNICIAN" as const,
   },
   {
-    email: 'tech4@aera.demo',
-    firstName: 'Bilal',
-    lastName: 'Hassan',
-    role: 'TECHNICIAN' as const,
+    email: "tech4@aera.demo",
+    firstName: "Bilal",
+    lastName: "Hassan",
+    role: "TECHNICIAN" as const,
   },
 ];
 
 const CUSTOMERS = [
   {
-    firstName: 'Sarah',
-    lastName: 'Khan',
-    email: 'sarah.khan@example.com',
-    phone: '+92 300 1234567',
+    firstName: "Sarah",
+    lastName: "Khan",
+    email: "sarah.khan@example.com",
+    phone: "+92 300 1234567",
     address: {
-      label: 'Home',
-      line1: '123 Main Street',
-      line2: 'Apartment 4B',
-      city: 'Lahore',
-      region: 'Punjab',
-      postalCode: '54000',
-      countryCode: 'PK',
+      label: "Home",
+      line1: "123 Main Street",
+      line2: "Apartment 4B",
+      city: "Lahore",
+      region: "Punjab",
+      postalCode: "54000",
+      countryCode: "PK",
     },
   },
   {
-    firstName: 'Malik',
-    lastName: 'Textiles',
-    email: 'contact@maliktextiles.com',
-    phone: '+92 321 9876543',
+    firstName: "Malik",
+    lastName: "Textiles",
+    email: "contact@maliktextiles.com",
+    phone: "+92 321 9876543",
     address: {
-      label: 'Head Office',
-      line1: '456 Industrial Estate',
+      label: "Head Office",
+      line1: "456 Industrial Estate",
       line2: null,
-      city: 'Lahore',
-      region: 'Punjab',
-      postalCode: '54700',
-      countryCode: 'PK',
+      city: "Lahore",
+      region: "Punjab",
+      postalCode: "54700",
+      countryCode: "PK",
     },
   },
   {
-    firstName: 'Dr.',
-    lastName: 'Ali',
-    email: 'ali.clinic@example.com',
-    phone: '+92 333 4567890',
+    firstName: "Dr.",
+    lastName: "Ali",
+    email: "ali.clinic@example.com",
+    phone: "+92 333 4567890",
     address: {
-      label: 'Clinic',
-      line1: '789 Medical Complex',
-      line2: 'Floor 2',
-      city: 'Gulberg III',
-      region: 'Punjab',
-      postalCode: '54600',
-      countryCode: 'PK',
+      label: "Clinic",
+      line1: "789 Medical Complex",
+      line2: "Floor 2",
+      city: "Gulberg III",
+      region: "Punjab",
+      postalCode: "54600",
+      countryCode: "PK",
     },
   },
   {
-    firstName: 'Fatima',
-    lastName: 'Zahra',
-    email: 'fatima.z@example.com',
-    phone: '+92 344 1112233',
+    firstName: "Fatima",
+    lastName: "Zahra",
+    email: "fatima.z@example.com",
+    phone: "+92 344 1112233",
     address: {
-      label: 'Home',
-      line1: '321 Peace Avenue',
+      label: "Home",
+      line1: "321 Peace Avenue",
       line2: null,
-      city: 'DHA Phase 5',
-      region: 'Punjab',
-      postalCode: '54800',
-      countryCode: 'PK',
+      city: "DHA Phase 5",
+      region: "Punjab",
+      postalCode: "54800",
+      countryCode: "PK",
     },
   },
   {
-    firstName: 'Rashid',
-    lastName: 'Enterprises',
-    email: 'info@rashident.com',
-    phone: '+92 355 5556667',
+    firstName: "Rashid",
+    lastName: "Enterprises",
+    email: "info@rashident.com",
+    phone: "+92 355 5556667",
     address: {
-      label: 'Warehouse',
-      line1: '999 Commercial Plaza',
-      line2: 'Block C',
-      city: 'Lahore',
-      region: 'Punjab',
-      postalCode: '54500',
-      countryCode: 'PK',
+      label: "Warehouse",
+      line1: "999 Commercial Plaza",
+      line2: "Block C",
+      city: "Lahore",
+      region: "Punjab",
+      postalCode: "54500",
+      countryCode: "PK",
     },
   },
 ];
 
 const SERVICE_TYPES = [
-  'AC Not Cooling · 4-Ton Split',
-  'AC Not Cooling · 2-Ton Split',
-  'Quarterly VRF Chillers Audit',
-  'AC Installation · 1.5 Ton',
-  'AC Maintenance · 3-Ton',
-  'AC Repair · Compressor Issue',
-  'AC Installation · 5-Ton Commercial',
-  'AC Not Cooling · Cassette Unit',
-  'AC Maintenance · Duct Cleaning',
-  'AC Repair · Gas Leak Detection',
+  "AC Not Cooling · 4-Ton Split",
+  "AC Not Cooling · 2-Ton Split",
+  "Quarterly VRF Chillers Audit",
+  "AC Installation · 1.5 Ton",
+  "AC Maintenance · 3-Ton",
+  "AC Repair · Compressor Issue",
+  "AC Installation · 5-Ton Commercial",
+  "AC Not Cooling · Cassette Unit",
+  "AC Maintenance · Duct Cleaning",
+  "AC Repair · Gas Leak Detection",
 ];
 
 const PROBLEM_DESCRIPTIONS = [
-  'AC unit not cooling properly despite being on for 30 minutes',
-  'Water leaking from indoor unit',
-  'Unusual noise coming from outdoor unit',
-  'AC not turning on at all',
-  'Cooling insufficient for room size',
-  'Remote control not responding',
-  'Display showing error code E4',
-  'Unit making loud banging noise',
-  'Airflow weak from vents',
-  'Compressor cycling on and off frequently',
+  "AC unit not cooling properly despite being on for 30 minutes",
+  "Water leaking from indoor unit",
+  "Unusual noise coming from outdoor unit",
+  "AC not turning on at all",
+  "Cooling insufficient for room size",
+  "Remote control not responding",
+  "Display showing error code E4",
+  "Unit making loud banging noise",
+  "Airflow weak from vents",
+  "Compressor cycling on and off frequently",
 ];
 
 async function seedDemoData() {
-  console.log('🌱 Starting demo data seed...');
+  console.log("🌱 Starting demo data seed...");
 
   // Clean existing demo data
-  console.log('🧹 Cleaning existing demo data...');
+  console.log("🧹 Cleaning existing demo data...");
   await prisma.payment.deleteMany();
   await prisma.invoiceItem.deleteMany();
   await prisma.invoice.deleteMany();
@@ -245,20 +244,20 @@ async function seedDemoData() {
   await prisma.user.deleteMany();
   await prisma.company.deleteMany();
 
-  console.log('✅ Cleaned existing data');
+  console.log("✅ Cleaned existing data");
 
   // Create company
-  console.log('🏢 Creating company...');
+  console.log("🏢 Creating company...");
   const company = await prisma.company.create({
     data: COMPANY_DATA,
   });
   console.log(`✅ Created company: ${company.name}`);
 
   // Create users
-  console.log('👥 Creating users...');
+  console.log("👥 Creating users...");
   const users = [];
   for (const userData of USERS) {
-    const passwordHash = await hashPassword('Demo123!'); // Fixed password for demo
+    const passwordHash = await hashPassword("Demo123!"); // Fixed password for demo
     const user = await prisma.user.create({
       data: {
         ...userData,
@@ -274,14 +273,16 @@ async function seedDemoData() {
         companyId: company.id,
         userId: user.id,
         role: userData.role,
-        status: 'ACTIVE',
+        status: "ACTIVE",
       },
     });
-    console.log(`✅ Created user: ${user.firstName} ${user.lastName} (${userData.role})`);
+    console.log(
+      `✅ Created user: ${user.firstName} ${user.lastName} (${userData.role})`,
+    );
   }
 
   // Create customers
-  console.log('👤 Creating customers...');
+  console.log("👤 Creating customers...");
   const customers = [];
   const rng = new SeededRandom(SEEDS.customers);
   for (const customerData of CUSTOMERS) {
@@ -289,7 +290,7 @@ async function seedDemoData() {
       data: {
         companyId: company.id,
         ...customerData,
-        status: 'ACTIVE',
+        status: "ACTIVE",
       },
     });
 
@@ -303,11 +304,13 @@ async function seedDemoData() {
     });
 
     customers.push({ ...customer, serviceAddress });
-    console.log(`✅ Created customer: ${customer.firstName} ${customer.lastName}`);
+    console.log(
+      `✅ Created customer: ${customer.firstName} ${customer.lastName}`,
+    );
   }
 
   // Create jobs
-  console.log('🔧 Creating jobs...');
+  console.log("🔧 Creating jobs...");
   const jobs = [];
   const jobRng = new SeededRandom(SEEDS.jobs);
   const now = new Date();
@@ -316,17 +319,12 @@ async function seedDemoData() {
 
   const technicians = users.filter((u) => {
     const member = USERS.find((u2) => u2.email === u.email);
-    return member?.role === 'TECHNICIAN';
+    return member?.role === "TECHNICIAN";
   });
 
-  const jobStatuses: Array<'NEW' | 'SCHEDULED' | 'EN_ROUTE' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'> = [
-    'NEW',
-    'SCHEDULED',
-    'EN_ROUTE',
-    'IN_PROGRESS',
-    'COMPLETED',
-    'CANCELLED',
-  ];
+  const jobStatuses: Array<
+    "NEW" | "SCHEDULED" | "EN_ROUTE" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED"
+  > = ["NEW", "SCHEDULED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "CANCELLED"];
 
   for (let i = 0; i < 15; i++) {
     const customer = rng.pick(customers);
@@ -335,9 +333,11 @@ async function seedDemoData() {
     const problemDescription = rng.pick(PROBLEM_DESCRIPTIONS);
     const status = rng.pick(jobStatuses);
 
-    const jobNumber = await getNextJobNumber(prisma, company.id);
+    const jobNumber = await getNextJobNumber(company.id);
     const scheduledStart = jobRng.date(thirtyDaysAgo, thirtyDaysFromNow);
-    const scheduledEnd = new Date(scheduledStart.getTime() + 2 * 60 * 60 * 1000); // 2 hours
+    const scheduledEnd = new Date(
+      scheduledStart.getTime() + 2 * 60 * 60 * 1000,
+    ); // 2 hours
 
     const job = await prisma.job.create({
       data: {
@@ -348,13 +348,22 @@ async function seedDemoData() {
         jobNumber,
         serviceType,
         problemDescription,
-        priority: rng.pick(['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const),
+        priority: rng.pick(["LOW", "NORMAL", "HIGH", "URGENT"] as const),
         status,
         scheduledStart,
         scheduledEnd,
-        startedAt: status === 'IN_PROGRESS' || status === 'COMPLETED' ? scheduledStart : null,
-        completedAt: status === 'COMPLETED' ? new Date(scheduledStart.getTime() + 1.5 * 60 * 60 * 1000) : null,
-        completionSummary: status === 'COMPLETED' ? 'Job completed successfully. AC cooling restored.' : null,
+        startedAt:
+          status === "IN_PROGRESS" || status === "COMPLETED"
+            ? scheduledStart
+            : null,
+        completedAt:
+          status === "COMPLETED"
+            ? new Date(scheduledStart.getTime() + 1.5 * 60 * 60 * 1000)
+            : null,
+        completionSummary:
+          status === "COMPLETED"
+            ? "Job completed successfully. AC cooling restored."
+            : null,
       },
     });
 
@@ -365,7 +374,7 @@ async function seedDemoData() {
         jobId: job.id,
         actorUserId: technician.id,
         toStatus: status,
-        reason: 'Initial status',
+        reason: "Initial status",
       },
     });
 
@@ -374,16 +383,12 @@ async function seedDemoData() {
   }
 
   // Create quotes
-  console.log('📄 Creating quotes...');
+  console.log("📄 Creating quotes...");
   const quotes = [];
   const quoteRng = new SeededRandom(SEEDS.quotes);
-  const quoteStatuses: Array<'DRAFT' | 'SENT' | 'APPROVED' | 'DECLINED' | 'EXPIRED'> = [
-    'DRAFT',
-    'SENT',
-    'APPROVED',
-    'DECLINED',
-    'EXPIRED',
-  ];
+  const quoteStatuses: Array<
+    "DRAFT" | "SENT" | "APPROVED" | "DECLINED" | "EXPIRED"
+  > = ["DRAFT", "SENT", "APPROVED", "DECLINED", "EXPIRED"];
 
   for (let i = 0; i < 8; i++) {
     const customer = rng.pick(customers);
@@ -406,12 +411,15 @@ async function seedDemoData() {
         taxMinor,
         taxRateBps,
         totalMinor,
-        currency: 'PKR',
+        currency: "PKR",
         expiresAt: quoteRng.date(now, thirtyDaysFromNow),
-        sentAt: status !== 'DRAFT' ? now : null,
-        approvedAt: status === 'APPROVED' ? now : null,
-        declinedAt: status === 'DECLINED' ? now : null,
-        shareToken: status === 'SENT' || status === 'APPROVED' ? `quote-${i + 1}-token` : null,
+        sentAt: status !== "DRAFT" ? now : null,
+        approvedAt: status === "APPROVED" ? now : null,
+        declinedAt: status === "DECLINED" ? now : null,
+        shareToken:
+          status === "SENT" || status === "APPROVED"
+            ? `quote-${i + 1}-token`
+            : null,
       },
     });
 
@@ -425,11 +433,11 @@ async function seedDemoData() {
           companyId: company.id,
           quoteId: quote.id,
           description: rng.pick([
-            'AC Compressor replacement',
-            'Refrigerant gas top-up',
-            'Labor charges',
-            'Filter replacement',
-            'Thermostat installation',
+            "AC Compressor replacement",
+            "Refrigerant gas top-up",
+            "Labor charges",
+            "Filter replacement",
+            "Thermostat installation",
           ]),
           quantity,
           unitPriceMinor,
@@ -440,25 +448,22 @@ async function seedDemoData() {
     }
 
     quotes.push(quote);
-    console.log(`✅ Created quote: PKR ${(totalMinor / 100).toFixed(2)} (${status})`);
+    console.log(
+      `✅ Created quote: PKR ${(totalMinor / 100).toFixed(2)} (${status})`,
+    );
   }
 
   // Create invoices
-  console.log('💰 Creating invoices...');
+  console.log("💰 Creating invoices...");
   const invoices = [];
   const invoiceRng = new SeededRandom(SEEDS.invoices);
-  const invoiceStatuses: Array<'DRAFT' | 'ISSUED' | 'PARTIALLY_PAID' | 'PAID' | 'VOID' | 'OVERDUE'> = [
-    'DRAFT',
-    'ISSUED',
-    'PARTIALLY_PAID',
-    'PAID',
-    'VOID',
-    'OVERDUE',
-  ];
+  const invoiceStatuses: Array<
+    "DRAFT" | "ISSUED" | "PARTIALLY_PAID" | "PAID" | "VOID" | "OVERDUE"
+  > = ["DRAFT", "ISSUED", "PARTIALLY_PAID", "PAID", "VOID", "OVERDUE"];
 
   for (let i = 0; i < 6; i++) {
     const customer = rng.pick(customers);
-    const job = rng.pick(jobs.filter((j) => j.status === 'COMPLETED'));
+    const job = rng.pick(jobs.filter((j) => j.status === "COMPLETED"));
     const status = rng.pick(invoiceStatuses);
 
     const subtotalMinor = Math.floor(invoiceRng.range(15000, 150000) * 100); // PKR 150-1500
@@ -466,11 +471,15 @@ async function seedDemoData() {
     const taxMinor = Math.floor((subtotalMinor * taxRateBps) / 10000);
     const totalMinor = subtotalMinor + taxMinor;
 
-    const invoiceNumber = `INV-${String(i + 1).padStart(4, '0')}`;
+    const invoiceNumber = `INV-${String(i + 1).padStart(4, "0")}`;
     const dueAt = invoiceRng.date(now, thirtyDaysFromNow);
 
-    const amountPaidMinor = status === 'PAID' ? totalMinor :
-                           status === 'PARTIALLY_PAID' ? Math.floor(totalMinor * 0.5) : 0;
+    const amountPaidMinor =
+      status === "PAID"
+        ? totalMinor
+        : status === "PARTIALLY_PAID"
+          ? Math.floor(totalMinor * 0.5)
+          : 0;
     const balanceDueMinor = totalMinor - amountPaidMinor;
 
     const invoice = await prisma.invoice.create({
@@ -487,10 +496,10 @@ async function seedDemoData() {
         totalMinor,
         amountPaidMinor,
         balanceDueMinor,
-        currency: 'PKR',
+        currency: "PKR",
         dueAt,
-        issuedAt: status !== 'DRAFT' ? now : null,
-        paidAt: status === 'PAID' ? now : null,
+        issuedAt: status !== "DRAFT" ? now : null,
+        paidAt: status === "PAID" ? now : null,
       },
     });
 
@@ -504,11 +513,11 @@ async function seedDemoData() {
           companyId: company.id,
           invoiceId: invoice.id,
           description: rng.pick([
-            'Service call charges',
-            'Labor charges',
-            'Parts and materials',
-            'Emergency service fee',
-            'Travel charges',
+            "Service call charges",
+            "Labor charges",
+            "Parts and materials",
+            "Emergency service fee",
+            "Travel charges",
           ]),
           quantity,
           unitPriceMinor,
@@ -519,29 +528,31 @@ async function seedDemoData() {
     }
 
     // Create payment if partially or fully paid
-    if (status === 'PARTIALLY_PAID' || status === 'PAID') {
+    if (status === "PARTIALLY_PAID" || status === "PAID") {
       await prisma.payment.create({
         data: {
           companyId: company.id,
           invoiceId: invoice.id,
           createdBy: users[0].id,
           amountMinor: amountPaidMinor,
-          currency: 'PKR',
-          method: rng.pick(['CASH', 'CARD', 'BANK_TRANSFER'] as const),
-          provider: 'manual',
+          currency: "PKR",
+          method: rng.pick(["CASH", "CARD", "BANK_TRANSFER"] as const),
+          provider: "manual",
           idempotencyKey: `payment-${invoice.id}-${Date.now()}`,
         },
       });
     }
 
     invoices.push(invoice);
-    console.log(`✅ Created invoice ${invoiceNumber}: PKR ${(totalMinor / 100).toFixed(2)} (${status})`);
+    console.log(
+      `✅ Created invoice ${invoiceNumber}: PKR ${(totalMinor / 100).toFixed(2)} (${status})`,
+    );
   }
 
   // Create customer reviews for completed jobs
-  console.log('⭐ Creating customer reviews...');
-  const reviewRng = new SeededRandom('reviews');
-  const completedJobs = jobs.filter((j) => j.status === 'COMPLETED');
+  console.log("⭐ Creating customer reviews...");
+  const reviewRng = new SeededRandom("reviews");
+  const completedJobs = jobs.filter((j) => j.status === "COMPLETED");
 
   for (let i = 0; i < 5; i++) {
     const job = reviewRng.pick(completedJobs);
@@ -553,31 +564,34 @@ async function seedDemoData() {
         customerId: job.customerId,
         jobId: job.id,
         rating,
-        comment: rating >= 4 ? 'Excellent service! Very professional.' : 'Good service, but could be faster.',
+        comment:
+          rating >= 4
+            ? "Excellent service! Very professional."
+            : "Good service, but could be faster.",
       },
     });
     console.log(`✅ Created review: ${rating} stars`);
   }
 
-  console.log('\n🎉 Demo data seed completed successfully!');
-  console.log('\n📊 Summary:');
+  console.log("\n🎉 Demo data seed completed successfully!");
+  console.log("\n📊 Summary:");
   console.log(`   - Company: ${company.name}`);
   console.log(`   - Users: ${users.length}`);
   console.log(`   - Customers: ${customers.length}`);
   console.log(`   - Jobs: ${jobs.length}`);
   console.log(`   - Quotes: ${quotes.length}`);
   console.log(`   - Invoices: ${invoices.length}`);
-  console.log('\n🔐 Demo Credentials:');
-  console.log('   Email: admin@aera.demo');
-  console.log('   Password: Demo123!');
-  console.log('\n⚠️  Warning: This is demo data. Do not use in production!');
+  console.log("\n🔐 Demo Credentials:");
+  console.log("   Email: admin@aera.demo");
+  console.log("   Password: Demo123!");
+  console.log("\n⚠️  Warning: This is demo data. Do not use in production!");
 }
 
 async function main() {
   try {
     await seedDemoData();
   } catch (error) {
-    console.error('❌ Error seeding demo data:', error);
+    console.error("❌ Error seeding demo data:", error);
     process.exit(1);
   } finally {
     await prisma.$disconnect();

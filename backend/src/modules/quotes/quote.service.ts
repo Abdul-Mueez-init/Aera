@@ -97,7 +97,7 @@ function calculateTotals(input: CreateQuoteInput) {
   const taxableMinor = subtotalMinor - discountMinor;
   const taxMinor = calculateTax(taxableMinor, input.taxRateBps ?? 0);
   const totalMinor = calculateTotal(subtotalMinor, discountMinor, taxMinor);
-  
+
   return {
     subtotalMinor: Number(subtotalMinor),
     discountMinor: Number(discountMinor),
@@ -147,7 +147,7 @@ function assertTotals(totals: ReturnType<typeof calculateTotals>) {
       BigInt(totals.discountMinor),
       totals.taxRateBps,
     );
-  } catch (error) {
+  } catch {
     throw new AppError("QUOTE_INVALID_TOTALS", "Quote totals are invalid", 422);
   }
 }

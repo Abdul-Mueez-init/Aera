@@ -48,7 +48,7 @@ describe("Money Calculations - Exact Integer Arithmetic", () => {
     it("should use banker's rounding for half-cent cases", () => {
       // 10.00 * 0.005 = 0.05 (exact)
       expect(multiplyMinorByQuantity(1000n, "0.005")).toBe(5n);
-      
+
       // 10.00 * 0.015 = 0.15 (exact)
       expect(multiplyMinorByQuantity(1000n, "0.015")).toBe(15n);
     });
@@ -69,7 +69,9 @@ describe("Money Calculations - Exact Integer Arithmetic", () => {
 
   describe("calculateLineItemTotal", () => {
     it("should be an alias for multiplyMinorByQuantity", () => {
-      expect(calculateLineItemTotal(1000n, "2.5")).toBe(multiplyMinorByQuantity(1000n, "2.5"));
+      expect(calculateLineItemTotal(1000n, "2.5")).toBe(
+        multiplyMinorByQuantity(1000n, "2.5"),
+      );
     });
   });
 
@@ -77,8 +79,8 @@ describe("Money Calculations - Exact Integer Arithmetic", () => {
     it("should sum line item totals correctly", () => {
       const items = [
         { unitPriceMinor: 1000n, quantity: "2" }, // 20.00
-        { unitPriceMinor: 500n, quantity: "1" },  // 5.00
-        { unitPriceMinor: 250n, quantity: "4" },  // 10.00
+        { unitPriceMinor: 500n, quantity: "1" }, // 5.00
+        { unitPriceMinor: 250n, quantity: "4" }, // 10.00
       ];
       expect(calculateSubtotal(items)).toBe(3500n); // 35.00
     });
@@ -86,7 +88,7 @@ describe("Money Calculations - Exact Integer Arithmetic", () => {
     it("should handle fractional quantities in subtotal", () => {
       const items = [
         { unitPriceMinor: 1000n, quantity: "1.5" }, // 15.00
-        { unitPriceMinor: 500n, quantity: "0.5" },  // 2.50
+        { unitPriceMinor: 500n, quantity: "0.5" }, // 2.50
       ];
       expect(calculateSubtotal(items)).toBe(1750n); // 17.50
     });
@@ -112,10 +114,10 @@ describe("Money Calculations - Exact Integer Arithmetic", () => {
     it("should handle half-cent rounding correctly", () => {
       // 9.99 * 10% = 0.999 -> 1.00
       expect(calculateTax(999n, 1000)).toBe(100n);
-      
+
       // 10.01 * 10% = 1.001 -> 1.00
       expect(calculateTax(1001n, 1000)).toBe(100n);
-      
+
       // 10.00 * 7.5% = 0.75 -> 0.75 (exact)
       expect(calculateTax(1000n, 750)).toBe(75n);
     });
@@ -123,10 +125,10 @@ describe("Money Calculations - Exact Integer Arithmetic", () => {
     it("should handle edge cases with half-cent rounding", () => {
       // 1.00 * 5% = 0.05 (exact)
       expect(calculateTax(100n, 500)).toBe(5n);
-      
+
       // 1.00 * 3% = 0.03 (exact)
       expect(calculateTax(100n, 300)).toBe(3n);
-      
+
       // 1.00 * 1% = 0.01 (exact)
       expect(calculateTax(100n, 100)).toBe(1n);
     });
@@ -165,39 +167,49 @@ describe("Money Calculations - Exact Integer Arithmetic", () => {
 
   describe("validateMonetaryCalculations", () => {
     it("should pass valid calculations", () => {
-      expect(() => validateMonetaryCalculations(10000n, 1000n, 750)).not.toThrow();
+      expect(() =>
+        validateMonetaryCalculations(10000n, 1000n, 750),
+      ).not.toThrow();
       expect(() => validateMonetaryCalculations(10000n, 0n, 0)).not.toThrow();
-      expect(() => validateMonetaryCalculations(10000n, 10000n, 10000)).not.toThrow();
+      expect(() =>
+        validateMonetaryCalculations(10000n, 10000n, 10000),
+      ).not.toThrow();
     });
 
     it("should throw on negative discount", () => {
-      expect(() => validateMonetaryCalculations(10000n, -100n, 750)).toThrow("Discount cannot be negative");
+      expect(() => validateMonetaryCalculations(10000n, -100n, 750)).toThrow(
+        "Discount cannot be negative",
+      );
     });
 
     it("should throw on discount exceeding subtotal", () => {
-      expect(() => validateMonetaryCalculations(10000n, 11000n, 750)).toThrow("Discount cannot exceed subtotal");
+      expect(() => validateMonetaryCalculations(10000n, 11000n, 750)).toThrow(
+        "Discount cannot exceed subtotal",
+      );
     });
 
     it("should throw on negative tax rate", () => {
-      expect(() => validateMonetaryCalculations(10000n, 1000n, -100)).toThrow("Tax rate must be between 0 and 10000");
+      expect(() => validateMonetaryCalculations(10000n, 1000n, -100)).toThrow(
+        "Tax rate must be between 0 and 10000",
+      );
     });
 
     it("should throw on tax rate exceeding 100%", () => {
-      expect(() => validateMonetaryCalculations(10000n, 1000n, 10001)).toThrow("Tax rate must be between 0 and 10000");
+      expect(() => validateMonetaryCalculations(10000n, 1000n, 10001)).toThrow(
+        "Tax rate must be between 0 and 10000",
+      );
     });
   });
 
   describe("roundMinor", () => {
     it("should return value unchanged (minor units are already integers)", () => {
-      expect(roundMinor(5n, 2)).toBe(5n);
-      expect(roundMinor(15n, 2)).toBe(15n);
-      expect(roundMinor(25n, 2)).toBe(25n);
+      expect(roundMinor(5n)).toBe(5n);
+      expect(roundMinor(15n)).toBe(15n);
+      expect(roundMinor(25n)).toBe(25n);
     });
 
     it("should handle different scales", () => {
-      expect(roundMinor(12345n, 2)).toBe(12345n);
-      expect(roundMinor(12345n, 1)).toBe(12345n);
-      expect(roundMinor(12345n, 0)).toBe(12345n);
+      expect(roundMinor(12345n)).toBe(12345n);
     });
   });
 
@@ -250,14 +262,14 @@ describe("Money Calculations - Exact Integer Arithmetic", () => {
         { unitPriceMinor: 5000n, quantity: "1.5" }, // 75.00
         { unitPriceMinor: 2500n, quantity: "0.5" }, // 12.50
       ];
-      
+
       const subtotalMinor = calculateSubtotal(items); // 287.50
       const discountMinor = 1000n; // 10.00
       const taxableMinor = subtotalMinor - discountMinor; // 277.50
       const taxRateBps = 750; // 7.5%
       const taxMinor = calculateTax(taxableMinor, taxRateBps); // 20.81
       const totalMinor = calculateTotal(subtotalMinor, discountMinor, taxMinor); // 298.31
-      
+
       expect(subtotalMinor).toBe(28750n);
       expect(taxMinor).toBe(2081n);
       expect(totalMinor).toBe(29831n);
@@ -269,7 +281,7 @@ describe("Money Calculations - Exact Integer Arithmetic", () => {
         { unitPriceMinor: 1000n, quantity: "0.2" }, // 2.00
         { unitPriceMinor: 1000n, quantity: "0.3" }, // 3.00
       ];
-      
+
       const subtotalMinor = calculateSubtotal(items);
       expect(subtotalMinor).toBe(600n); // Exactly 6.00
     });
@@ -279,7 +291,7 @@ describe("Money Calculations - Exact Integer Arithmetic", () => {
       const discountMinor = 0n;
       const taxRateBps = 1000; // 10%
       const taxMinor = calculateTax(subtotalMinor - discountMinor, taxRateBps);
-      
+
       // 9.99 * 10% = 0.999 -> 1.00
       expect(taxMinor).toBe(100n);
     });

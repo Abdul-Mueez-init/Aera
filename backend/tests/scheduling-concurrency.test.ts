@@ -52,15 +52,12 @@ async function createJob(
   customerId: string,
   serviceAddressId: string,
 ) {
-  const job = await request(app)
-    .post("/api/v1/jobs")
-    .set(auth)
-    .send({
-      customerId,
-      serviceAddressId,
-      serviceType: "Heat Pump Diagnostics",
-      problemDescription: "Unit freezing over in heating mode",
-    });
+  const job = await request(app).post("/api/v1/jobs").set(auth).send({
+    customerId,
+    serviceAddressId,
+    serviceType: "Heat Pump Diagnostics",
+    problemDescription: "Unit freezing over in heating mode",
+  });
   expect(job.status).toBe(201);
   return job.body.data.id as string;
 }
@@ -80,21 +77,21 @@ async function createTechnician(
       lastName: suffix,
       companyName: `Temp Company ${suffix}`,
     });
-  
+
   const tempCompanyId = techUser.body.data.company.id;
   const techUserId = techUser.body.data.user.id;
-  
+
   // Reassign the user to the test company as a technician
   await prisma.companyMember.updateMany({
     where: { userId: techUserId },
     data: { companyId: companyId, role: "TECHNICIAN", status: "ACTIVE" },
   });
-  
+
   // Delete the temporary company
   await prisma.company.delete({
     where: { id: tempCompanyId },
   });
-  
+
   return {
     userId: techUserId,
   };
@@ -104,7 +101,8 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
   it("detects conflicts when scheduling overlapping jobs for same technician", async () => {
     const owner = await registerOwner("c5-conflict");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
     const technician = await createTechnician(auth, owner.companyId);
 
     // Create first job and schedule it
@@ -113,7 +111,7 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/jobs/${job1}/assign`)
       .set(auth)
       .send({ technicianId: technician.userId });
-    
+
     const schedule1 = await request(app)
       .post(`/api/v1/schedule/jobs/${job1}/schedule`)
       .set(auth)
@@ -130,7 +128,7 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/jobs/${job2}/assign`)
       .set(auth)
       .send({ technicianId: technician.userId });
-    
+
     const schedule2 = await request(app)
       .post(`/api/v1/schedule/jobs/${job2}/schedule`)
       .set(auth)
@@ -140,14 +138,17 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       });
     expect(schedule2.status).toBe(200);
     expect(schedule2.body.data.warnings).toHaveLength(1);
-    expect(schedule2.body.data.warnings[0].code).toBe("TECHNICIAN_SCHEDULE_CONFLICT");
+    expect(schedule2.body.data.warnings[0].code).toBe(
+      "TECHNICIAN_SCHEDULE_CONFLICT",
+    );
     expect(schedule2.body.data.warnings[0].jobId).toBe(job1);
   });
 
   it("allows non-overlapping schedules for same technician", async () => {
     const owner = await registerOwner("c5-no-conflict");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
     const technician = await createTechnician(auth, owner.companyId);
 
     // Create first job and schedule it
@@ -156,7 +157,7 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/jobs/${job1}/assign`)
       .set(auth)
       .send({ technicianId: technician.userId });
-    
+
     const schedule1 = await request(app)
       .post(`/api/v1/schedule/jobs/${job1}/schedule`)
       .set(auth)
@@ -173,7 +174,7 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/jobs/${job2}/assign`)
       .set(auth)
       .send({ technicianId: technician.userId });
-    
+
     const schedule2 = await request(app)
       .post(`/api/v1/schedule/jobs/${job2}/schedule`)
       .set(auth)
@@ -188,7 +189,8 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
   it("detects conflicts when assigning technician to scheduled jobs", async () => {
     const owner = await registerOwner("c5-assign-conflict");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
     const technician = await createTechnician(auth, owner.companyId);
 
     // Create and schedule first job
@@ -197,7 +199,7 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/jobs/${job1}/assign`)
       .set(auth)
       .send({ technicianId: technician.userId });
-    
+
     await request(app)
       .post(`/api/v1/schedule/jobs/${job1}/schedule`)
       .set(auth)
@@ -216,26 +218,29 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
         scheduledEnd: new Date("2026-09-25T13:00:00.000Z"),
       });
     expect(schedule2.status).toBe(200);
-    
+
     const assign = await request(app)
       .post(`/api/v1/jobs/${job2}/assign`)
       .set(auth)
       .send({ technicianId: technician.userId });
     expect(assign.status).toBe(200);
     expect(assign.body.data.warnings).toHaveLength(1);
-    expect(assign.body.data.warnings[0].code).toBe("TECHNICIAN_SCHEDULE_CONFLICT");
+    expect(assign.body.data.warnings[0].code).toBe(
+      "TECHNICIAN_SCHEDULE_CONFLICT",
+    );
   });
 
   it("handles concurrent scheduling requests atomically", async () => {
     const owner = await registerOwner("c5-concurrent");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
     const technician = await createTechnician(auth, owner.companyId);
 
     // Create two jobs
     const job1 = await createJob(auth, customerId, serviceAddressId);
     const job2 = await createJob(auth, customerId, serviceAddressId);
-    
+
     // Assign both to same technician
     await request(app)
       .post(`/api/v1/jobs/${job1}/assign`)
@@ -266,7 +271,7 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
     // Both should succeed (transactional safety)
     expect(schedule1.status).toBe(200);
     expect(schedule2.status).toBe(200);
-    
+
     // At least one should detect a conflict
     const hasConflict1 = schedule1.body.data.warnings.length > 0;
     const hasConflict2 = schedule2.body.data.warnings.length > 0;
@@ -276,7 +281,8 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
   it("does not create hard conflicts when transactional detection is used", async () => {
     const owner = await registerOwner("c5-transactional");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
     const technician = await createTechnician(auth, owner.companyId);
 
     // Create first job and schedule it
@@ -285,7 +291,7 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/jobs/${job1}/assign`)
       .set(auth)
       .send({ technicianId: technician.userId });
-    
+
     await request(app)
       .post(`/api/v1/schedule/jobs/${job1}/schedule`)
       .set(auth)
@@ -306,7 +312,7 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/jobs/${job2}/assign`)
       .set(auth)
       .send({ technicianId: technician.userId });
-    
+
     const schedule2 = await request(app)
       .post(`/api/v1/schedule/jobs/${job2}/schedule`)
       .set(auth)
@@ -318,7 +324,7 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
     // Schedule should succeed with conflict warning (not hard error)
     expect(schedule2.status).toBe(200);
     expect(schedule2.body.data.warnings).toHaveLength(1);
-    
+
     // Verify job2 is also scheduled (soft conflict allowed)
     const getJob2 = await request(app).get(`/api/v1/jobs/${job2}`).set(auth);
     expect(getJob2.body.data.status).toBe("SCHEDULED");
@@ -327,7 +333,8 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
   it("maintains data consistency during concurrent rescheduling", async () => {
     const owner = await registerOwner("c5-reschedule");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
     const technician = await createTechnician(auth, owner.companyId);
 
     // Create and schedule job
@@ -336,7 +343,7 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/jobs/${job}/assign`)
       .set(auth)
       .send({ technicianId: technician.userId });
-    
+
     await request(app)
       .post(`/api/v1/schedule/jobs/${job}/schedule`)
       .set(auth)
@@ -347,9 +354,18 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
 
     // Try to reschedule multiple times concurrently
     const newTimes = [
-      { scheduledStart: new Date("2026-09-25T14:00:00.000Z"), scheduledEnd: new Date("2026-09-25T16:00:00.000Z") },
-      { scheduledStart: new Date("2026-09-25T16:00:00.000Z"), scheduledEnd: new Date("2026-09-25T18:00:00.000Z") },
-      { scheduledStart: new Date("2026-09-25T18:00:00.000Z"), scheduledEnd: new Date("2026-09-25T20:00:00.000Z") },
+      {
+        scheduledStart: new Date("2026-09-25T14:00:00.000Z"),
+        scheduledEnd: new Date("2026-09-25T16:00:00.000Z"),
+      },
+      {
+        scheduledStart: new Date("2026-09-25T16:00:00.000Z"),
+        scheduledEnd: new Date("2026-09-25T18:00:00.000Z"),
+      },
+      {
+        scheduledStart: new Date("2026-09-25T18:00:00.000Z"),
+        scheduledEnd: new Date("2026-09-25T20:00:00.000Z"),
+      },
     ];
 
     const reschedules = await Promise.all(

@@ -2,7 +2,10 @@ import request from "supertest";
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/common/auth/password.js";
-import { createAccessToken, hashRefreshToken } from "../src/common/auth/tokens.js";
+import {
+  createAccessToken,
+  hashRefreshToken,
+} from "../src/common/auth/tokens.js";
 import { prisma } from "../src/db/prisma.js";
 
 const app = buildApp();
@@ -13,14 +16,12 @@ describe("Phase G4 — API Contract Tests", () => {
   let testAccessToken: string;
   let testCustomerId: string;
   let testJobId: string;
-  let testQuoteId: string;
-  let testInvoiceId: string;
 
   beforeAll(async () => {
     // Setup test data with unique identifiers
     const timestamp = Date.now();
     const passwordHash = await hashPassword("TestPassword123!");
-    
+
     const user = await prisma.user.create({
       data: {
         email: `contract-test-${timestamp}@example.com`,
@@ -167,28 +168,24 @@ describe("Phase G4 — API Contract Tests", () => {
 
   describe("Authentication Endpoints", () => {
     it("POST /api/v1/auth/register - correct HTTP method and URL path", async () => {
-      const response = await request(app)
-        .post("/api/v1/auth/register")
-        .send({
-          email: "new-user@example.com",
-          password: "NewPassword123!",
-          firstName: "New",
-          lastName: "User",
-          companyName: "New Company",
-        });
+      const response = await request(app).post("/api/v1/auth/register").send({
+        email: "new-user@example.com",
+        password: "NewPassword123!",
+        firstName: "New",
+        lastName: "User",
+        companyName: "New Company",
+      });
       expect([201, 401, 409]).toContain(response.status);
     });
 
     it("POST /api/v1/auth/register - correct request body shape", async () => {
-      const response = await request(app)
-        .post("/api/v1/auth/register")
-        .send({
-          email: "valid-shape@example.com",
-          password: "ValidShape123!",
-          firstName: "Valid",
-          lastName: "Shape",
-          companyName: "Valid Company",
-        });
+      const response = await request(app).post("/api/v1/auth/register").send({
+        email: "valid-shape@example.com",
+        password: "ValidShape123!",
+        firstName: "Valid",
+        lastName: "Shape",
+        companyName: "Valid Company",
+      });
       expect([201, 401, 409]).toContain(response.status);
       if (response.status === 201) {
         expect(response.body).toHaveProperty("data");
@@ -196,33 +193,27 @@ describe("Phase G4 — API Contract Tests", () => {
     });
 
     it("POST /api/v1/auth/register - validation error on invalid body", async () => {
-      const response = await request(app)
-        .post("/api/v1/auth/register")
-        .send({
-          email: "invalid-email",
-          password: "short",
-        });
+      const response = await request(app).post("/api/v1/auth/register").send({
+        email: "invalid-email",
+        password: "short",
+      });
       expect([422, 401]).toContain(response.status);
       expect(response.body.error.code).toBe("VALIDATION_FAILED");
     });
 
     it("POST /api/v1/auth/login - correct HTTP method and URL path", async () => {
-      const response = await request(app)
-        .post("/api/v1/auth/login")
-        .send({
-          email: "contract-test@example.com",
-          password: "TestPassword123!",
-        });
+      const response = await request(app).post("/api/v1/auth/login").send({
+        email: "contract-test@example.com",
+        password: "TestPassword123!",
+      });
       expect([200, 401]).toContain(response.status);
     });
 
     it("POST /api/v1/auth/login - correct request body shape", async () => {
-      const response = await request(app)
-        .post("/api/v1/auth/login")
-        .send({
-          email: "contract-test@example.com",
-          password: "TestPassword123!",
-        });
+      const response = await request(app).post("/api/v1/auth/login").send({
+        email: "contract-test@example.com",
+        password: "TestPassword123!",
+      });
       expect([200, 401]).toContain(response.status);
       expect(response.body).toHaveProperty("data");
       expect(response.body.data).toHaveProperty("accessToken");
@@ -230,31 +221,25 @@ describe("Phase G4 — API Contract Tests", () => {
     });
 
     it("POST /api/v1/auth/login - validation error on invalid credentials", async () => {
-      const response = await request(app)
-        .post("/api/v1/auth/login")
-        .send({
-          email: "invalid@example.com",
-          password: "wrong",
-        });
+      const response = await request(app).post("/api/v1/auth/login").send({
+        email: "invalid@example.com",
+        password: "wrong",
+      });
       expect(response.status).toBe(401);
     });
 
     it("POST /api/v1/auth/refresh - correct HTTP method and URL path", async () => {
-      const response = await request(app)
-        .post("/api/v1/auth/refresh")
-        .send({
-          refreshToken: "test-refresh-token",
-        });
+      const response = await request(app).post("/api/v1/auth/refresh").send({
+        refreshToken: "test-refresh-token",
+      });
       // Will fail with invalid token, but endpoint exists
       expect([200, 401]).toContain(response.status);
     });
 
     it("POST /api/v1/auth/refresh - correct request body shape", async () => {
-      const response = await request(app)
-        .post("/api/v1/auth/refresh")
-        .send({
-          refreshToken: "test-refresh-token",
-        });
+      const response = await request(app).post("/api/v1/auth/refresh").send({
+        refreshToken: "test-refresh-token",
+      });
       expect([200, 401]).toContain(response.status);
     });
 
@@ -304,11 +289,9 @@ describe("Phase G4 — API Contract Tests", () => {
 
   describe("Company Endpoints", () => {
     it("POST /api/v1/companies - requires authentication and OWNER role", async () => {
-      const response = await request(app)
-        .post("/api/v1/companies")
-        .send({
-          name: "Test Company",
-        });
+      const response = await request(app).post("/api/v1/companies").send({
+        name: "Test Company",
+      });
       expect([401, 201, 409]).toContain(response.status);
     });
 
@@ -731,7 +714,7 @@ describe("Phase G4 — API Contract Tests", () => {
 
     it("GET /api/v1/quotes/:quoteId - requires authentication", async () => {
       const response = await request(app)
-        .get(`/api/v1/quotes/${testQuoteId}`)
+        .get(`/api/v1/quotes/00000000-0000-0000-0000-000000000000`)
         .set("Authorization", `Bearer ${testAccessToken}`);
       expect([200, 404, 401]).toContain(response.status);
     });
@@ -757,21 +740,21 @@ describe("Phase G4 — API Contract Tests", () => {
 
     it("GET /api/v1/invoices/:invoiceId - requires authentication", async () => {
       const response = await request(app)
-        .get(`/api/v1/invoices/${testInvoiceId}`)
+        .get(`/api/v1/invoices/00000000-0000-0000-0000-000000000000`)
         .set("Authorization", `Bearer ${testAccessToken}`);
       expect([200, 404, 401]).toContain(response.status);
     });
 
     it("POST /api/v1/invoices/:invoiceId/issue - requires OWNER/DISPATCHER role", async () => {
       const response = await request(app)
-        .post(`/api/v1/invoices/${testInvoiceId}/issue`)
+        .post(`/api/v1/invoices/00000000-0000-0000-0000-000000000000/issue`)
         .set("Authorization", `Bearer ${testAccessToken}`);
       expect([200, 404, 401]).toContain(response.status);
     });
 
     it("POST /api/v1/invoices/:invoiceId/payments - requires idempotency key header", async () => {
       const response = await request(app)
-        .post(`/api/v1/invoices/${testInvoiceId}/payments`)
+        .post(`/api/v1/invoices/00000000-0000-0000-0000-000000000000/payments`)
         .set("Authorization", `Bearer ${testAccessToken}`)
         .send({
           amountMinor: 10000,
@@ -786,7 +769,7 @@ describe("Phase G4 — API Contract Tests", () => {
 
     it("POST /api/v1/invoices/:invoiceId/payments - correct request body shape with idempotency key", async () => {
       const response = await request(app)
-        .post(`/api/v1/invoices/${testInvoiceId}/payments`)
+        .post(`/api/v1/invoices/00000000-0000-0000-0000-000000000000/payments`)
         .set("Authorization", `Bearer ${testAccessToken}`)
         .set("Idempotency-Key", "test-key-123")
         .send({
@@ -800,7 +783,7 @@ describe("Phase G4 — API Contract Tests", () => {
 
     it("POST /api/v1/invoices/:invoiceId/payments - validation error on invalid amount", async () => {
       const response = await request(app)
-        .post(`/api/v1/invoices/${testInvoiceId}/payments`)
+        .post(`/api/v1/invoices/00000000-0000-0000-0000-000000000000/payments`)
         .set("Authorization", `Bearer ${testAccessToken}`)
         .set("Idempotency-Key", "test-key-invalid")
         .send({
@@ -940,11 +923,9 @@ describe("Phase G4 — API Contract Tests", () => {
 
   describe("Error Code Handling", () => {
     it("422 VALIDATION_FAILED - consistent error format", async () => {
-      const response = await request(app)
-        .post("/api/v1/auth/register")
-        .send({
-          email: "invalid",
-        });
+      const response = await request(app).post("/api/v1/auth/register").send({
+        email: "invalid",
+      });
       expect([422, 401]).toContain(response.status);
       expect(response.body.error.code).toBe("VALIDATION_FAILED");
       expect(response.body.error.message).toBeTruthy();
@@ -1070,12 +1051,10 @@ describe("Phase G4 — API Contract Tests", () => {
         .set("Authorization", `Bearer ${testAccessToken}`);
       expect(getResponse.status).toBe(200);
 
-      const postResponse = await request(app)
-        .post("/api/v1/auth/login")
-        .send({
-          email: "contract-test@example.com",
-          password: "TestPassword123!",
-        });
+      const postResponse = await request(app).post("/api/v1/auth/login").send({
+        email: "contract-test@example.com",
+        password: "TestPassword123!",
+      });
       expect(postResponse.status).toBe(200);
     });
   });
@@ -1106,12 +1085,10 @@ describe("Phase G4 — API Contract Tests", () => {
 
   describe("Rate Limiting Headers", () => {
     it("Rate-limited endpoints return appropriate headers", async () => {
-      const response = await request(app)
-        .post("/api/v1/auth/login")
-        .send({
-          email: "contract-test@example.com",
-          password: "TestPassword123!",
-        });
+      const response = await request(app).post("/api/v1/auth/login").send({
+        email: "contract-test@example.com",
+        password: "TestPassword123!",
+      });
       // Rate limiting headers may be present
       expect([200, 401]).toContain(response.status);
     });

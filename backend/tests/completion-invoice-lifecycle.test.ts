@@ -65,7 +65,12 @@ async function createJob(
 async function addJobPart(
   auth: { Authorization: string },
   jobId: string,
-  part: { name: string; quantity: number; unitPriceMinor: number; currency?: string },
+  part: {
+    name: string;
+    quantity: number;
+    unitPriceMinor: number;
+    currency?: string;
+  },
 ) {
   const res = await request(app)
     .post(`/api/v1/jobs/${jobId}/parts`)
@@ -105,7 +110,8 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
   it("executes the full customer-to-cash lifecycle: job -> parts -> completion -> invoice -> payment", async () => {
     const owner = await registerOwner("c3-flow");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
 
     await startJob(auth, jobId);
@@ -126,7 +132,9 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
     const completeRes = await request(app)
       .post(`/api/v1/jobs/${jobId}/complete`)
       .set(auth)
-      .send({ summary: "Replaced defrost board and topped up 2 lbs refrigerant." });
+      .send({
+        summary: "Replaced defrost board and topped up 2 lbs refrigerant.",
+      });
     expect(completeRes.status).toBe(200);
     expect(completeRes.body.data.status).toBe("COMPLETED");
     expect(completeRes.body.data.completedAt).toBeTruthy();
@@ -183,7 +191,8 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
   it("performs atomic auto-invoice generation inside job completion transaction", async () => {
     const owner = await registerOwner("c3-auto");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
 
     await startJob(auth, jobId);
@@ -199,7 +208,8 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
       .post(`/api/v1/jobs/${jobId}/complete`)
       .set(auth)
       .send({
-        summary: "Installed new dual run capacitor and verified blower motor operation.",
+        summary:
+          "Installed new dual run capacitor and verified blower motor operation.",
         autoInvoice: true,
       });
     expect(completeRes.status).toBe(200);
@@ -220,7 +230,8 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
   it("rolls back job completion atomically when auto-invoice fails on $0 amount (leaves no ambiguous state)", async () => {
     const owner = await registerOwner("c3-rollback");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
 
     await startJob(auth, jobId);
@@ -256,7 +267,8 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
   it("rejects empty/zero-value invoice generation without explicit confirmation, but allows when confirmed", async () => {
     const owner = await registerOwner("c3-zero");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
 
     await startJob(auth, jobId);
@@ -283,13 +295,16 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
     expect(allowRes.status).toBe(201);
     expect(allowRes.body.data.totalMinor).toBe("0");
     expect(allowRes.body.data.balanceDueMinor).toBe("0");
-    expect(allowRes.body.data.items[0].description).toContain("Zero-cost / Courtesy Service");
+    expect(allowRes.body.data.items[0].description).toContain(
+      "Zero-cost / Courtesy Service",
+    );
   });
 
   it("handles repeated completion and invoice commands idempotently without duplicating financial records", async () => {
     const owner = await registerOwner("c3-idempotent");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
 
     await startJob(auth, jobId);
@@ -343,7 +358,8 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
     const authA = { Authorization: `Bearer ${ownerA.accessToken}` };
     const authB = { Authorization: `Bearer ${ownerB.accessToken}` };
 
-    const { customerId, serviceAddressId } = await createCustomerWithAddress(authA);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(authA);
     const jobIdA = await createJob(authA, customerId, serviceAddressId);
 
     await startJob(authA, jobIdA);

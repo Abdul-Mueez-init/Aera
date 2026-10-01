@@ -2,7 +2,10 @@ import request from "supertest";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/common/auth/password.js";
-import { createAccessToken, hashRefreshToken } from "../src/common/auth/tokens.js";
+import {
+  createAccessToken,
+  hashRefreshToken,
+} from "../src/common/auth/tokens.js";
 import { prisma } from "../src/db/prisma.js";
 
 const app = buildApp();
@@ -18,7 +21,7 @@ describe("Phase G5 — API Load Smoke Tests", () => {
     // Setup test data
     const timestamp = Date.now();
     const passwordHash = await hashPassword("TestPassword123!");
-    
+
     const user = await prisma.user.create({
       data: {
         email: `load-test-${timestamp}@example.com`,
@@ -107,10 +110,14 @@ describe("Phase G5 — API Load Smoke Tests", () => {
   afterAll(async () => {
     try {
       await prisma.job.deleteMany({ where: { companyId: testCompanyId } });
-      await prisma.serviceAddress.deleteMany({ where: { companyId: testCompanyId } });
+      await prisma.serviceAddress.deleteMany({
+        where: { companyId: testCompanyId },
+      });
       await prisma.customer.deleteMany({ where: { companyId: testCompanyId } });
       await prisma.refreshSession.deleteMany({ where: { userId: testUserId } });
-      await prisma.companyMember.deleteMany({ where: { companyId: testCompanyId } });
+      await prisma.companyMember.deleteMany({
+        where: { companyId: testCompanyId },
+      });
       await prisma.company.deleteMany({ where: { id: testCompanyId } });
       await prisma.user.deleteMany({ where: { id: testUserId } });
     } catch (error) {
@@ -121,14 +128,14 @@ describe("Phase G5 — API Load Smoke Tests", () => {
   describe("Concurrent Read Operations", () => {
     it("handles 10 concurrent GET /health requests", async () => {
       const requests = Array.from({ length: 10 }, () =>
-        request(app).get("/health")
+        request(app).get("/health"),
       );
-      
+
       const startTime = Date.now();
       const responses = await Promise.all(requests);
       const duration = Date.now() - startTime;
-      
-      const allOk = responses.every(r => r.status === 200);
+
+      const allOk = responses.every((r) => r.status === 200);
       expect(allOk).toBe(true);
       expect(duration).toBeLessThan(2000); // Should complete within 2 seconds
     });
@@ -137,14 +144,16 @@ describe("Phase G5 — API Load Smoke Tests", () => {
       const requests = Array.from({ length: 10 }, () =>
         request(app)
           .get("/api/v1/customers")
-          .set("Authorization", `Bearer ${testAccessToken}`)
+          .set("Authorization", `Bearer ${testAccessToken}`),
       );
-      
+
       const startTime = Date.now();
       const responses = await Promise.all(requests);
       const duration = Date.now() - startTime;
-      
-      const allOk = responses.every(r => r.status === 200 || r.status === 401);
+
+      const allOk = responses.every(
+        (r) => r.status === 200 || r.status === 401,
+      );
       expect(allOk).toBe(true);
       expect(duration).toBeLessThan(3000); // Should complete within 3 seconds
     });
@@ -153,14 +162,16 @@ describe("Phase G5 — API Load Smoke Tests", () => {
       const requests = Array.from({ length: 10 }, () =>
         request(app)
           .get("/api/v1/jobs")
-          .set("Authorization", `Bearer ${testAccessToken}`)
+          .set("Authorization", `Bearer ${testAccessToken}`),
       );
-      
+
       const startTime = Date.now();
       const responses = await Promise.all(requests);
       const duration = Date.now() - startTime;
-      
-      const allOk = responses.every(r => r.status === 200 || r.status === 401);
+
+      const allOk = responses.every(
+        (r) => r.status === 200 || r.status === 401,
+      );
       expect(allOk).toBe(true);
       expect(duration).toBeLessThan(3000); // Should complete within 3 seconds
     });
@@ -177,14 +188,16 @@ describe("Phase G5 — API Load Smoke Tests", () => {
             firstName: `Load${i}`,
             lastName: "Customer",
             email: `load${i}-${timestamp}@example.com`,
-          })
+          }),
       );
-      
+
       const startTime = Date.now();
       const responses = await Promise.all(requests);
       const duration = Date.now() - startTime;
-      
-      const allOk = responses.every(r => r.status === 201 || r.status === 401);
+
+      const allOk = responses.every(
+        (r) => r.status === 201 || r.status === 401,
+      );
       expect(allOk).toBe(true);
       expect(duration).toBeLessThan(5000); // Should complete within 5 seconds
     });
@@ -218,13 +231,17 @@ describe("Phase G5 — API Load Smoke Tests", () => {
             email: `mixed-${timestamp}@example.com`,
           }),
       ];
-      
+
       const startTime = Date.now();
       const responses = await Promise.all(requests);
       const duration = Date.now() - startTime;
-      
-      const allOk = responses.every(r => 
-        r.status === 200 || r.status === 201 || r.status === 401 || r.status === 404
+
+      const allOk = responses.every(
+        (r) =>
+          r.status === 200 ||
+          r.status === 201 ||
+          r.status === 401 ||
+          r.status === 404,
       );
       expect(allOk).toBe(true);
       expect(duration).toBeLessThan(5000); // Should complete within 5 seconds
@@ -236,7 +253,7 @@ describe("Phase G5 — API Load Smoke Tests", () => {
       const startTime = Date.now();
       const response = await request(app).get("/health");
       const duration = Date.now() - startTime;
-      
+
       expect(response.status).toBe(200);
       expect(duration).toBeLessThan(100);
     });
@@ -247,7 +264,7 @@ describe("Phase G5 — API Load Smoke Tests", () => {
         .get("/api/v1/customers")
         .set("Authorization", `Bearer ${testAccessToken}`);
       const duration = Date.now() - startTime;
-      
+
       expect([200, 401]).toContain(response.status);
       expect(duration).toBeLessThan(500);
     });
@@ -258,7 +275,7 @@ describe("Phase G5 — API Load Smoke Tests", () => {
         .get("/api/v1/jobs")
         .set("Authorization", `Bearer ${testAccessToken}`);
       const duration = Date.now() - startTime;
-      
+
       expect([200, 401]).toContain(response.status);
       expect(duration).toBeLessThan(500);
     });

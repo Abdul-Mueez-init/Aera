@@ -347,82 +347,87 @@ export async function assignJob(
   jobId: string,
   technicianId: string | null,
 ) {
-  return prisma.$transaction(async (transaction) => {
-    const job = await transaction.job.findFirst({
-      where: { id: jobId, companyId: context.companyId },
-      select: {
-        id: true,
-        status: true,
-        scheduledStart: true,
-        scheduledEnd: true,
-      },
-    });
-    if (!job) {
-      throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
-    }
-    if (job.status === "COMPLETED" || job.status === "CANCELLED") {
-      throw new AppError("JOB_IMMUTABLE", "Final jobs cannot be assigned", 409);
-    }
-
-    if (technicianId) {
-      const technician = await transaction.companyMember.findFirst({
-        where: {
-          companyId: context.companyId,
-          userId: technicianId,
-          role: "TECHNICIAN",
-          status: "ACTIVE",
+  return prisma
+    .$transaction(async (transaction) => {
+      const job = await transaction.job.findFirst({
+        where: { id: jobId, companyId: context.companyId },
+        select: {
+          id: true,
+          status: true,
+          scheduledStart: true,
+          scheduledEnd: true,
         },
       });
-      if (!technician) {
+      if (!job) {
+        throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+      }
+      if (job.status === "COMPLETED" || job.status === "CANCELLED") {
         throw new AppError(
-          "JOB_INVALID_ASSIGNEE",
-          "Active technician not found",
-          422,
+          "JOB_IMMUTABLE",
+          "Final jobs cannot be assigned",
+          409,
         );
       }
-    }
 
-    const conflicts =
-      technicianId && job.scheduledStart && job.scheduledEnd
-        ? await transaction.job.findMany({
-            where: {
-              companyId: context.companyId,
-              id: { not: jobId },
-              assignedTechnicianId: technicianId,
-              scheduledStart: { lt: job.scheduledEnd },
-              scheduledEnd: { gt: job.scheduledStart },
-              status: { notIn: ["CANCELLED", "COMPLETED"] },
-            },
-            select: { id: true, jobNumber: true },
-          })
-        : [];
+      if (technicianId) {
+        const technician = await transaction.companyMember.findFirst({
+          where: {
+            companyId: context.companyId,
+            userId: technicianId,
+            role: "TECHNICIAN",
+            status: "ACTIVE",
+          },
+        });
+        if (!technician) {
+          throw new AppError(
+            "JOB_INVALID_ASSIGNEE",
+            "Active technician not found",
+            422,
+          );
+        }
+      }
 
-    await transaction.job.update({
-      where: { id: jobId },
-      data: { assignedTechnicianId: technicianId },
+      const conflicts =
+        technicianId && job.scheduledStart && job.scheduledEnd
+          ? await transaction.job.findMany({
+              where: {
+                companyId: context.companyId,
+                id: { not: jobId },
+                assignedTechnicianId: technicianId,
+                scheduledStart: { lt: job.scheduledEnd },
+                scheduledEnd: { gt: job.scheduledStart },
+                status: { notIn: ["CANCELLED", "COMPLETED"] },
+              },
+              select: { id: true, jobNumber: true },
+            })
+          : [];
+
+      await transaction.job.update({
+        where: { id: jobId },
+        data: { assignedTechnicianId: technicianId },
+      });
+
+      return {
+        conflicts,
+        technicianId,
+      };
+    })
+    .then(async ({ conflicts, technicianId }) => {
+      void notificationPublisher.publish({
+        type: "JOB_ASSIGNED",
+        companyId: context.companyId,
+        jobId,
+        recipientUserId: technicianId ?? undefined,
+      });
+      return {
+        job: await getJob(context, jobId),
+        warnings: conflicts.map((conflict) => ({
+          code: "TECHNICIAN_SCHEDULE_CONFLICT",
+          jobId: conflict.id,
+          jobNumber: conflict.jobNumber,
+        })),
+      };
     });
-
-    return {
-      job,
-      conflicts,
-      technicianId,
-    };
-  }).then(async ({ job, conflicts, technicianId }) => {
-    void notificationPublisher.publish({
-      type: "JOB_ASSIGNED",
-      companyId: context.companyId,
-      jobId,
-      recipientUserId: technicianId ?? undefined,
-    });
-    return {
-      job: await getJob(context, jobId),
-      warnings: conflicts.map((conflict) => ({
-        code: "TECHNICIAN_SCHEDULE_CONFLICT",
-        jobId: conflict.id,
-        jobNumber: conflict.jobNumber,
-      })),
-    };
-  });
 }
 
 export async function transitionJob(
@@ -536,7 +541,7 @@ export async function presignJobPhoto(
   mimeType: string,
 ): Promise<SignedUploadResult> {
   await assertExecutableJob(context, jobId);
-  
+
   const result = await supabaseStorageAdapter.createSignedUploadUrl({
     companyId: context.companyId,
     jobId,
@@ -565,7 +570,7 @@ export async function addJobPhoto(
   input: JobPhotoInput,
 ) {
   await assertExecutableJob(context, jobId);
-  
+
   // Validate against presigned upload record
   const presignedUpload = await prisma.presignedUpload.findUnique({
     where: { objectKey: input.objectKey.trim() },
