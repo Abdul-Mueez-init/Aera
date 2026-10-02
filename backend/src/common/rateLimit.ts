@@ -1,4 +1,5 @@
 import rateLimit from "express-rate-limit";
+import { env } from "../config/env.js";
 import { AppError } from "./errors.js";
 
 /**
@@ -22,6 +23,33 @@ export const authRateLimiter = rateLimit({
         : "unknown";
     return `${request.ip}:${email}`;
   },
+  handler: (_request, _response, next) => {
+    next(
+      new AppError(
+        "RATE_LIMITED",
+        "Too many attempts. Please try again later.",
+        429,
+      ),
+    );
+  },
+});
+
+/**
+ * Invitation acceptance has no email in the request body (it is identified by
+ * an opaque token), so it must NOT share authRateLimiter's `ip:email` key -
+ * every request would collapse into one `ip:unknown` bucket and lock out all
+ * legitimate invitees behind the same IP (office NAT, test runner, etc.).
+ *
+ * Keyed by IP only, deliberately not by token: keying by the submitted token
+ * would hand a brute-forcer a fresh bucket per guess. Skipped under
+ * NODE_ENV=test because the whole suite shares one process and one IP.
+ */
+export const invitationRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === "test",
   handler: (_request, _response, next) => {
     next(
       new AppError(

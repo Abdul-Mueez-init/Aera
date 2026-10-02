@@ -21,6 +21,10 @@ const envSchema = z.object({
     .default("development"),
   HOST: z.string().default("127.0.0.1"),
   PORT: z.coerce.number().int().positive().default(4000),
+  // Number of reverse-proxy hops in front of the API (Render/Railway/Fly = 1).
+  // 0 = no proxy. Without this, request.ip is the proxy's IP for every client,
+  // so IP-keyed rate limits would be shared across ALL users.
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   LOG_LEVEL: z.string().default("info"),
   DATABASE_URL: z.string().url(),
   DIRECT_URL: z.string().url(),

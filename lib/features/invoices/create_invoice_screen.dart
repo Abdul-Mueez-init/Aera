@@ -26,7 +26,11 @@ final _completedJobsProvider = FutureProvider.autoDispose<List<Job>>((
 });
 
 class CreateInvoiceScreen extends ConsumerStatefulWidget {
-  const CreateInvoiceScreen({super.key});
+  const CreateInvoiceScreen({super.key, this.initialJobId});
+
+  /// Optional job to preselect (from `/create-invoice?jobId=...`). Only applied
+  /// if that job is in the COMPLETED list; otherwise the picker starts empty.
+  final String? initialJobId;
 
   @override
   ConsumerState<CreateInvoiceScreen> createState() =>
@@ -46,6 +50,12 @@ Job? _findById(List<Job> jobs, String? id) {
 class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
   String? _jobId;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _jobId = widget.initialJobId;
+  }
 
   Future<void> _submit() async {
     final jobId = _jobId;

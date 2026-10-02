@@ -2,7 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../common/auth/auth.middleware.js";
 import { verifyAccessToken } from "../../common/auth/tokens.js";
-import { authRateLimiter, refreshRateLimiter } from "../../common/rateLimit.js";
+import {
+  authRateLimiter,
+  invitationRateLimiter,
+  refreshRateLimiter,
+} from "../../common/rateLimit.js";
 import {
   acceptInvitationAndLogin,
   getCurrentUser,
@@ -82,7 +86,7 @@ router.post("/refresh", refreshRateLimiter, async (request, response) => {
 
 router.post(
   "/accept-invitation",
-  authRateLimiter,
+  invitationRateLimiter,
   async (request, response) => {
     const parsed = acceptInvitationSchema.safeParse(request.body);
     if (!parsed.success) {

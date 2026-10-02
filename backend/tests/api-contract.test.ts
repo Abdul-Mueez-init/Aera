@@ -12,6 +12,7 @@ const app = buildApp();
 
 describe("Phase G4 — API Contract Tests", () => {
   let testUserId: string;
+  let testEmail: string;
   let testCompanyId: string;
   let testAccessToken: string;
   let testCustomerId: string;
@@ -21,10 +22,11 @@ describe("Phase G4 — API Contract Tests", () => {
     // Setup test data with unique identifiers
     const timestamp = Date.now();
     const passwordHash = await hashPassword("TestPassword123!");
+    testEmail = `contract-test-${timestamp}@example.com`;
 
     const user = await prisma.user.create({
       data: {
-        email: `contract-test-${timestamp}@example.com`,
+        email: testEmail,
         passwordHash,
         firstName: "Contract",
         lastName: "Tester",
@@ -203,7 +205,7 @@ describe("Phase G4 — API Contract Tests", () => {
 
     it("POST /api/v1/auth/login - correct HTTP method and URL path", async () => {
       const response = await request(app).post("/api/v1/auth/login").send({
-        email: "contract-test@example.com",
+        email: testEmail,
         password: "TestPassword123!",
       });
       expect([200, 401]).toContain(response.status);
@@ -211,7 +213,7 @@ describe("Phase G4 — API Contract Tests", () => {
 
     it("POST /api/v1/auth/login - correct request body shape", async () => {
       const response = await request(app).post("/api/v1/auth/login").send({
-        email: "contract-test@example.com",
+        email: testEmail,
         password: "TestPassword123!",
       });
       expect([200, 401]).toContain(response.status);
@@ -1052,7 +1054,7 @@ describe("Phase G4 — API Contract Tests", () => {
       expect(getResponse.status).toBe(200);
 
       const postResponse = await request(app).post("/api/v1/auth/login").send({
-        email: "contract-test@example.com",
+        email: testEmail,
         password: "TestPassword123!",
       });
       expect(postResponse.status).toBe(200);
@@ -1086,7 +1088,7 @@ describe("Phase G4 — API Contract Tests", () => {
   describe("Rate Limiting Headers", () => {
     it("Rate-limited endpoints return appropriate headers", async () => {
       const response = await request(app).post("/api/v1/auth/login").send({
-        email: "contract-test@example.com",
+        email: testEmail,
         password: "TestPassword123!",
       });
       // Rate limiting headers may be present
