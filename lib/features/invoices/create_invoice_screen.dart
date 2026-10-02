@@ -26,9 +26,7 @@ final _completedJobsProvider = FutureProvider.autoDispose<List<Job>>((
 });
 
 class CreateInvoiceScreen extends ConsumerStatefulWidget {
-  const CreateInvoiceScreen({super.key, this.initialJobId});
-
-  final String? initialJobId;
+  const CreateInvoiceScreen({super.key});
 
   @override
   ConsumerState<CreateInvoiceScreen> createState() =>
@@ -49,13 +47,7 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
   String? _jobId;
   bool _saving = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _jobId = widget.initialJobId;
-  }
-
-  Future<void> _submit({bool allowZeroAmount = false}) async {
+  Future<void> _submit() async {
     final jobId = _jobId;
     if (jobId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -70,60 +62,48 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
       // it's returned instead of erroring, so no pre-check is needed here.
       final invoice = await ref
           .read(invoicesRepositoryProvider)
-          .generateFromJob(jobId, allowZeroAmount: allowZeroAmount);
+          .generateFromJob(jobId);
 
       ref.invalidate(invoicesListProvider);
 
       if (!mounted) return;
 
       if (invoice.totalMinor == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Generated zero-cost invoice')),
+        // Per invoice.service.ts getCompletedJobSource fallback order: no
+        // approved quote and no logged parts means a $0 placeholder line
+        // item was generated. Warn clearly before navigating — there is no
+        // line-item-editing endpoint yet, so this needs a manual fix.
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Placeholder \$0 invoice'),
+            content: const Text(
+              'This job had no approved quote and no logged parts, so the '
+              'generated invoice has a \$0 total. There is currently no way '
+              'to edit invoice line items through the app — this will need '
+              'a manual correction.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Understood'),
+              ),
+            ],
+          ),
         );
       }
 
       if (mounted) {
         context.pushReplacement('/invoices/${invoice.id}');
       }
-    } on ApiException catch (e) {
-      if (e.code == 'INVOICE_ZERO_AMOUNT') {
-        if (!mounted) return;
-        final confirmZero = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            backgroundColor: AeraColors.surface,
-            shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
-            title: const Text('Zero-Cost Invoice Confirmation'),
-            content: const Text(
-              'This job has no approved quote and no logged parts (\$0 total). Do you want to generate a zero-cost courtesy / warranty invoice?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Confirm Zero-Cost'),
-              ),
-            ],
-          ),
-        );
-        if (confirmZero == true && mounted) {
-          await _submit(allowZeroAmount: true);
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(e.message)));
-        }
-      }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
+        final message = e is ApiException
+            ? e.message
+            : 'Could not generate invoice. Please try again.';
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Could not generate invoice. Please try again.')));
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -187,8 +167,13 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                           style: AeraTypography.bodySm,
                         );
                       }
+                      // The router can pass a job that is not in this COMPLETED
+                      // list (e.g. opened from a job that isn't finished, or
+                      // beyond the first page). A dropdown whose value matches
+                      // no item throws, so only preselect a job that exists.
+                      final preselectedJobId = _findById(jobs, jobId)?.id;
                       return DropdownButtonFormField<String>(
-                        initialValue: jobId,
+                        initialValue: preselectedJobId,
                         isExpanded: true,
                         decoration: InputDecoration(
                           filled: true,
@@ -283,7 +268,7 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                 color: Colors.white,
               ),
               isLoading: _saving,
-              onPressed: (_jobId == null || _saving) ? null : _submit,
+              onPressed: (selectedJob == null || _saving) ? null : _submit,
             ),
             const SizedBox(height: 20),
           ],
