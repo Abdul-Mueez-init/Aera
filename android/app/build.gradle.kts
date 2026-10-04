@@ -5,11 +5,16 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val keystoreProps = java.util.Properties().apply {
-    val f = rootProject.file("key.properties")
-    if (f.exists()) load(f.inputStream())
+import java.util.Properties
+import java.io.FileInputStream
+
+val keystoreProps = Properties()
+val keyFile = rootProject.file("key.properties")
+if (keyFile.exists()) {
+    keystoreProps.load(FileInputStream(keyFile))
 }
 
+@Suppress("DEPRECATION")
 android {
     namespace = "com.example.aera"
     compileSdk = flutter.compileSdkVersion
@@ -23,10 +28,10 @@ android {
     signingConfigs {
         create("release") {
             if (keystoreProps.isNotEmpty()) {
-                keyAlias = keystoreProps["keyAlias"] as String
-                keyPassword = keystoreProps["keyPassword"] as String
-                storeFile = file(keystoreProps["storeFile"] as String)
-                storePassword = keystoreProps["storePassword"] as String
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
             }
         }
     }
@@ -69,7 +74,8 @@ android {
         release {
             signingConfig = if (keystoreProps.isNotEmpty())
                 signingConfigs.getByName("release")
-            else signingConfigs.getByName("debug")
+            else
+                signingConfigs.getByName("debug")
         }
     }
 }
