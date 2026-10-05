@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_response.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final client = ref.watch(apiClientProvider);
@@ -9,6 +10,17 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   client.setTokenRefreshCallback(repo.refreshAccessToken);
   return repo;
 });
+
+/// Thrown by [AuthRepository.restoreSession] when the saved session was
+/// rejected by the server (expired, revoked, user suspended or removed).
+/// The auth state carries it as its error so the router can send the user
+/// to Login instead of Welcome.
+class SessionExpiredException implements Exception {
+  const SessionExpiredException();
+
+  @override
+  String toString() => 'SessionExpiredException';
+}
 
 class AuthUser {
   final String id;
@@ -92,6 +104,14 @@ class AuthRepository {
   final ApiClient _client;
   static const _sessionKey = 'aera_auth_session';
 
+  /// Upper bound for the startup check, so a dead network can never keep the
+  /// app on the splash screen.
+  static const _startupValidationTimeout = Duration(seconds: 8);
+
+  /// Upper bound for the best-effort server-side revoke, so Sign Out always
+  /// completes even when offline.
+  static const _logoutTimeout = Duration(seconds: 5);
+
   Future<AuthSession> login(String email, String password) async {
     final res = await _client.post(
       '/api/v1/auth/login',
@@ -131,68 +151,150 @@ class AuthRepository {
     return session;
   }
 
+  /// Exchanges the saved refresh token for a new access/refresh pair.
+  ///
+  /// Returns null when there is nothing to refresh with. Errors from the
+  /// refresh endpoint (401/403 = session dead, 429/5xx/network = transient)
+  /// are deliberately NOT swallowed here: [ApiClient] needs the difference to
+  /// decide whether the session has expired.
   Future<String?> refreshAccessToken() async {
     final prefs = await SharedPreferences.getInstance();
+    final stored = _readStoredJson(prefs);
+    final refreshToken = stored?['refreshToken'];
+    if (refreshToken is! String || refreshToken.isEmpty) return null;
+
+    final res = await _client.post(
+      '/api/v1/auth/refresh',
+      body: {'refreshToken': refreshToken},
+      retryOnUnauthorized: false,
+    );
+    final data = res as Map<String, dynamic>;
+    final newAccessToken = data['accessToken'] as String;
+    final newRefreshToken = data['refreshToken'] as String? ?? refreshToken;
+
+    // The user may have signed out, or the session may have been cleared,
+    // while the request was in flight. Never write a session back after that.
+    final latest = _readStoredJson(prefs);
+    if (latest == null) return null;
+
+    latest['accessToken'] = newAccessToken;
+    latest['refreshToken'] = newRefreshToken;
+    await prefs.setString(_sessionKey, jsonEncode(latest));
+    _client.setAccessToken(newAccessToken);
+    return newAccessToken;
+  }
+
+  /// Revokes the refresh session on the server (best effort, bounded by a
+  /// timeout) and always clears the local session.
+  Future<void> logout() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final refreshToken = _readStoredJson(prefs)?['refreshToken'];
+      if (refreshToken is String && refreshToken.isNotEmpty) {
+        await _client
+            .post(
+              '/api/v1/auth/logout',
+              body: {'refreshToken': refreshToken},
+              retryOnUnauthorized: false,
+            )
+            .timeout(_logoutTimeout);
+      }
+    } catch (_) {
+      // Best-effort remote logout
+    }
+    await clearLocalSession();
+  }
+
+  /// Forgets the session on this device only (no server call).
+  Future<void> clearLocalSession() async {
+    _client.setAccessToken(null);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_sessionKey);
+  }
+
+  /// Restores the saved session and confirms it with the server.
+  ///
+  /// - No saved session: returns null.
+  /// - Server accepts it (possibly after a token refresh): returns it, with
+  ///   user/company/role taken from the server so a changed role is honoured.
+  /// - Server rejects it (401/403): clears it and throws
+  ///   [SessionExpiredException].
+  /// - Network error, timeout, 429, 5xx: the saved session is kept. Offline
+  ///   is not the same as expired.
+  Future<AuthSession?> restoreSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!prefs.containsKey(_sessionKey)) return null;
+
+    final stored = _reloadStoredSession(prefs);
+    if (stored == null) {
+      await clearLocalSession();
+      return null;
+    }
+    _client.setAccessToken(stored.accessToken);
+
+    dynamic me;
+    try {
+      me = await _client
+          .get('/api/v1/auth/me')
+          .timeout(_startupValidationTimeout);
+    } on ApiException catch (error) {
+      if (error.statusCode == 401 || error.statusCode == 403) {
+        await clearLocalSession();
+        throw const SessionExpiredException();
+      }
+      return _reloadStoredSession(prefs) ?? stored;
+    } catch (_) {
+      return _reloadStoredSession(prefs) ?? stored;
+    }
+
+    // The call above may have rotated the tokens; storage is the source of
+    // truth for them, not the copy read before the call.
+    final latest = _reloadStoredSession(prefs);
+    if (latest == null) {
+      await clearLocalSession();
+      throw const SessionExpiredException();
+    }
+    return _applyServerIdentity(latest, me);
+  }
+
+  Future<AuthSession> _applyServerIdentity(
+    AuthSession latest,
+    dynamic me,
+  ) async {
+    try {
+      final data = me as Map<String, dynamic>;
+      final refreshed = AuthSession(
+        accessToken: latest.accessToken,
+        refreshToken: latest.refreshToken,
+        user: AuthUser.fromJson(data['user'] as Map<String, dynamic>),
+        company: AuthCompany.fromJson(data['company'] as Map<String, dynamic>),
+        role: data['role'] as String? ?? latest.role,
+      );
+      await _persistSession(refreshed);
+      return refreshed;
+    } catch (_) {
+      // Unexpected response shape: keep the session we already have.
+      return latest;
+    }
+  }
+
+  Map<String, dynamic>? _readStoredJson(SharedPreferences prefs) {
     final raw = prefs.getString(_sessionKey);
     if (raw == null) return null;
-
     try {
-      final json = jsonDecode(raw) as Map<String, dynamic>;
-      final refreshToken = json['refreshToken'] as String?;
-      if (refreshToken == null || refreshToken.isEmpty) return null;
-
-      final res = await _client.post(
-        '/api/v1/auth/refresh',
-        body: {'refreshToken': refreshToken},
-      );
-      final data = res as Map<String, dynamic>;
-      final newAccessToken = data['accessToken'] as String;
-      final newRefreshToken =
-          data['refreshToken'] as String? ?? refreshToken;
-
-      json['accessToken'] = newAccessToken;
-      json['refreshToken'] = newRefreshToken;
-      await prefs.setString(_sessionKey, jsonEncode(json));
-      _client.setAccessToken(newAccessToken);
-      return newAccessToken;
+      final decoded = jsonDecode(raw);
+      return decoded is Map<String, dynamic> ? decoded : null;
     } catch (_) {
       return null;
     }
   }
 
-  Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_sessionKey);
+  AuthSession? _reloadStoredSession(SharedPreferences prefs) {
+    final json = _readStoredJson(prefs);
+    if (json == null) return null;
     try {
-      if (raw != null) {
-        final json = jsonDecode(raw) as Map<String, dynamic>;
-        final refreshToken = json['refreshToken'] as String?;
-        if (refreshToken != null && refreshToken.isNotEmpty) {
-          await _client.post(
-            '/api/v1/auth/logout',
-            body: {'refreshToken': refreshToken},
-          );
-        }
-      }
+      return AuthSession.fromJson(json);
     } catch (_) {
-      // Best-effort remote logout
-    }
-    _client.setAccessToken(null);
-    await prefs.remove(_sessionKey);
-  }
-
-  Future<AuthSession?> restoreSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_sessionKey);
-    if (raw == null) return null;
-
-    try {
-      final json = jsonDecode(raw) as Map<String, dynamic>;
-      final session = AuthSession.fromJson(json);
-      _client.setAccessToken(session.accessToken);
-      return session;
-    } catch (_) {
-      await prefs.remove(_sessionKey);
       return null;
     }
   }

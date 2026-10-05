@@ -2,11 +2,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import '../data/auth_repository.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/network/api_client.dart';
 
 final authNotifierProvider =
     StateNotifierProvider<AuthNotifier, AsyncValue<AuthSession?>>((ref) {
   final repo = ref.watch(authRepositoryProvider);
-  return AuthNotifier(repo);
+  final client = ref.watch(apiClientProvider);
+  final notifier = AuthNotifier(repo);
+  client.setSessionExpiredCallback(notifier.handleSessionExpired);
+  ref.onDispose(() => client.setSessionExpiredCallback(null));
+  return notifier;
 });
 
 final currentUserProvider = Provider<AuthUser?>((ref) {
@@ -48,6 +53,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
         });
       }
     } catch (e, st) {
+      // A SessionExpiredException lands here too: it is kept as the error so
+      // the router can tell "session died" (-> Login) from "never signed in".
       state = AsyncValue.error(e, st);
     }
   }
@@ -102,16 +109,38 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
 
   Future<void> logout() async {
     await _repo.logout();
-
-    // Clear user context from Sentry
-    if (AppConfig.isSentryEnabled) {
-      await Sentry.configureScope((scope) {
-        scope.setUser(null);
-        scope.removeTag('company_id');
-        scope.removeTag('role');
-      });
-    }
-
+    await _clearSentryUser();
     state = const AsyncValue.data(null);
+  }
+
+  /// Called by [ApiClient] when the server has definitively rejected the
+  /// saved session while the user was signed in. Clears the local session and
+  /// moves to a signed-out state that remembers the session died, so the
+  /// router can send the user to Login.
+  Future<void> handleSessionExpired() async {
+    // Only a signed-in session can expire. During startup validation the
+    // repository reports the expiry itself; after a sign-out there is nothing
+    // left to expire.
+    if (!mounted || state.value == null) return;
+
+    await _repo.clearLocalSession();
+    await _clearSentryUser();
+
+    // The user may have signed out, or the notifier may have been disposed,
+    // while the awaits above were running.
+    if (!mounted || state.value == null) return;
+    state = AsyncValue.error(
+      const SessionExpiredException(),
+      StackTrace.current,
+    );
+  }
+
+  Future<void> _clearSentryUser() async {
+    if (!AppConfig.isSentryEnabled) return;
+    await Sentry.configureScope((scope) {
+      scope.setUser(null);
+      scope.removeTag('company_id');
+      scope.removeTag('role');
+    });
   }
 }

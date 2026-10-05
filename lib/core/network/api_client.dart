@@ -6,6 +6,12 @@ import '../config/app_config.dart';
 
 typedef TokenRefreshCallback = Future<String?> Function();
 
+/// Called once when the server has definitively rejected the saved session
+/// (refresh token expired, revoked, reused, or the member is no longer
+/// active). It is NOT called for network errors, timeouts, 429 or 5xx:
+/// offline is not the same as expired.
+typedef SessionExpiredCallback = Future<void> Function();
+
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient();
 });
@@ -19,7 +25,13 @@ class ApiClient {
   final String baseUrl;
   String? _accessToken;
   TokenRefreshCallback? _onTokenRefresh;
-  bool _refreshInFlight = false;
+  SessionExpiredCallback? _onSessionExpired;
+
+  /// The refresh that is currently running, shared by every request that hits
+  /// a 401 in the meantime. The backend rotates refresh tokens and revokes the
+  /// whole session chain when an old token is presented again, so two
+  /// concurrent refreshes would kill a perfectly good session.
+  Future<String?>? _refreshFuture;
 
   void setAccessToken(String? token) {
     _accessToken = token;
@@ -27,6 +39,10 @@ class ApiClient {
 
   void setTokenRefreshCallback(TokenRefreshCallback? callback) {
     _onTokenRefresh = callback;
+  }
+
+  void setSessionExpiredCallback(SessionExpiredCallback? callback) {
+    _onSessionExpired = callback;
   }
 
   String? get accessToken => _accessToken;
@@ -90,28 +106,79 @@ class ApiClient {
     );
   }
 
+  /// Sends a request and, if it comes back 401, refreshes the access token
+  /// once (shared between all concurrent requests) and retries it once.
+  ///
+  /// A refresh is only attempted when the request actually carried a bearer
+  /// token and [retryOnUnauthorized] is true. That keeps a wrong-password
+  /// login (401 without any token) and the refresh call itself out of the
+  /// refresh machinery.
   Future<http.Response> _sendWithRefresh(
-    Future<http.Response> Function() request,
-  ) async {
-    var response = await request();
+    Future<http.Response> Function() request, {
+    bool retryOnUnauthorized = true,
+  }) async {
+    final sentToken = _accessToken;
+    final response = await request();
     if (response.statusCode != 401 ||
+        !retryOnUnauthorized ||
         _onTokenRefresh == null ||
-        _refreshInFlight) {
+        sentToken == null ||
+        sentToken.isEmpty) {
       return response;
     }
 
-    _refreshInFlight = true;
-    try {
-      final newToken = await _onTokenRefresh!();
-      if (newToken == null || newToken.isEmpty) {
-        return response;
-      }
-      _accessToken = newToken;
-      response = await request();
-    } finally {
-      _refreshInFlight = false;
+    // Another request may have refreshed the token while this one was in
+    // flight. Its 401 is then just a stale token: retry with the new one
+    // instead of rotating the refresh token a second time.
+    final currentToken = _accessToken;
+    if (currentToken != null &&
+        currentToken.isNotEmpty &&
+        currentToken != sentToken) {
+      return request();
     }
-    return response;
+
+    final newToken = await _refreshAccessToken();
+    if (newToken == null || newToken.isEmpty) {
+      return response;
+    }
+    _accessToken = newToken;
+    return request();
+  }
+
+  Future<String?> _refreshAccessToken() {
+    return _refreshFuture ??= _performRefresh().whenComplete(() {
+      _refreshFuture = null;
+    });
+  }
+
+  Future<String?> _performRefresh() async {
+    final refresh = _onTokenRefresh;
+    if (refresh == null) return null;
+
+    try {
+      return await refresh();
+    } on ApiException catch (error) {
+      // 401/403 from the refresh endpoint: the session is really gone.
+      // Anything else (429, 5xx, ...) is a server problem, not an expiry.
+      if (error.statusCode == 401 || error.statusCode == 403) {
+        await _notifySessionExpired();
+      }
+      return null;
+    } catch (_) {
+      // Offline, timeout, unreadable response: keep the session.
+      return null;
+    }
+  }
+
+  Future<void> _notifySessionExpired() async {
+    _accessToken = null;
+    final callback = _onSessionExpired;
+    if (callback == null) return;
+    try {
+      await callback();
+    } catch (_) {
+      // A failing listener must never break the request that triggered it.
+    }
   }
 
   Future<dynamic> get(
@@ -131,6 +198,7 @@ class ApiClient {
     dynamic body,
     Map<String, String>? headers,
     Map<String, String>? queryParameters,
+    bool retryOnUnauthorized = true,
   }) async {
     final uri = _buildUri(path, queryParameters);
     final response = await _sendWithRefresh(
@@ -139,6 +207,7 @@ class ApiClient {
         headers: _buildHeaders(headers),
         body: body != null ? jsonEncode(body) : null,
       ),
+      retryOnUnauthorized: retryOnUnauthorized,
     );
     return _processResponse(response);
   }
