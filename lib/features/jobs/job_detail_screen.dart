@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
@@ -62,6 +63,34 @@ class JobDetailScreen extends ConsumerStatefulWidget {
 class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
   bool _updating = false;
   bool _generatingInvoice = false;
+
+  /// Opens the phone's maps app with directions to the service address.
+  /// Works for every role, and needs no customer portal token.
+  Future<void> _openDirections(Iterable<String?> addressParts) async {
+    final destination = addressParts
+        .whereType<String>()
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .join(', ');
+    if (destination.isEmpty) return;
+
+    final uri = Uri.https('www.google.com', '/maps/dir/', {
+      'api': '1',
+      'destination': destination,
+    });
+
+    var opened = false;
+    try {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      opened = false;
+    }
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open a maps app')),
+      );
+    }
+  }
 
   Future<void> _generateInvoiceForJob({bool allowZeroAmount = false}) async {
     setState(() => _generatingInvoice = true);
@@ -418,15 +447,14 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                             ),
                           ),
                           TextButton(
-                            onPressed: () {
-                              // TODO: Implement proper technician tracking with token and jobId
-                              // This requires the actual portal token and current job ID
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Technician tracking requires valid portal token'),
-                                ),
-                              );
-                            },
+                            onPressed: () => _openDirections([
+                              job.serviceAddress.line1,
+                              job.serviceAddress.line2,
+                              job.serviceAddress.city,
+                              job.serviceAddress.region,
+                              job.serviceAddress.postalCode,
+                              job.serviceAddress.countryCode,
+                            ]),
                             child: Text(
                               'Directions',
                               style: AeraTypography.label.copyWith(

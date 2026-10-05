@@ -175,6 +175,39 @@ router.delete(
   },
 );
 
+const companySelect = {
+  id: true,
+  name: true,
+  slug: true,
+  timezone: true,
+  defaultCurrency: true,
+} as const;
+
+// Only returns the company when the caller is still an ACTIVE member of it.
+function findCompanyForMember(companyId: string, userId: string) {
+  return prisma.company.findFirst({
+    where: {
+      id: companyId,
+      memberships: { some: { userId, status: "ACTIVE" } },
+    },
+    select: companySelect,
+  });
+}
+
+// "current" = the company in the caller's own access token. The client never
+// chooses a company. This must be declared before "/:companyId" so that
+// "current" is not read as a company ID.
+router.get("/current", requireAuth, async (request, response) => {
+  const { companyId, userId } = request.auth!;
+
+  const company = await findCompanyForMember(companyId, userId);
+  if (!company) {
+    throw new AppError("TENANT_ACCESS_DENIED", "Company access denied", 403);
+  }
+
+  response.status(200).json({ data: company });
+});
+
 router.get("/:companyId", requireAuth, async (request, response) => {
   const companyId = Array.isArray(request.params.companyId)
     ? request.params.companyId[0]
@@ -184,25 +217,7 @@ router.get("/:companyId", requireAuth, async (request, response) => {
     throw new AppError("TENANT_ACCESS_DENIED", "Company access denied", 403);
   }
 
-  const company = await prisma.company.findFirst({
-    where: {
-      id: companyId,
-      memberships: {
-        some: {
-          userId: request.auth!.userId,
-          status: "ACTIVE",
-        },
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      timezone: true,
-      defaultCurrency: true,
-    },
-  });
-
+  const company = await findCompanyForMember(companyId, request.auth!.userId);
   if (!company) {
     throw new AppError("TENANT_ACCESS_DENIED", "Company access denied", 403);
   }
