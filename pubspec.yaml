@@ -38,6 +38,9 @@ dependencies:
   intl: ^0.20.2
   flutter_riverpod: ^2.6.1
   shared_preferences: ^2.3.5
+  # Audit fix, Phase 1 task 8: the login session is kept in the platform
+  # keystore instead of plain SharedPreferences.
+  flutter_secure_storage: ^9.2.4
   # New in Phase 6: camera/gallery capture for Job Evidence photo upload.
   # No image-capture package existed in the project before this — flagging
   # per rules.md §11 rather than adding it silently.

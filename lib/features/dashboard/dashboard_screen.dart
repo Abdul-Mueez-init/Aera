@@ -69,13 +69,6 @@ class DashboardScreen extends StatelessWidget {
             ),
             onPressed: () => context.push('/notifications'),
           ),
-          Builder(
-            builder: (ctx) => IconButton(
-              icon: const Icon(Icons.menu, color: AeraColors.ink),
-              tooltip: 'Screen Catalog',
-              onPressed: () => Scaffold.of(ctx).openEndDrawer(),
-            ),
-          ),
           IconButton(
             icon: CircleAvatar(
               radius: 14,

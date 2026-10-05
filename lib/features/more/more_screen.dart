@@ -1,20 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../auth/data/auth_repository.dart';
+import '../auth/providers/auth_provider.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_card.dart';
 
-class MoreScreen extends StatelessWidget {
+class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider);
+    final company = ref.watch(currentCompanyProvider);
+    final role = ref.watch(currentRoleProvider);
+
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       appBar: AppBar(
         title: const Text('Operations Hub'),
-        // Screen catalog drawer is only available in main app shell
-        // Removed broken openEndDrawer call
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -36,7 +41,7 @@ class MoreScreen extends StatelessWidget {
                     ),
                     child: Center(
                       child: Text(
-                        'MV',
+                        user?.initials ?? '?',
                         style: AeraTypography.h3.copyWith(
                           color: AeraColors.accent,
                           fontWeight: FontWeight.w700,
@@ -51,10 +56,14 @@ class MoreScreen extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              'Marcus Vance',
-                              style: AeraTypography.bodySm.copyWith(
-                                fontWeight: FontWeight.w700,
+                            Flexible(
+                              child: Text(
+                                user?.fullName ?? 'Your account',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AeraTypography.bodySm.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 6),
@@ -68,7 +77,7 @@ class MoreScreen extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                'Dispatcher',
+                                roleLabel(role),
                                 style: AeraTypography.label.copyWith(
                                   color: AeraColors.accent,
                                   fontSize: 10,
@@ -78,7 +87,9 @@ class MoreScreen extends StatelessWidget {
                           ],
                         ),
                         Text(
-                          'Northstar Climate Solutions • Lahore Hub',
+                          company?.name ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: AeraTypography.label.copyWith(
                             color: AeraColors.outline,
                           ),
@@ -103,62 +114,26 @@ class MoreScreen extends StatelessWidget {
             context,
             icon: Icons.request_quote,
             title: 'Quotes & Proposals',
-            subtitle: '5 active estimates • Rs 56,700 pending',
+            subtitle: 'Create, send and track customer quotes',
             route: '/quotes',
           ),
           _navItem(
             context,
             icon: Icons.receipt_long,
             title: 'Invoices & Receivables',
-            subtitle: 'Rs 84,300 outstanding • 3 pending settlement',
+            subtitle: 'Issue invoices and record payments',
             route: '/invoices',
-          ),
-          _navItem(
-            context,
-            icon: Icons.draw,
-            title: 'Client Quote Approval Portal',
-            subtitle: 'Digital sign & scope authorization view',
-            route: '/quote-approval',
-          ),
-          _navItem(
-            context,
-            icon: Icons.payments,
-            title: 'Client Invoice Payment Portal',
-            subtitle: 'Raast IBFT & Card checkout view',
-            route: '/invoice-payment',
           ),
           const SizedBox(height: 14),
 
-          // Section 2: Field Telemetry & AI
-          _sectionHeader('FIELD OPERATIONS & INTELLIGENCE'),
+          // Section 2: AI
+          _sectionHeader('INTELLIGENCE'),
           _navItem(
             context,
             icon: Icons.auto_awesome,
             title: 'Aera AI Operations Assistant',
-            subtitle: 'Operational risk analysis & recommendations',
+            subtitle: 'Ask about today\'s jobs, workload and risks',
             route: '/ai-assistant',
-          ),
-          _navItem(
-            context,
-            icon: Icons.crisis_alert,
-            title: 'AI Insight & Algorithmic Trace',
-            subtitle: 'Live SLA buffer breach simulation',
-            route: '/ai-insight/ins-1',
-          ),
-          // Technician tracking requires valid token and jobId - disabled
-          // _navItem(
-          //   context,
-          //   icon: Icons.location_on,
-          //   title: 'Live Technician GPS Tracking',
-          //   subtitle: 'Van #12 (Ahmed Raza) • 18 min away',
-          //   route: '/technician-tracking',
-          // ),
-          _navItem(
-            context,
-            icon: Icons.engineering,
-            title: 'Technician Home',
-            subtitle: "Today's assigned jobs & field execution",
-            route: '/technician-home',
           ),
           const SizedBox(height: 14),
 
@@ -168,27 +143,23 @@ class MoreScreen extends StatelessWidget {
             context,
             icon: Icons.notifications,
             title: 'Notification Center',
-            subtitle: '6 updates across dispatch & billing',
+            subtitle: 'Updates on dispatch and billing',
             route: '/notifications',
           ),
           _navItem(
             context,
             icon: Icons.domain,
-            title: 'Company Settings & Fleet',
-            subtitle: 'Manage 4 vans, 35 km radius, labor rates',
+            title: 'Company Settings',
+            subtitle: 'Company name, timezone and currency',
             route: '/company-settings',
           ),
           _navItem(
             context,
             icon: Icons.person,
-            title: 'Profile & App Preferences',
-            subtitle: 'Offline sync, haptics, security locks',
+            title: 'Profile & Account',
+            subtitle: 'Your details and sign out',
             route: '/profile-settings',
           ),
-          const SizedBox(height: 14),
-
-          // Screen catalog drawer is only available in main app shell
-          // Removed broken openEndDrawer shortcut button
           const SizedBox(height: 24),
         ],
       ),

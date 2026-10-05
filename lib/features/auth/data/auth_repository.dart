@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_response.dart';
+import 'session_store.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final client = ref.watch(apiClientProvider);
-  final repo = AuthRepository(client);
+  final repo = AuthRepository(client, store: ref.watch(sessionStoreProvider));
   client.setTokenRefreshCallback(repo.refreshAccessToken);
   return repo;
 });
@@ -48,6 +48,38 @@ class AuthUser {
     'firstName': firstName,
     'lastName': lastName,
   };
+
+  /// "First Last", falling back to the email when no name is set.
+  String get fullName {
+    final name = '$firstName $lastName'.trim();
+    return name.isNotEmpty ? name : email;
+  }
+
+  /// Up to two capital letters for avatars.
+  String get initials {
+    final first = firstName.trim();
+    final last = lastName.trim();
+    final letters = [
+      if (first.isNotEmpty) first[0],
+      if (last.isNotEmpty) last[0],
+    ].join();
+    if (letters.isNotEmpty) return letters.toUpperCase();
+    return email.isNotEmpty ? email[0].toUpperCase() : '?';
+  }
+}
+
+/// Human-readable name for a backend role value.
+String roleLabel(String? role) {
+  switch (role) {
+    case 'OWNER':
+      return 'Owner';
+    case 'DISPATCHER':
+      return 'Dispatcher';
+    case 'TECHNICIAN':
+      return 'Technician';
+    default:
+      return 'Team member';
+  }
 }
 
 class AuthCompany {
@@ -99,10 +131,11 @@ class AuthSession {
 }
 
 class AuthRepository {
-  AuthRepository(this._client);
+  AuthRepository(this._client, {SessionStore? store})
+      : _store = store ?? SecureSessionStore();
 
   final ApiClient _client;
-  static const _sessionKey = 'aera_auth_session';
+  final SessionStore _store;
 
   /// Upper bound for the startup check, so a dead network can never keep the
   /// app on the splash screen.
@@ -158,8 +191,7 @@ class AuthRepository {
   /// are deliberately NOT swallowed here: [ApiClient] needs the difference to
   /// decide whether the session has expired.
   Future<String?> refreshAccessToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = _readStoredJson(prefs);
+    final stored = await _readStoredJson();
     final refreshToken = stored?['refreshToken'];
     if (refreshToken is! String || refreshToken.isEmpty) return null;
 
@@ -174,12 +206,12 @@ class AuthRepository {
 
     // The user may have signed out, or the session may have been cleared,
     // while the request was in flight. Never write a session back after that.
-    final latest = _readStoredJson(prefs);
+    final latest = await _readStoredJson();
     if (latest == null) return null;
 
     latest['accessToken'] = newAccessToken;
     latest['refreshToken'] = newRefreshToken;
-    await prefs.setString(_sessionKey, jsonEncode(latest));
+    await _store.write(jsonEncode(latest));
     _client.setAccessToken(newAccessToken);
     return newAccessToken;
   }
@@ -188,8 +220,7 @@ class AuthRepository {
   /// timeout) and always clears the local session.
   Future<void> logout() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final refreshToken = _readStoredJson(prefs)?['refreshToken'];
+      final refreshToken = (await _readStoredJson())?['refreshToken'];
       if (refreshToken is String && refreshToken.isNotEmpty) {
         await _client
             .post(
@@ -208,8 +239,7 @@ class AuthRepository {
   /// Forgets the session on this device only (no server call).
   Future<void> clearLocalSession() async {
     _client.setAccessToken(null);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_sessionKey);
+    await _store.delete();
   }
 
   /// Restores the saved session and confirms it with the server.
@@ -222,10 +252,9 @@ class AuthRepository {
   /// - Network error, timeout, 429, 5xx: the saved session is kept. Offline
   ///   is not the same as expired.
   Future<AuthSession?> restoreSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!prefs.containsKey(_sessionKey)) return null;
+    if (await _store.read() == null) return null;
 
-    final stored = _reloadStoredSession(prefs);
+    final stored = await _loadStoredSession();
     if (stored == null) {
       await clearLocalSession();
       return null;
@@ -242,14 +271,14 @@ class AuthRepository {
         await clearLocalSession();
         throw const SessionExpiredException();
       }
-      return _reloadStoredSession(prefs) ?? stored;
+      return await _loadStoredSession() ?? stored;
     } catch (_) {
-      return _reloadStoredSession(prefs) ?? stored;
+      return await _loadStoredSession() ?? stored;
     }
 
     // The call above may have rotated the tokens; storage is the source of
     // truth for them, not the copy read before the call.
-    final latest = _reloadStoredSession(prefs);
+    final latest = await _loadStoredSession();
     if (latest == null) {
       await clearLocalSession();
       throw const SessionExpiredException();
@@ -278,8 +307,8 @@ class AuthRepository {
     }
   }
 
-  Map<String, dynamic>? _readStoredJson(SharedPreferences prefs) {
-    final raw = prefs.getString(_sessionKey);
+  Future<Map<String, dynamic>?> _readStoredJson() async {
+    final raw = await _store.read();
     if (raw == null) return null;
     try {
       final decoded = jsonDecode(raw);
@@ -289,8 +318,8 @@ class AuthRepository {
     }
   }
 
-  AuthSession? _reloadStoredSession(SharedPreferences prefs) {
-    final json = _readStoredJson(prefs);
+  Future<AuthSession?> _loadStoredSession() async {
+    final json = await _readStoredJson();
     if (json == null) return null;
     try {
       return AuthSession.fromJson(json);
@@ -300,7 +329,6 @@ class AuthRepository {
   }
 
   Future<void> _persistSession(AuthSession session) async {
-    final prefs = await SharedPreferences.getInstance();
     final map = {
       'accessToken': session.accessToken,
       'refreshToken': session.refreshToken,
@@ -308,6 +336,6 @@ class AuthRepository {
       'user': session.user.toJson(),
       'company': session.company.toJson(),
     };
-    await prefs.setString(_sessionKey, jsonEncode(map));
+    await _store.write(jsonEncode(map));
   }
 }

@@ -4,14 +4,31 @@ import 'dart:convert';
 import 'package:aera/core/network/api_client.dart';
 import 'package:aera/core/network/api_response.dart';
 import 'package:aera/features/auth/data/auth_repository.dart';
+import 'package:aera/features/auth/data/session_store.dart';
 import 'package:aera/features/auth/providers/auth_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const _sessionKey = 'aera_auth_session';
+/// In-memory stand-in for the secure storage, so these tests never touch a
+/// platform plugin.
+class _MemoryStore implements SessionStore {
+  String? value;
+
+  @override
+  Future<String?> read() async => value;
+
+  @override
+  Future<void> write(String newValue) async => value = newValue;
+
+  @override
+  Future<void> delete() async => value = null;
+}
+
+late _MemoryStore store;
 
 const _user = {
   'id': 'user-1',
@@ -50,20 +67,17 @@ http.Response _me({String role = 'OWNER'}) =>
     _ok({'user': _user, 'company': _company, 'role': role});
 
 void _seedSession([Map<String, Object?>? session]) {
-  SharedPreferences.setMockInitialValues({
-    _sessionKey: jsonEncode(session ?? _storedSession()),
-  });
+  store.value = jsonEncode(session ?? _storedSession());
 }
 
-Future<Map<String, dynamic>?> _readPrefsSession() async {
-  final prefs = await SharedPreferences.getInstance();
-  final raw = prefs.getString(_sessionKey);
+Future<Map<String, dynamic>?> _readStoredSession() async {
+  final raw = store.value;
   return raw == null ? null : jsonDecode(raw) as Map<String, dynamic>;
 }
 
 ({ApiClient client, AuthRepository repo}) _build(MockClient mock) {
   final client = ApiClient(baseUrl: 'http://test.local', client: mock);
-  final repo = AuthRepository(client);
+  final repo = AuthRepository(client, store: store);
   client.setTokenRefreshCallback(repo.refreshAccessToken);
   return (client: client, repo: repo);
 }
@@ -71,10 +85,13 @@ Future<Map<String, dynamic>?> _readPrefsSession() async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  setUp(() {
+    store = _MemoryStore();
+  });
+
   group('AuthRepository.restoreSession', () {
     test('returns null without any network call when nothing is saved',
         () async {
-      SharedPreferences.setMockInitialValues({});
       var calls = 0;
       final mock = MockClient((request) async {
         calls++;
@@ -105,7 +122,7 @@ void main() {
       expect(session.accessToken, 'old-access');
       expect(built.client.accessToken, 'old-access');
 
-      final stored = await _readPrefsSession();
+      final stored = await _readStoredSession();
       expect(stored?['role'], 'DISPATCHER');
       expect(stored?['refreshToken'], 'old-refresh');
     });
@@ -121,7 +138,7 @@ void main() {
 
       expect(session, isNotNull);
       expect(session!.role, 'OWNER');
-      expect(await _readPrefsSession(), isNotNull);
+      expect(await _readStoredSession(), isNotNull);
       expect(built.client.accessToken, 'old-access');
     });
 
@@ -135,7 +152,7 @@ void main() {
       final session = await built.repo.restoreSession();
 
       expect(session, isNotNull);
-      expect(await _readPrefsSession(), isNotNull);
+      expect(await _readStoredSession(), isNotNull);
     });
 
     test('a rejected refresh clears the session and reports it expired',
@@ -152,7 +169,7 @@ void main() {
         throwsA(isA<SessionExpiredException>()),
       );
 
-      expect(await _readPrefsSession(), isNull);
+      expect(await _readStoredSession(), isNull);
       expect(built.client.accessToken, isNull);
     });
 
@@ -169,7 +186,7 @@ void main() {
         throwsA(isA<SessionExpiredException>()),
       );
 
-      expect(await _readPrefsSession(), isNull);
+      expect(await _readStoredSession(), isNull);
       expect(built.client.accessToken, isNull);
     });
 
@@ -202,7 +219,7 @@ void main() {
       expect(session.refreshToken, 'new-refresh');
       expect(built.client.accessToken, 'new-access');
 
-      final stored = await _readPrefsSession();
+      final stored = await _readStoredSession();
       expect(stored?['accessToken'], 'new-access');
       expect(stored?['refreshToken'], 'new-refresh');
     });
@@ -210,7 +227,6 @@ void main() {
 
   group('AuthRepository.refreshAccessToken', () {
     test('returns null when there is no saved session', () async {
-      SharedPreferences.setMockInitialValues({});
       final mock = MockClient((request) async => _error(500, 'UNEXPECTED'));
       final built = _build(mock);
 
@@ -254,7 +270,7 @@ void main() {
       gate.complete();
 
       expect(await refreshing, isNull);
-      expect(await _readPrefsSession(), isNull);
+      expect(await _readStoredSession(), isNull);
       expect(built.client.accessToken, isNull);
     });
   });
@@ -278,7 +294,7 @@ void main() {
       await built.repo.logout();
 
       expect(revokedToken, 'old-refresh');
-      expect(await _readPrefsSession(), isNull);
+      expect(await _readStoredSession(), isNull);
       expect(built.client.accessToken, isNull);
     });
 
@@ -292,7 +308,7 @@ void main() {
 
       await built.repo.logout();
 
-      expect(await _readPrefsSession(), isNull);
+      expect(await _readStoredSession(), isNull);
       expect(built.client.accessToken, isNull);
     });
   });
@@ -301,7 +317,10 @@ void main() {
     ProviderContainer containerFor(MockClient mock) {
       final client = ApiClient(baseUrl: 'http://test.local', client: mock);
       final container = ProviderContainer(
-        overrides: [apiClientProvider.overrideWithValue(client)],
+        overrides: [
+          apiClientProvider.overrideWithValue(client),
+          sessionStoreProvider.overrideWithValue(store),
+        ],
       );
       addTearDown(container.dispose);
       return container;
@@ -315,7 +334,6 @@ void main() {
     }
 
     test('starts signed out (no error) when nothing is saved', () async {
-      SharedPreferences.setMockInitialValues({});
       final container = containerFor(
         MockClient((request) async => _error(500, 'UNEXPECTED')),
       );
@@ -340,7 +358,7 @@ void main() {
       expect(state.hasError, isTrue);
       expect(state.error, isA<SessionExpiredException>());
       expect(state.value, isNull);
-      expect(await _readPrefsSession(), isNull);
+      expect(await _readStoredSession(), isNull);
     });
 
     test('a signed-in session the server later rejects becomes "expired"',
@@ -365,7 +383,7 @@ void main() {
       expect(state.hasError, isTrue);
       expect(state.error, isA<SessionExpiredException>());
       expect(state.value, isNull);
-      expect(await _readPrefsSession(), isNull);
+      expect(await _readStoredSession(), isNull);
       expect(client.accessToken, isNull);
     });
 
@@ -393,7 +411,7 @@ void main() {
       final state = container.read(authNotifierProvider);
       expect(state.hasError, isFalse);
       expect(state.value, isNotNull);
-      expect(await _readPrefsSession(), isNotNull);
+      expect(await _readStoredSession(), isNotNull);
       expect(client.accessToken, 'old-access');
     });
 
@@ -417,7 +435,69 @@ void main() {
       expect(state.hasError, isFalse);
       expect(state.isLoading, isFalse);
       expect(state.value, isNull);
-      expect(await _readPrefsSession(), isNull);
+      expect(await _readStoredSession(), isNull);
+    });
+  });
+
+  group('SecureSessionStore', () {
+    const legacyJson = '{"accessToken":"legacy-access"}';
+
+    test('moves a session saved by the old version into secure storage',
+        () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues({
+        SecureSessionStore.legacyPrefsKey: legacyJson,
+      });
+      final secure = SecureSessionStore();
+
+      expect(await secure.read(), legacyJson);
+
+      // Now in secure storage, and gone from the plain preferences file.
+      expect(
+        await const FlutterSecureStorage().read(
+          key: SecureSessionStore.storageKey,
+        ),
+        legacyJson,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(SecureSessionStore.legacyPrefsKey), isNull);
+    });
+
+    test('secure storage wins over a leftover old copy', () async {
+      FlutterSecureStorage.setMockInitialValues({
+        SecureSessionStore.storageKey: '{"accessToken":"secure-access"}',
+      });
+      SharedPreferences.setMockInitialValues({
+        SecureSessionStore.legacyPrefsKey: legacyJson,
+      });
+
+      expect(
+        await SecureSessionStore().read(),
+        '{"accessToken":"secure-access"}',
+      );
+    });
+
+    test('returns null when nothing is saved anywhere', () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues({});
+
+      expect(await SecureSessionStore().read(), isNull);
+    });
+
+    test('delete clears both the secure and the old copy', () async {
+      FlutterSecureStorage.setMockInitialValues({
+        SecureSessionStore.storageKey: '{"accessToken":"secure-access"}',
+      });
+      SharedPreferences.setMockInitialValues({
+        SecureSessionStore.legacyPrefsKey: legacyJson,
+      });
+      final secure = SecureSessionStore();
+
+      await secure.delete();
+
+      expect(await secure.read(), isNull);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(SecureSessionStore.legacyPrefsKey), isNull);
     });
   });
 }
