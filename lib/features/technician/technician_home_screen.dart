@@ -40,7 +40,17 @@ class TechnicianHomeScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AeraColors.canvas,
-      appBar: const AeraAppBar(title: 'Today', subtitle: 'Technician'),
+      appBar: AeraAppBar(
+        title: 'Today',
+        subtitle: 'Technician',
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.account_circle_outlined),
+            tooltip: 'Profile & sign out',
+            onPressed: () => context.push('/profile-settings'),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Column(
           children: [

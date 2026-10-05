@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../auth/providers/auth_provider.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_card.dart';
 
-class ProfileSettingsScreen extends StatefulWidget {
+class ProfileSettingsScreen extends ConsumerStatefulWidget {
   const ProfileSettingsScreen({super.key});
 
   @override
-  State<ProfileSettingsScreen> createState() => _ProfileSettingsScreenState();
+  ConsumerState<ProfileSettingsScreen> createState() =>
+      _ProfileSettingsScreenState();
 }
 
-class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
+class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   bool _hapticFeedback = true;
   bool _offlineCache = true;
   bool _autoInterventions = true;
@@ -248,7 +251,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
           // Sign Out Action
           OutlinedButton.icon(
-            onPressed: () => context.go('/login'),
+            // Revokes the session on the server (best effort), clears it on
+            // this device, and the router then sends the user to Welcome.
+            onPressed: () => ref.read(authNotifierProvider.notifier).logout(),
             icon: const Icon(Icons.logout, size: 18, color: AeraColors.danger),
             label: const Text('Sign Out of Aera OS', style: TextStyle(color: AeraColors.danger)),
             style: OutlinedButton.styleFrom(

@@ -25,7 +25,7 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
-  final _cityController = TextEditingController(text: 'Lahore');
+  final _cityController = TextEditingController();
   final _notesController = TextEditingController();
   bool _saving = false;
 

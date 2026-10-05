@@ -17,28 +17,26 @@ void main() {
   );
 
   bootstrapWithSentry(() {
-    runApp(const AeraApp());
+    // The ProviderScope lives above the app so the router (which reads the
+    // auth state) and every screen share one provider container.
+    const app = ProviderScope(child: AeraApp());
+
+    // Only wrap in SentryWidget when Sentry is enabled
+    runApp(AppConfig.isSentryEnabled ? SentryWidget(child: app) : app);
   });
 }
 
-class AeraApp extends StatelessWidget {
+class AeraApp extends ConsumerWidget {
   const AeraApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final app = ProviderScope(
-      child: MaterialApp.router(
-        title: 'Aera Field Operations',
-        debugShowCheckedModeBanner: false,
-        theme: AeraTheme.lightTheme,
-        routerConfig: appRouter,
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+    return MaterialApp.router(
+      title: 'Aera Field Operations',
+      debugShowCheckedModeBanner: false,
+      theme: AeraTheme.lightTheme,
+      routerConfig: router,
     );
-
-    // Only wrap in SentryWidget when Sentry is enabled
-    if (AppConfig.isSentryEnabled) {
-      return SentryWidget(child: app);
-    }
-    return app;
   }
 }

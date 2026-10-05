@@ -79,10 +79,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             lastName: lastName,
             companyName: companyName,
           );
-      if (mounted) {
-        setState(() => _isLoading = false);
-        context.go('/dashboard');
-      }
+      // No navigation here: the router sends the new owner to the
+      // Dashboard as soon as the session exists.
+      if (mounted) setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);

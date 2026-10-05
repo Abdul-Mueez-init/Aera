@@ -42,10 +42,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       await ref.read(authNotifierProvider.notifier).login(email, password);
-      if (mounted) {
-        setState(() => _isLoading = false);
-        context.go('/dashboard');
-      }
+      // No navigation here. The router sees the new session and sends the
+      // user to their home (owner/dispatcher -> Dashboard, technician ->
+      // Technician Home). If it already did, this screen is gone.
+      if (mounted) setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);

@@ -1,11 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
-import 'providers/auth_provider.dart';
+import '../../core/router/route_guard.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -15,30 +14,29 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
+  /// Keep the brand visible at least this long, even if the session check
+  /// finishes instantly.
+  static const _minimumBrandTime = Duration(milliseconds: 1200);
+
+  Timer? _timer;
+
   @override
   void initState() {
     super.initState();
-    // Reading the provider starts restoring any saved login from the device.
-    ref.read(authNotifierProvider);
-    _routeAfterSplash();
+    // The splash does not navigate. The router (route_guard.dart) keeps the
+    // user here while the saved session is being checked and sends them to
+    // the right place once it knows. This timer only opens the "minimum
+    // brand time" gate; the router does the rest.
+    _timer = Timer(_minimumBrandTime, () {
+      if (!mounted) return;
+      ref.read(splashGateProvider.notifier).state = true;
+    });
   }
 
-  Future<void> _routeAfterSplash() async {
-    // Keep the brand visible briefly.
-    await Future<void>.delayed(const Duration(milliseconds: 1500));
-
-    // Wait (up to 5 seconds) for the saved session to finish loading.
-    var waitedMs = 0;
-    while (mounted &&
-        ref.read(authNotifierProvider).isLoading &&
-        waitedMs < 5000) {
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-      waitedMs += 100;
-    }
-
-    if (!mounted) return;
-    final session = ref.read(authNotifierProvider).value;
-    context.go(session != null ? '/dashboard' : '/welcome');
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   @override

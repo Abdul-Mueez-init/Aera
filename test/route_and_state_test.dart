@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:aera/main.dart';
+import 'package:aera/core/network/api_client.dart';
 import 'package:aera/core/router/app_router.dart';
+import 'package:aera/core/router/route_guard.dart';
+import 'package:aera/features/auth/data/auth_repository.dart';
+import 'package:aera/features/auth/providers/auth_provider.dart';
 import 'package:aera/features/auth/login_screen.dart';
-import 'package:aera/features/auth/sign_up_screen.dart';
-import 'package:aera/features/auth/forgot_password_screen.dart';
-import 'package:aera/features/auth/reset_password_screen.dart';
 import 'package:aera/features/auth/welcome_screen.dart';
 import 'package:aera/features/onboarding/business_basics_screen.dart';
 import 'package:aera/features/onboarding/service_area_screen.dart';
@@ -35,47 +35,84 @@ import 'package:aera/features/calendar/calendar_screen.dart';
 import 'package:aera/features/customers/customers_screen.dart';
 import 'package:aera/features/customers/customer_detail_screen.dart';
 import 'package:aera/features/quotes/quote_detail_screen.dart';
-import 'package:aera/features/invoices/invoice_detail_screen.dart';
 import 'package:aera/features/settings/notifications_screen.dart';
 import 'package:aera/features/settings/profile_settings_screen.dart';
 import 'package:aera/features/settings/company_settings_screen.dart';
 import 'package:aera/features/jobs/jobs_screen.dart';
+
+/// Stands in for the real repository so no storage or network is touched.
+class _FakeAuthRepository extends AuthRepository {
+  _FakeAuthRepository(this._session) : super(ApiClient());
+
+  final AuthSession? _session;
+
+  @override
+  Future<AuthSession?> restoreSession() async => _session;
+
+  @override
+  Future<void> logout() async {}
+
+  @override
+  Future<void> clearLocalSession() async {}
+}
+
+const _ownerSession = AuthSession(
+  accessToken: 'access',
+  refreshToken: 'refresh',
+  user: AuthUser(
+    id: 'user-1',
+    email: 'owner@example.com',
+    firstName: 'Sam',
+    lastName: 'Owner',
+  ),
+  company: AuthCompany(id: 'company-1', name: 'Test HVAC Co', slug: 'test'),
+  role: 'OWNER',
+);
+
+/// Route tests run as a signed-in owner: owners may open every screen, so the
+/// route table itself is what is being exercised. Who-can-open-what is covered
+/// by test/core/router/route_guard_test.dart and test/widget_test.dart.
+List<Override> _ownerOverrides() => [
+  authNotifierProvider.overrideWith(
+    (ref) => AuthNotifier(_FakeAuthRepository(_ownerSession)),
+  ),
+];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Phase G3 - Flutter Route and State Tests', () {
     late ProviderContainer container;
+    late GoRouter router;
 
-    setUp(() {
-      container = ProviderContainer();
+    setUp(() async {
+      container = ProviderContainer(overrides: _ownerOverrides());
+      router = container.read(routerProvider);
+      // Resolve the (fake) saved session and open the splash gate up front,
+      // so router.go(...) in a test is never bounced back to /splash.
+      await container.read(authNotifierProvider.notifier).restoreSession();
+      container.read(splashGateProvider.notifier).state = true;
     });
 
     tearDown(() {
       container.dispose();
     });
 
-    testWidgets('Auth return path - redirect to login when not authenticated', (
+    testWidgets('Signed-in owner - protected routes are reachable', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
-      // Initially should show dashboard (default route)
-      expect(find.byType(DashboardScreen), findsOneWidget);
-
-      // Navigate to a protected route
-      appRouter.go('/customers');
+      router.go('/customers');
       await tester.pumpAndSettle();
 
-      // Should redirect to login if not authenticated
-      // Note: This test may need adjustment based on actual auth guard implementation
       expect(find.byType(CustomersScreen), findsOneWidget);
     });
 
@@ -86,37 +123,32 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
-      // Start from welcome
-      appRouter.go('/welcome');
-      await tester.pumpAndSettle();
-      expect(find.byType(WelcomeScreen), findsOneWidget);
-
       // Navigate through onboarding steps
-      appRouter.go('/onboarding/business-basics');
+      router.go('/onboarding/business-basics');
       await tester.pumpAndSettle();
       expect(find.byType(BusinessBasicsScreen), findsOneWidget);
 
-      appRouter.go('/onboarding/service-area');
+      router.go('/onboarding/service-area');
       await tester.pumpAndSettle();
       // Service area screen exists and renders
       expect(find.byType(ServiceAreaScreen), findsOneWidget);
 
-      appRouter.go('/onboarding/services');
+      router.go('/onboarding/services');
       await tester.pumpAndSettle();
       // Services screen exists and renders
       expect(find.byType(ServicesScreen), findsOneWidget);
 
-      appRouter.go('/onboarding/team-setup');
+      router.go('/onboarding/team-setup');
       await tester.pumpAndSettle();
       // Team setup screen exists and renders
       expect(find.byType(TeamSetupScreen), findsOneWidget);
 
-      appRouter.go('/onboarding/complete');
+      router.go('/onboarding/complete');
       await tester.pumpAndSettle();
       expect(find.byType(OnboardingCompleteScreen), findsOneWidget);
     });
@@ -128,23 +160,23 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Start at dashboard
-      appRouter.go('/dashboard');
+      router.go('/dashboard');
       await tester.pumpAndSettle();
       expect(find.byType(DashboardScreen), findsOneWidget);
 
       // Navigate to create job
-      appRouter.go('/create-job');
+      router.go('/create-job');
       await tester.pumpAndSettle();
       expect(find.byType(CreateJobScreen), findsOneWidget);
 
       // Navigate to job detail after creation
-      appRouter.go('/jobs/JOB-4019');
+      router.go('/jobs/JOB-4019');
       await tester.pumpAndSettle();
       expect(find.byType(JobDetailScreen), findsOneWidget);
     });
@@ -156,38 +188,38 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Start at technician home
-      appRouter.go('/technician-home');
+      router.go('/technician-home');
       await tester.pumpAndSettle();
       expect(find.byType(TechnicianHomeScreen), findsOneWidget);
 
       // Navigate to job brief
-      appRouter.go('/technician/jobs/JOB-4019/brief');
+      router.go('/technician/jobs/JOB-4019/brief');
       await tester.pumpAndSettle();
       expect(find.byType(JobBriefScreen), findsOneWidget);
 
       // Navigate to en route
-      appRouter.go('/technician/jobs/JOB-4019/en-route');
+      router.go('/technician/jobs/JOB-4019/en-route');
       await tester.pumpAndSettle();
       expect(find.byType(EnRouteScreen), findsOneWidget);
 
       // Navigate to work in progress
-      appRouter.go('/technician/jobs/JOB-4019/work');
+      router.go('/technician/jobs/JOB-4019/work');
       await tester.pumpAndSettle();
       expect(find.byType(WorkInProgressScreen), findsOneWidget);
 
       // Navigate to evidence
-      appRouter.go('/technician/jobs/JOB-4019/evidence');
+      router.go('/technician/jobs/JOB-4019/evidence');
       await tester.pumpAndSettle();
       expect(find.byType(JobEvidenceScreen), findsOneWidget);
 
       // Navigate to complete
-      appRouter.go('/technician/jobs/JOB-4019/complete');
+      router.go('/technician/jobs/JOB-4019/complete');
       await tester.pumpAndSettle();
       expect(find.byType(CompleteJobScreen), findsOneWidget);
     });
@@ -199,18 +231,18 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Navigate to quote approval with share token
-      appRouter.go('/quote-approval/test-share-token-123');
+      router.go('/quote-approval/test-share-token-123');
       await tester.pumpAndSettle();
       expect(find.byType(QuoteApprovalScreen), findsOneWidget);
 
       // Navigate to invoice payment
-      appRouter.go('/invoice-payment/test-token/INV-1001');
+      router.go('/invoice-payment/test-token/INV-1001');
       await tester.pumpAndSettle();
       expect(find.byType(InvoicePaymentScreen), findsOneWidget);
     });
@@ -222,18 +254,18 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Navigate to AI assistant
-      appRouter.go('/ai-assistant');
+      router.go('/ai-assistant');
       await tester.pumpAndSettle();
       expect(find.byType(AiOperationsAssistantScreen), findsOneWidget);
 
       // Navigate to AI insight detail
-      appRouter.go('/ai-insight/insight-123');
+      router.go('/ai-insight/insight-123');
       await tester.pumpAndSettle();
       expect(find.byType(AiInsightDetailScreen), findsOneWidget);
     });
@@ -245,23 +277,23 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Test with valid job ID to verify route works
-      appRouter.go('/jobs/JOB-4019');
+      router.go('/jobs/JOB-4019');
       await tester.pumpAndSettle();
       expect(find.byType(JobDetailScreen), findsOneWidget);
 
       // Test with valid customer ID to verify route works
-      appRouter.go('/customers/CUST-1002');
+      router.go('/customers/CUST-1002');
       await tester.pumpAndSettle();
       expect(find.byType(CustomerDetailScreen), findsOneWidget);
 
       // Test with valid quote ID to verify route works
-      appRouter.go('/quotes/QT-1048');
+      router.go('/quotes/QT-1048');
       await tester.pumpAndSettle();
       expect(find.byType(QuoteDetailScreen), findsOneWidget);
     });
@@ -273,74 +305,61 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Test Dashboard tab
-      appRouter.go('/dashboard');
+      router.go('/dashboard');
       await tester.pumpAndSettle();
       expect(find.byType(DashboardScreen), findsOneWidget);
 
       // Test Jobs tab
-      appRouter.go('/jobs');
+      router.go('/jobs');
       await tester.pumpAndSettle();
       expect(find.byType(JobsScreen), findsOneWidget);
 
       // Test Calendar tab
-      appRouter.go('/calendar');
+      router.go('/calendar');
       await tester.pumpAndSettle();
       expect(find.byType(CalendarScreen), findsOneWidget);
 
       // Test Customers tab
-      appRouter.go('/customers');
+      router.go('/customers');
       await tester.pumpAndSettle();
       expect(find.byType(CustomersScreen), findsOneWidget);
 
       // Test More tab
-      appRouter.go('/more');
+      router.go('/more');
       await tester.pumpAndSettle();
       expect(find.byType(MoreScreen), findsOneWidget);
     });
 
-    testWidgets('Auth screens - all auth routes are accessible', (
+    testWidgets('Auth screens - signed-in users are sent past them', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
-      // Test welcome screen
-      appRouter.go('/welcome');
+      // A signed-in owner who opens an auth entry screen lands on the
+      // dashboard instead (see route_guard.dart).
+      router.go('/welcome');
       await tester.pumpAndSettle();
-      expect(find.byType(WelcomeScreen), findsOneWidget);
+      expect(find.byType(WelcomeScreen), findsNothing);
+      expect(find.byType(DashboardScreen), findsOneWidget);
 
-      // Test login screen
-      appRouter.go('/login');
+      router.go('/login');
       await tester.pumpAndSettle();
-      expect(find.byType(LoginScreen), findsOneWidget);
-
-      // Test sign up screen
-      appRouter.go('/sign-up');
-      await tester.pumpAndSettle();
-      expect(find.byType(SignUpScreen), findsOneWidget);
-
-      // Test forgot password
-      appRouter.go('/forgot-password');
-      await tester.pumpAndSettle();
-      expect(find.byType(ForgotPasswordScreen), findsOneWidget);
-
-      // Test reset password
-      appRouter.go('/reset-password');
-      await tester.pumpAndSettle();
-      expect(find.byType(ResetPasswordScreen), findsOneWidget);
-    }, skip: true); // Skip due to rendering overflow issues
+      expect(find.byType(LoginScreen), findsNothing);
+      expect(find.byType(DashboardScreen), findsOneWidget);
+    });
 
     testWidgets('Settings and profile routes - accessibility', (
       WidgetTester tester,
@@ -349,23 +368,23 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Test notifications - route exists and renders
-      appRouter.go('/notifications');
+      router.go('/notifications');
       await tester.pumpAndSettle();
       expect(find.byType(NotificationsScreen), findsOneWidget);
 
       // Test profile settings - route exists and renders
-      appRouter.go('/profile-settings');
+      router.go('/profile-settings');
       await tester.pumpAndSettle();
       expect(find.byType(ProfileSettingsScreen), findsOneWidget);
 
       // Test company settings - route exists and renders
-      appRouter.go('/company-settings');
+      router.go('/company-settings');
       await tester.pumpAndSettle();
       expect(find.byType(CompanySettingsScreen), findsOneWidget);
     }, skip: true); // Skip due to rendering issues with ListTile background
@@ -377,13 +396,13 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Test customer portal with token
-      appRouter.go('/portal/customer-token-123');
+      router.go('/portal/customer-token-123');
       await tester.pumpAndSettle();
       expect(find.byType(CustomerHomeScreen), findsOneWidget);
     });
@@ -395,13 +414,13 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Test technician tracking
-      appRouter.go('/technician-tracking/track-token/JOB-4019');
+      router.go('/technician-tracking/track-token/JOB-4019');
       await tester.pumpAndSettle();
       expect(find.byType(TechnicianTrackingScreen), findsOneWidget);
     });
@@ -413,14 +432,14 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Test job ID parameter extraction
       const testJobId = 'JOB-TEST-123';
-      appRouter.go('/jobs/$testJobId');
+      router.go('/jobs/$testJobId');
       await tester.pumpAndSettle();
       
       final jobDetailFinder = find.byType(JobDetailScreen);
@@ -438,13 +457,13 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Test query parameter for job ID
-      appRouter.go('/create-invoice?jobId=JOB-4019');
+      router.go('/create-invoice?jobId=JOB-4019');
       await tester.pumpAndSettle();
       expect(find.byType(CreateInvoiceScreen), findsOneWidget);
     });
@@ -456,23 +475,23 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Test deep link to specific job
-      appRouter.go('/jobs/JOB-DEEP-123');
+      router.go('/jobs/JOB-DEEP-123');
       await tester.pumpAndSettle();
       expect(find.byType(JobDetailScreen), findsOneWidget);
 
       // Test deep link to specific customer
-      appRouter.go('/customers/CUST-DEEP-456');
+      router.go('/customers/CUST-DEEP-456');
       await tester.pumpAndSettle();
       expect(find.byType(CustomerDetailScreen), findsOneWidget);
 
       // Test deep link to specific quote
-      appRouter.go('/quotes/QT-DEEP-789');
+      router.go('/quotes/QT-DEEP-789');
       await tester.pumpAndSettle();
       expect(find.byType(QuoteDetailScreen), findsOneWidget);
     });
@@ -480,9 +499,15 @@ void main() {
 
   group('Phase G3 - API-Backed Screen State Tests', () {
     late ProviderContainer container;
+    late GoRouter router;
 
-    setUp(() {
-      container = ProviderContainer();
+    setUp(() async {
+      container = ProviderContainer(overrides: _ownerOverrides());
+      router = container.read(routerProvider);
+      // Resolve the (fake) saved session and open the splash gate up front,
+      // so router.go(...) in a test is never bounced back to /splash.
+      await container.read(authNotifierProvider.notifier).restoreSession();
+      container.read(splashGateProvider.notifier).state = true;
     });
 
     tearDown(() {
@@ -498,12 +523,12 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
-      appRouter.go('/jobs');
+      router.go('/jobs');
       await tester.pumpAndSettle();
       expect(find.byType(JobsScreen), findsOneWidget);
     });
@@ -516,12 +541,12 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
-      appRouter.go('/customers');
+      router.go('/customers');
       await tester.pumpAndSettle();
       expect(find.byType(CustomersScreen), findsOneWidget);
     });
@@ -534,12 +559,12 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
-      appRouter.go('/dashboard');
+      router.go('/dashboard');
       await tester.pumpAndSettle();
       expect(find.byType(DashboardScreen), findsOneWidget);
     });
@@ -552,12 +577,12 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
-      appRouter.go('/jobs');
+      router.go('/jobs');
       await tester.pumpAndSettle();
       expect(find.byType(JobsScreen), findsOneWidget);
     });
@@ -570,12 +595,12 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
-      appRouter.go('/company-settings');
+      router.go('/company-settings');
       await tester.pumpAndSettle();
       expect(find.byType(CompanySettingsScreen), findsOneWidget);
     });
@@ -583,9 +608,15 @@ void main() {
 
   group('Phase G3 - Route Navigation Edge Cases', () {
     late ProviderContainer container;
+    late GoRouter router;
 
-    setUp(() {
-      container = ProviderContainer();
+    setUp(() async {
+      container = ProviderContainer(overrides: _ownerOverrides());
+      router = container.read(routerProvider);
+      // Resolve the (fake) saved session and open the splash gate up front,
+      // so router.go(...) in a test is never bounced back to /splash.
+      await container.read(authNotifierProvider.notifier).restoreSession();
+      container.read(splashGateProvider.notifier).state = true;
     });
 
     tearDown(() {
@@ -599,13 +630,13 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Navigate to unknown route - should fall back to default route
-      appRouter.go('/unknown-route');
+      router.go('/unknown-route');
       await tester.pumpAndSettle();
       
       // Router should handle gracefully (either show 404 or redirect)
@@ -620,31 +651,31 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Navigate through multiple routes using push for navigation stack
-      appRouter.go('/dashboard');
+      router.go('/dashboard');
       await tester.pumpAndSettle();
       
       // Use location to verify current route
-      expect(appRouter.routeInformationProvider.value.uri.path, '/dashboard');
+      expect(router.routeInformationProvider.value.uri.path, '/dashboard');
       
-      appRouter.go('/jobs');
+      router.go('/jobs');
       await tester.pumpAndSettle();
-      expect(appRouter.routeInformationProvider.value.uri.path, '/jobs');
+      expect(router.routeInformationProvider.value.uri.path, '/jobs');
       
-      appRouter.go('/customers');
+      router.go('/customers');
       await tester.pumpAndSettle();
-      expect(appRouter.routeInformationProvider.value.uri.path, '/customers');
+      expect(router.routeInformationProvider.value.uri.path, '/customers');
 
       // Test back navigation using canPop and pop
-      if (appRouter.canPop()) {
-        appRouter.pop();
+      if (router.canPop()) {
+        router.pop();
         await tester.pumpAndSettle();
-        expect(appRouter.routeInformationProvider.value.uri.path, '/jobs');
+        expect(router.routeInformationProvider.value.uri.path, '/jobs');
       }
     });
 
@@ -655,13 +686,13 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Test with special characters (though IDs should be alphanumeric)
-      appRouter.go('/jobs/JOB-123-TEST');
+      router.go('/jobs/JOB-123-TEST');
       await tester.pumpAndSettle();
       expect(find.byType(JobDetailScreen), findsOneWidget);
     });
@@ -673,19 +704,19 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp.router(
-            routerConfig: appRouter,
+            routerConfig: router,
           ),
         ),
       );
 
       // Rapid navigation changes
-      appRouter.go('/dashboard');
+      router.go('/dashboard');
       await tester.pump();
       
-      appRouter.go('/jobs');
+      router.go('/jobs');
       await tester.pump();
       
-      appRouter.go('/customers');
+      router.go('/customers');
       await tester.pumpAndSettle();
       
       expect(find.byType(CustomersScreen), findsOneWidget);
