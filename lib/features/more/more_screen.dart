@@ -148,6 +148,13 @@ class MoreScreen extends ConsumerWidget {
           ),
           _navItem(
             context,
+            icon: Icons.groups,
+            title: 'Team',
+            subtitle: 'Invite and manage technicians and dispatchers',
+            route: '/team',
+          ),
+          _navItem(
+            context,
             icon: Icons.domain,
             title: 'Company Settings',
             subtitle: 'Company name, timezone and currency',

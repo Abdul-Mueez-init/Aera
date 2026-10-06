@@ -149,6 +149,63 @@ describe("Team invitations", () => {
   });
 });
 
+describe("Invitations for emails that already have an account", () => {
+  it("never lets the invitation token overwrite the existing account's password", async () => {
+    const victimPassword = "victim-password-123456";
+    const victimEmail = `victim-${Date.now()}-${Math.random()}@example.com`;
+    const victimRegister = await request(app)
+      .post("/api/v1/auth/register")
+      .send({
+        email: victimEmail,
+        password: victimPassword,
+        firstName: "Vic",
+        lastName: "Tim",
+        companyName: `Victim Co ${Date.now()}`,
+      });
+    expect(victimRegister.status).toBe(201);
+
+    const owner = await registerOwner();
+    const invite = await request(app)
+      .post("/api/v1/companies/current/invitations")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({
+        email: victimEmail,
+        firstName: "Vic",
+        lastName: "Tim",
+        role: "TECHNICIAN",
+      });
+    expect(invite.status).toBe(201);
+
+    // The inviting owner holds the token but not the victim's password.
+    const takeover = await request(app)
+      .post("/api/v1/auth/accept-invitation")
+      .send({
+        token: invite.body.data.invitationToken,
+        password: "attacker-chosen-password-1",
+      });
+    expect(takeover.status).toBe(400);
+    expect(takeover.body.error.code).toBe("INVITATION_PASSWORD_MISMATCH");
+
+    // The victim's own password still works.
+    const stillWorks = await request(app).post("/api/v1/auth/login").send({
+      email: victimEmail,
+      password: victimPassword,
+    });
+    expect(stillWorks.status).toBe(200);
+
+    // The real account holder can accept with their existing password.
+    const accept = await request(app)
+      .post("/api/v1/auth/accept-invitation")
+      .send({
+        token: invite.body.data.invitationToken,
+        password: victimPassword,
+      });
+    expect(accept.status).toBe(200);
+    expect(accept.body.data.role).toBe("TECHNICIAN");
+    expect(accept.body.data.company.id).toBe(owner.company.id);
+  });
+});
+
 describe("Refresh token reuse detection", () => {
   it("revokes the whole session when a rotated (already-used) refresh token is replayed", async () => {
     const owner = await registerOwner();

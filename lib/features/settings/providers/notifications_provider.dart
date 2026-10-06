@@ -1,8 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/network/api_client.dart';
 import '../data/notifications_repository.dart';
 
-final notificationsRepositoryProvider = Provider<NotificationsRepository>((ref) {
-  return NotificationsRepository();
+final notificationsRepositoryProvider = Provider<NotificationsRepository>((
+  ref,
+) {
+  return NotificationsRepository(apiClient: ref.watch(apiClientProvider));
 });
 
 class NotificationListState {
@@ -41,7 +44,8 @@ class NotificationListNotifier extends StateNotifier<NotificationListState> {
   final NotificationsRepository _repository;
 
   NotificationListNotifier(this._repository)
-      : super(NotificationListState(
+    : super(
+        NotificationListState(
           meta: NotificationMeta(
             page: 1,
             pageSize: 20,
@@ -49,10 +53,15 @@ class NotificationListNotifier extends StateNotifier<NotificationListState> {
             pageCount: 0,
             unreadCount: 0,
           ),
-        ));
+        ),
+      );
 
   Future<void> loadNotifications({bool unreadOnly = false}) async {
-    state = state.copyWith(isLoading: true, error: null, unreadOnly: unreadOnly);
+    state = state.copyWith(
+      isLoading: true,
+      error: null,
+      unreadOnly: unreadOnly,
+    );
     try {
       final response = await _repository.listNotifications(
         page: 1,
@@ -65,10 +74,7 @@ class NotificationListNotifier extends StateNotifier<NotificationListState> {
         isLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
@@ -98,7 +104,9 @@ class NotificationListNotifier extends StateNotifier<NotificationListState> {
         pageSize: state.meta.pageSize,
         total: state.meta.total,
         pageCount: state.meta.pageCount,
-        unreadCount: state.meta.unreadCount > 0 ? state.meta.unreadCount - 1 : 0,
+        unreadCount: state.meta.unreadCount > 0
+            ? state.meta.unreadCount - 1
+            : 0,
       );
 
       state = state.copyWith(items: updatedItems, meta: updatedMeta);
@@ -116,7 +124,9 @@ class NotificationListNotifier extends StateNotifier<NotificationListState> {
 }
 
 final notificationsListProvider =
-    StateNotifierProvider<NotificationListNotifier, NotificationListState>((ref) {
-  final repository = ref.watch(notificationsRepositoryProvider);
-  return NotificationListNotifier(repository);
-});
+    StateNotifierProvider<NotificationListNotifier, NotificationListState>((
+      ref,
+    ) {
+      final repository = ref.watch(notificationsRepositoryProvider);
+      return NotificationListNotifier(repository);
+    });

@@ -13,6 +13,8 @@ import '../../features/auth/login_screen.dart';
 import '../../features/auth/sign_up_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
 import '../../features/auth/reset_password_screen.dart';
+import '../../features/auth/accept_invitation_screen.dart';
+import '../../features/team/team_screen.dart';
 
 import '../../features/onboarding/business_basics_screen.dart';
 import '../../features/onboarding/service_area_screen.dart';
@@ -121,6 +123,12 @@ List<RouteBase> _buildRoutes() => [
   GoRoute(
     path: '/reset-password',
     builder: (context, state) => const ResetPasswordScreen(),
+  ),
+  GoRoute(
+    path: '/accept-invitation',
+    builder: (context, state) => AcceptInvitationScreen(
+      initialToken: state.uri.queryParameters['token'],
+    ),
   ),
 
   // Onboarding Flow
@@ -289,6 +297,7 @@ List<RouteBase> _buildRoutes() => [
     path: '/company-settings',
     builder: (context, state) => const CompanySettingsScreen(),
   ),
+  GoRoute(path: '/team', builder: (context, state) => const TeamScreen()),
 
   // Sub-routes for Jobs & Customers Details
   GoRoute(

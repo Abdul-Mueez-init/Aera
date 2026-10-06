@@ -1,7 +1,7 @@
 import { randomBytes, createHash } from "node:crypto";
 import { AppError } from "../../common/errors.js";
 import type { AuthContext } from "../../common/auth/auth.types.js";
-import { hashPassword } from "../../common/auth/password.js";
+import { hashPassword, verifyPassword } from "../../common/auth/password.js";
 import { prisma } from "../../db/prisma.js";
 
 export interface InviteMemberInput {
@@ -149,7 +149,35 @@ export async function acceptInvitation(
     );
   }
 
-  const passwordHash = await hashPassword(password);
+  // An invitation may point at an email that already has an Aera account
+  // (for example from another company). Whoever holds the invitation token
+  // must never be able to overwrite that person's password, so an existing
+  // account has to prove it by entering its current password.
+  const invitedUser = await prisma.user.findUnique({
+    where: { id: member.userId },
+    select: { passwordHash: true },
+  });
+  if (!invitedUser) {
+    throw new AppError(
+      "INVITATION_INVALID_OR_EXPIRED",
+      "This invitation link is invalid or has expired",
+      400,
+    );
+  }
+
+  let newPasswordHash: string | null = null;
+  if (invitedUser.passwordHash) {
+    const matches = await verifyPassword(password, invitedUser.passwordHash);
+    if (!matches) {
+      throw new AppError(
+        "INVITATION_PASSWORD_MISMATCH",
+        "This email already has an Aera account. Enter your existing password to join.",
+        400,
+      );
+    }
+  } else {
+    newPasswordHash = await hashPassword(password);
+  }
 
   const accepted = await prisma.$transaction(async (tx) => {
     const updateResult = await tx.companyMember.updateMany({
@@ -170,10 +198,12 @@ export async function acceptInvitation(
       return false;
     }
 
-    await tx.user.update({
-      where: { id: member.userId },
-      data: { passwordHash, isActive: true },
-    });
+    if (newPasswordHash !== null) {
+      await tx.user.update({
+        where: { id: member.userId },
+        data: { passwordHash: newPasswordHash, isActive: true },
+      });
+    }
 
     return true;
   });

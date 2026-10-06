@@ -152,7 +152,7 @@ void main() {
   group('signed in as owner or dispatcher', () {
     for (final role in ['OWNER', 'DISPATCHER']) {
       test('$role: entry screens go to the dashboard', () {
-        for (final path in ['/splash', '/welcome', '/login', '/sign-up']) {
+        for (final path in ['/splash', '/welcome', '/login', '/sign-up', '/accept-invitation']) {
           expect(
             _redirect(AuthGate.signedIn, path, role: role),
             '/dashboard',
@@ -190,7 +190,7 @@ void main() {
 
   group('signed in as technician', () {
     test('entry screens go to Technician Home', () {
-      for (final path in ['/splash', '/welcome', '/login', '/sign-up']) {
+      for (final path in ['/splash', '/welcome', '/login', '/sign-up', '/accept-invitation']) {
         expect(
           _redirect(AuthGate.signedIn, path, role: 'TECHNICIAN'),
           '/technician-home',
@@ -220,6 +220,7 @@ void main() {
         '/ai-assistant',
         '/ai-insight/abc',
         '/company-settings',
+        '/team',
         '/onboarding/team-setup',
       ]) {
         expect(

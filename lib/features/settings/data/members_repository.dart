@@ -93,4 +93,25 @@ class MembersRepository {
     );
     return Member.fromJson(res as Map<String, dynamic>);
   }
+
+  /// Changes a member's role and/or status (OWNER only; the server enforces
+  /// it). Only ACTIVE <-> SUSPENDED is allowed for status.
+  Future<void> updateMember(
+    String memberId, {
+    String? role,
+    String? status,
+  }) async {
+    await _client.patch(
+      '/api/v1/companies/current/members/$memberId',
+      body: {
+        if (role != null) 'role': role,
+        if (status != null) 'status': status,
+      },
+    );
+  }
+
+  /// Removes a member and revokes their sessions (OWNER only).
+  Future<void> removeMember(String memberId) async {
+    await _client.delete('/api/v1/companies/current/members/$memberId');
+  }
 }

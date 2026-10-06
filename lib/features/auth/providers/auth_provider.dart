@@ -107,6 +107,33 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
     }
   }
 
+  Future<AuthSession> acceptInvitation({
+    required String token,
+    required String password,
+  }) async {
+    state = const AsyncValue.loading();
+    try {
+      final session = await _repo.acceptInvitation(
+        token: token,
+        password: password,
+      );
+      state = AsyncValue.data(session);
+
+      if (AppConfig.isSentryEnabled) {
+        await Sentry.configureScope((scope) {
+          scope.setUser(SentryUser(id: session.user.id));
+          scope.setTag('company_id', session.company.id);
+          scope.setTag('role', session.role);
+        });
+      }
+
+      return session;
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      rethrow;
+    }
+  }
+
   Future<void> logout() async {
     await _repo.logout();
     await _clearSentryUser();

@@ -99,6 +99,19 @@ class WelcomeScreen extends StatelessWidget {
               variant: AeraButtonVariant.secondary,
               onPressed: () => context.push('/login'),
             ),
+            const SizedBox(height: 8),
+            Center(
+              child: TextButton(
+                onPressed: () => context.push('/accept-invitation'),
+                child: Text(
+                  'I have an invitation',
+                  style: AeraTypography.bodySm.copyWith(
+                    color: AeraColors.accent,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
           ],
         ),

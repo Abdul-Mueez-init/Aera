@@ -184,6 +184,24 @@ class AuthRepository {
     return session;
   }
 
+  /// Accepts a team invitation: sets (or, for an email that already has an
+  /// Aera account, confirms) the password and signs the member in.
+  Future<AuthSession> acceptInvitation({
+    required String token,
+    required String password,
+  }) async {
+    final res = await _client.post(
+      '/api/v1/auth/accept-invitation',
+      body: {'token': token.trim(), 'password': password},
+      retryOnUnauthorized: false,
+    );
+
+    final session = AuthSession.fromJson(res as Map<String, dynamic>);
+    _client.setAccessToken(session.accessToken);
+    await _persistSession(session);
+    return session;
+  }
+
   /// Exchanges the saved refresh token for a new access/refresh pair.
   ///
   /// Returns null when there is nothing to refresh with. Errors from the

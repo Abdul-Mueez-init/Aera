@@ -42,7 +42,12 @@ const List<String> _publicPrefixes = [
 ];
 
 /// Screens a signed-in user never needs to see again.
-const Set<String> _authEntryPaths = {'/welcome', '/login', '/sign-up'};
+const Set<String> _authEntryPaths = {
+  '/welcome',
+  '/login',
+  '/sign-up',
+  '/accept-invitation',
+};
 
 /// The only signed-in routes a technician may open. Everything else is
 /// owner/dispatcher-only. The server still enforces permissions on every

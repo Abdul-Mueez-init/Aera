@@ -20,7 +20,9 @@ class Notification {
       id: json['id'] as String,
       type: json['type'] as String,
       payload: json['payload'] as Map<String, dynamic>?,
-      readAt: json['readAt'] != null ? DateTime.parse(json['readAt'] as String) : null,
+      readAt: json['readAt'] != null
+          ? DateTime.parse(json['readAt'] as String)
+          : null,
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }
@@ -58,10 +60,7 @@ class NotificationListResponse {
   final List<Notification> items;
   final NotificationMeta meta;
 
-  NotificationListResponse({
-    required this.items,
-    required this.meta,
-  });
+  NotificationListResponse({required this.items, required this.meta});
 
   factory NotificationListResponse.fromJson(Map<String, dynamic> json) {
     return NotificationListResponse(
@@ -76,8 +75,11 @@ class NotificationListResponse {
 class NotificationsRepository {
   final ApiClient _apiClient;
 
-  NotificationsRepository({ApiClient? apiClient})
-      : _apiClient = apiClient ?? ApiClient();
+  /// Always built with the app-wide [ApiClient] (see
+  /// `notificationsRepositoryProvider`). A private `ApiClient()` would have no
+  /// access token, no token refresh and no session-expiry handling.
+  NotificationsRepository({required ApiClient apiClient})
+    : _apiClient = apiClient;
 
   Future<NotificationListResponse> listNotifications({
     int page = 1,
@@ -91,7 +93,7 @@ class NotificationsRepository {
     };
 
     final data = await _apiClient.get(
-      '/notifications',
+      '/api/v1/notifications',
       queryParameters: queryParameters,
     );
     return NotificationListResponse.fromJson(data as Map<String, dynamic>);
@@ -99,7 +101,7 @@ class NotificationsRepository {
 
   Future<Notification> markAsRead(String notificationId) async {
     final data = await _apiClient.post(
-      '/notifications/$notificationId/read',
+      '/api/v1/notifications/$notificationId/read',
     );
     return Notification.fromJson(data as Map<String, dynamic>);
   }
