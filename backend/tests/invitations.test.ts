@@ -206,6 +206,110 @@ describe("Invitations for emails that already have an account", () => {
   });
 });
 
+describe("Invitations that can no longer be accepted", () => {
+  async function inviteTechnician(owner: {
+    accessToken: string;
+    company: { id: string };
+  }) {
+    const invite = await request(app)
+      .post("/api/v1/companies/current/invitations")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({
+        email: `late-tech-${Date.now()}-${Math.random()}@example.com`,
+        firstName: "Late",
+        lastName: "Tech",
+        role: "TECHNICIAN",
+      });
+    expect(invite.status).toBe(201);
+    return invite.body.data as {
+      id: string;
+      invitationToken: string;
+      user: { id: string; email: string };
+    };
+  }
+
+  it("rejects an expired invitation and leaves the member INVITED with no password", async () => {
+    const owner = await registerOwner();
+    const invite = await inviteTechnician(owner);
+
+    await prisma.companyMember.update({
+      where: {
+        companyId_userId: {
+          companyId: owner.company.id,
+          userId: invite.user.id,
+        },
+      },
+      data: { invitationTokenExpiresAt: new Date(Date.now() - 60 * 1000) },
+    });
+
+    const accept = await request(app)
+      .post("/api/v1/auth/accept-invitation")
+      .send({
+        token: invite.invitationToken,
+        password: "expired-invite-password-1",
+      });
+    expect(accept.status).toBe(400);
+    expect(accept.body.error.code).toBe("INVITATION_INVALID_OR_EXPIRED");
+
+    const membership = await prisma.companyMember.findUnique({
+      where: {
+        companyId_userId: {
+          companyId: owner.company.id,
+          userId: invite.user.id,
+        },
+      },
+    });
+    expect(membership?.status).toBe("INVITED");
+
+    // No password was set, so the person still cannot sign in.
+    const login = await request(app).post("/api/v1/auth/login").send({
+      email: invite.user.email,
+      password: "expired-invite-password-1",
+    });
+    expect(login.status).toBe(401);
+  });
+
+  it("rejects an invitation after the owner removed the pending member", async () => {
+    const owner = await registerOwner();
+    const invite = await inviteTechnician(owner);
+
+    const removal = await request(app)
+      .delete(`/api/v1/companies/current/members/${invite.id}`)
+      .set("Authorization", `Bearer ${owner.accessToken}`);
+    expect(removal.status).toBe(200);
+
+    const accept = await request(app)
+      .post("/api/v1/auth/accept-invitation")
+      .send({
+        token: invite.invitationToken,
+        password: "removed-invite-password-1",
+      });
+    expect(accept.status).toBe(400);
+    expect(accept.body.error.code).toBe("INVITATION_INVALID_OR_EXPIRED");
+  });
+
+  it("rejects a too-short password without consuming the invitation", async () => {
+    const owner = await registerOwner();
+    const invite = await inviteTechnician(owner);
+
+    const tooShort = await request(app)
+      .post("/api/v1/auth/accept-invitation")
+      .send({ token: invite.invitationToken, password: "short-pw-1" });
+    expect(tooShort.status).toBe(422);
+    expect(tooShort.body.error.code).toBe("VALIDATION_FAILED");
+
+    // The same code still works with a valid password.
+    const accept = await request(app)
+      .post("/api/v1/auth/accept-invitation")
+      .send({
+        token: invite.invitationToken,
+        password: "long-enough-password-1",
+      });
+    expect(accept.status).toBe(200);
+    expect(accept.body.data.role).toBe("TECHNICIAN");
+  });
+});
+
 describe("Refresh token reuse detection", () => {
   it("revokes the whole session when a rotated (already-used) refresh token is replayed", async () => {
     const owner = await registerOwner();

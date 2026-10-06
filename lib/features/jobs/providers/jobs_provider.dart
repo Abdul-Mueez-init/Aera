@@ -54,7 +54,15 @@ final jobDetailProvider = FutureProvider.family<Job, String>((
   return repo.getJob(jobId);
 });
 
-final techniciansProvider = FutureProvider<List<Technician>>((ref) async {
+/// Active technicians for the assign list.
+///
+/// Auto-disposed on purpose: the roster changes outside this screen (an
+/// invited technician accepts on their own phone, the owner suspends or
+/// removes someone), so the list must be fetched fresh every time the
+/// schedule screen opens instead of being cached for the whole session.
+final techniciansProvider = FutureProvider.autoDispose<List<Technician>>((
+  ref,
+) async {
   final repo = ref.watch(jobsRepositoryProvider);
   return repo.listTechnicians();
 });

@@ -340,19 +340,47 @@ class _ScheduleJobScreenState extends ConsumerState<ScheduleJobScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
-                  error: (error, _) => Text(
-                    error is ApiException
-                        ? error.message
-                        : 'Could not load technicians',
-                    style: AeraTypography.bodySm.copyWith(
-                      color: AeraColors.danger,
-                    ),
+                  error: (error, _) => Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          error is ApiException
+                              ? error.message
+                              : 'Could not load technicians',
+                          style: AeraTypography.bodySm.copyWith(
+                            color: AeraColors.danger,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => ref.invalidate(techniciansProvider),
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ),
                   data: (technicians) {
                     if (technicians.isEmpty) {
-                      return Text(
-                        'No active technicians on this company yet',
-                        style: AeraTypography.bodySm,
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'No active technicians yet. A technician shows '
+                            'up here once they have accepted their '
+                            'invitation.',
+                            style: AeraTypography.bodySm,
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: () async {
+                              await context.push('/team');
+                              // The roster may have changed while away.
+                              if (!mounted) return;
+                              ref.invalidate(techniciansProvider);
+                            },
+                            icon: const Icon(Icons.group_outlined, size: 18),
+                            label: const Text('Open Team'),
+                          ),
+                        ],
                       );
                     }
                     return Column(
