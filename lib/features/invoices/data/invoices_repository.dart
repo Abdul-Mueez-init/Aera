@@ -326,6 +326,16 @@ class InvoicesRepository {
     );
     return Invoice.fromJson(res as Map<String, dynamic>);
   }
+
+  /// Generate a portal access token for the invoice's customer.
+  /// Returns the token string which can be used to build an invoice payment link.
+  Future<String> createInvoicePaymentLink(String customerId) async {
+    final res = await _client.post(
+      '/api/v1/customers/$customerId/portal-access',
+    );
+    final data = res as Map<String, dynamic>;
+    return data['token'] as String;
+  }
 }
 
 /// No `uuid` package exists in the project yet (checked pubspec.yaml before

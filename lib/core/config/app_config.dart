@@ -41,6 +41,13 @@ class AppConfig {
     return _defaultBaseUrl();
   }
 
+  // Phase 5: Base URL for customer-facing web build (quote approval, invoice payment, portal).
+  // Required for production web builds. Falls back to empty string in development.
+  static const String customerWebBaseUrl = String.fromEnvironment(
+    'CUSTOMER_WEB_BASE_URL',
+    defaultValue: '',
+  );
+
   static String _defaultBaseUrl() {
     switch (environment) {
       case 'production':

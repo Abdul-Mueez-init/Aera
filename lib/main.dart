@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_web_plugins/url_strategy.dart' show usePathUrlStrategy;
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'core/theme/aera_theme.dart';
 import 'core/router/app_router.dart';
@@ -9,6 +10,11 @@ import 'core/observability/sentry_bootstrap.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Phase 5: Use path URL strategy for web builds so customer-facing links
+  // work correctly with static hosting (e.g., Cloudflare Pages) and SPA fallback.
+  usePathUrlStrategy();
+  
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,

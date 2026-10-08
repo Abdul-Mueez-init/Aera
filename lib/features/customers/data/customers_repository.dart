@@ -352,4 +352,14 @@ class CustomersRepository {
       meta: PageMeta.fromJson(map['meta'] as Map<String, dynamic>),
     );
   }
+
+  /// Generate a portal access token for the customer.
+  /// Returns the token string which can be used to build a customer portal link.
+  Future<String> createPortalAccess(String customerId) async {
+    final res = await _client.post(
+      '/api/v1/customers/$customerId/portal-access',
+    );
+    final data = res as Map<String, dynamic>;
+    return data['token'] as String;
+  }
 }

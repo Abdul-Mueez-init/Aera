@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_typography.dart';
+import '../../core/utils/link_builder.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
@@ -103,13 +105,71 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   }
 
   void _copyShareLink(String shareToken) {
-    // No public web host is defined yet for the customer-facing quote
-    // approval page, so we copy the raw share token/API path rather than
-    // inventing a frontend URL that doesn't exist.
-    Clipboard.setData(ClipboardData(text: shareToken));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Share token copied to clipboard')),
-    );
+    try {
+      final link = LinkBuilder.quoteApproval(shareToken);
+      Clipboard.setData(ClipboardData(text: link));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Link copied to clipboard')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Customer web URL not configured for this build'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _shareViaWhatsApp(String shareToken) async {
+    try {
+      final link = LinkBuilder.quoteApproval(shareToken);
+      final message = 'Your quote is ready for review: $link';
+      final whatsappUrl = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(message)}');
+      
+      if (await canLaunchUrl(whatsappUrl)) {
+        await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open WhatsApp')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Customer web URL not configured for this build'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareViaSms(String shareToken) async {
+    try {
+      final link = LinkBuilder.quoteApproval(shareToken);
+      final message = 'Your quote is ready for review: $link';
+      final smsUrl = Uri.parse('sms:?body=${Uri.encodeComponent(message)}');
+      
+      if (await canLaunchUrl(smsUrl)) {
+        await launchUrl(smsUrl, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open SMS')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Customer web URL not configured for this build'),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -154,20 +214,42 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
                       ],
                     ),
                     if (quote.shareToken != null)
-                      TextButton.icon(
-                        onPressed: () => _copyShareLink(quote.shareToken!),
-                        icon: const Icon(
-                          Icons.link,
-                          size: 16,
-                          color: AeraColors.accent,
-                        ),
-                        label: Text(
-                          'Copy Share Link',
-                          style: AeraTypography.label.copyWith(
-                            color: AeraColors.accent,
-                            fontWeight: FontWeight.w600,
+                      Row(
+                        children: [
+                          TextButton.icon(
+                            onPressed: () => _copyShareLink(quote.shareToken!),
+                            icon: const Icon(
+                              Icons.link,
+                              size: 16,
+                              color: AeraColors.accent,
+                            ),
+                            label: Text(
+                              'Copy',
+                              style: AeraTypography.label.copyWith(
+                                color: AeraColors.accent,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
-                        ),
+                          IconButton(
+                            onPressed: () => _shareViaWhatsApp(quote.shareToken!),
+                            icon: const Icon(
+                              Icons.message,
+                              size: 18,
+                              color: AeraColors.accent,
+                            ),
+                            tooltip: 'Share via WhatsApp',
+                          ),
+                          IconButton(
+                            onPressed: () => _shareViaSms(quote.shareToken!),
+                            icon: const Icon(
+                              Icons.sms,
+                              size: 18,
+                              color: AeraColors.accent,
+                            ),
+                            tooltip: 'Share via SMS',
+                          ),
+                        ],
                       ),
                   ],
                 ),

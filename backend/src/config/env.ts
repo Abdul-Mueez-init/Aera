@@ -109,6 +109,17 @@ const envSchema = z.object({
   // Fraction of requests that produce performance traces (0 to 1). Errors are
   // always captured regardless of this value.
   SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.1),
+  // Phase 5 — CORS allowlist for customer-facing web build. Comma-separated
+  // list of allowed origins (e.g., "https://customer.example.com,http://localhost:3000").
+  // If unset, falls back to open CORS for development only.
+  CORS_ORIGINS: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => {
+      if (!value || value === "") return undefined;
+      return value.split(",").map((origin) => origin.trim());
+    }),
 });
 
 const parsed = envSchema.safeParse(process.env);

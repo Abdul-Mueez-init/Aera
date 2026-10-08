@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
+import '../../core/utils/link_builder.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_status_chip.dart';
 import '../../core/widgets/aera_text_field.dart';
+import '../customers/data/customers_repository.dart';
+import '../customers/providers/customers_provider.dart';
 import 'data/invoices_repository.dart';
 import 'providers/invoices_provider.dart';
 
@@ -52,6 +56,7 @@ class InvoiceDetailScreen extends ConsumerStatefulWidget {
 
 class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
   bool _issuing = false;
+  bool _generatingPaymentLink = false;
 
   Future<void> _issueInvoice() async {
     setState(() => _issuing = true);
@@ -77,6 +82,103 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
       }
     } finally {
       if (mounted) setState(() => _issuing = false);
+    }
+  }
+
+  Future<void> _generateAndSharePaymentLink(Invoice invoice) async {
+    setState(() => _generatingPaymentLink = true);
+    try {
+      final token = await ref
+          .read(customersRepositoryProvider)
+          .createPortalAccess(invoice.customerId);
+      
+      final link = LinkBuilder.invoicePayment(token, invoice.id);
+      
+      // Show dialog with share options
+      if (mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: AeraColors.surface,
+            shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
+            title: Text(
+              'Invoice Payment Link',
+              style: AeraTypography.h3.copyWith(fontSize: 17),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Share this link with the customer to view and pay this invoice:',
+                  style: AeraTypography.bodySm,
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AeraColors.surfaceContainerLow,
+                    borderRadius: AeraRadii.borderMd,
+                  ),
+                  child: Text(
+                    link,
+                    style: AeraTypography.label.copyWith(
+                      fontSize: 11,
+                      color: AeraColors.accent,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: link));
+                  Navigator.of(dialogContext).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Link copied to clipboard')),
+                  );
+                },
+                icon: const Icon(Icons.copy, size: 18),
+                label: const Text('Copy'),
+              ),
+              TextButton.icon(
+                onPressed: () async {
+                  final message = 'Your invoice payment link: $link';
+                  final whatsappUrl = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(message)}');
+                  if (await canLaunchUrl(whatsappUrl)) {
+                    await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
+                  }
+                },
+                icon: const Icon(Icons.message, size: 18),
+                label: const Text('WhatsApp'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Customer web URL not configured for this build'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _generatingPaymentLink = false);
     }
   }
 
@@ -446,7 +548,17 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                 ),
               if (invoice.status == 'ISSUED' ||
                   invoice.status == 'PARTIALLY_PAID' ||
-                  invoice.status == 'OVERDUE')
+                  invoice.status == 'OVERDUE') ...[
+                AeraButton(
+                  text: 'Share Invoice',
+                  variant: AeraButtonVariant.secondary,
+                  icon: const Icon(Icons.share, size: 18),
+                  isLoading: _generatingPaymentLink,
+                  onPressed: _generatingPaymentLink
+                      ? null
+                      : () => _generateAndSharePaymentLink(invoice),
+                ),
+                const SizedBox(height: 10),
                 AeraButton(
                   text: 'Record Payment',
                   icon: const Icon(
@@ -456,6 +568,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                   ),
                   onPressed: () => _openRecordPaymentSheet(invoice),
                 ),
+              ],
               const SizedBox(height: 20),
             ],
           ),
