@@ -9,12 +9,9 @@ import 'package:aera/features/auth/data/auth_repository.dart';
 import 'package:aera/features/auth/providers/auth_provider.dart';
 import 'package:aera/features/auth/login_screen.dart';
 import 'package:aera/features/auth/welcome_screen.dart';
-import 'package:aera/features/onboarding/business_basics_screen.dart';
-import 'package:aera/features/onboarding/service_area_screen.dart';
-import 'package:aera/features/onboarding/services_screen.dart';
-import 'package:aera/features/onboarding/team_setup_screen.dart';
-import 'package:aera/features/onboarding/onboarding_complete_screen.dart';
 import 'package:aera/features/dashboard/dashboard_screen.dart';
+import 'package:aera/features/auth/forgot_password_screen.dart';
+import 'package:aera/features/auth/reset_password_screen.dart';
 import 'package:aera/features/jobs/create_job_screen.dart';
 import 'package:aera/features/jobs/job_detail_screen.dart';
 import 'package:aera/features/technician/technician_home_screen.dart';
@@ -116,7 +113,7 @@ void main() {
       expect(find.byType(CustomersScreen), findsOneWidget);
     });
 
-    testWidgets('Owner onboarding path - complete flow', (
+    testWidgets('Password recovery screens are routable and prefill the email', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
@@ -128,29 +125,15 @@ void main() {
         ),
       );
 
-      // Navigate through onboarding steps
-      router.go('/onboarding/business-basics');
+      router.go('/forgot-password?email=rita%40example.com');
       await tester.pumpAndSettle();
-      expect(find.byType(BusinessBasicsScreen), findsOneWidget);
+      expect(find.byType(ForgotPasswordScreen), findsOneWidget);
+      expect(find.text('rita@example.com'), findsOneWidget);
 
-      router.go('/onboarding/service-area');
+      router.go('/reset-password?email=rita%40example.com');
       await tester.pumpAndSettle();
-      // Service area screen exists and renders
-      expect(find.byType(ServiceAreaScreen), findsOneWidget);
-
-      router.go('/onboarding/services');
-      await tester.pumpAndSettle();
-      // Services screen exists and renders
-      expect(find.byType(ServicesScreen), findsOneWidget);
-
-      router.go('/onboarding/team-setup');
-      await tester.pumpAndSettle();
-      // Team setup screen exists and renders
-      expect(find.byType(TeamSetupScreen), findsOneWidget);
-
-      router.go('/onboarding/complete');
-      await tester.pumpAndSettle();
-      expect(find.byType(OnboardingCompleteScreen), findsOneWidget);
+      expect(find.byType(ResetPasswordScreen), findsOneWidget);
+      expect(find.text('rita@example.com'), findsOneWidget);
     });
 
     testWidgets('Owner creates job path - from dashboard to job creation', (

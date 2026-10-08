@@ -16,12 +16,6 @@ import '../../features/auth/reset_password_screen.dart';
 import '../../features/auth/accept_invitation_screen.dart';
 import '../../features/team/team_screen.dart';
 
-import '../../features/onboarding/business_basics_screen.dart';
-import '../../features/onboarding/service_area_screen.dart';
-import '../../features/onboarding/services_screen.dart';
-import '../../features/onboarding/team_setup_screen.dart';
-import '../../features/onboarding/onboarding_complete_screen.dart';
-
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/jobs/jobs_screen.dart';
 import '../../features/jobs/job_detail_screen.dart';
@@ -118,39 +112,21 @@ List<RouteBase> _buildRoutes() => [
   ),
   GoRoute(
     path: '/forgot-password',
-    builder: (context, state) => const ForgotPasswordScreen(),
+    builder: (context, state) => ForgotPasswordScreen(
+      initialEmail: state.uri.queryParameters['email'],
+    ),
   ),
   GoRoute(
     path: '/reset-password',
-    builder: (context, state) => const ResetPasswordScreen(),
+    builder: (context, state) => ResetPasswordScreen(
+      initialEmail: state.uri.queryParameters['email'],
+    ),
   ),
   GoRoute(
     path: '/accept-invitation',
     builder: (context, state) => AcceptInvitationScreen(
       initialToken: state.uri.queryParameters['token'],
     ),
-  ),
-
-  // Onboarding Flow
-  GoRoute(
-    path: '/onboarding/business-basics',
-    builder: (context, state) => const BusinessBasicsScreen(),
-  ),
-  GoRoute(
-    path: '/onboarding/service-area',
-    builder: (context, state) => const ServiceAreaScreen(),
-  ),
-  GoRoute(
-    path: '/onboarding/services',
-    builder: (context, state) => const ServicesScreen(),
-  ),
-  GoRoute(
-    path: '/onboarding/team-setup',
-    builder: (context, state) => const TeamSetupScreen(),
-  ),
-  GoRoute(
-    path: '/onboarding/complete',
-    builder: (context, state) => const OnboardingCompleteScreen(),
   ),
 
   // Creation Flows

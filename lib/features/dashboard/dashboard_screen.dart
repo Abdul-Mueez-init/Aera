@@ -5,6 +5,7 @@ import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_metric_card.dart';
+import 'widgets/get_started_checklist.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -84,6 +85,9 @@ class DashboardScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           children: [
+            // Real progress for new companies; hidden once everything is done.
+            const GetStartedChecklist(),
+
             // Dispatch Hero Bar
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -106,7 +106,7 @@ void main() {
         '/technician-home',
         '/technician/jobs/abc/brief',
         '/create-job',
-        '/onboarding/business-basics',
+        '/team',
       ]) {
         expect(_redirect(AuthGate.signedOut, path), '/welcome', reason: path);
       }
@@ -221,7 +221,6 @@ void main() {
         '/ai-insight/abc',
         '/company-settings',
         '/team',
-        '/onboarding/team-setup',
       ]) {
         expect(
           _redirect(AuthGate.signedIn, path, role: 'TECHNICIAN'),
