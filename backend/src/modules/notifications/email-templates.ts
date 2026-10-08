@@ -36,6 +36,59 @@ function renderShell(
   return { html, text };
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * The password-reset code email. Sent directly by the auth module (not via
+ * NotificationEvent): it is addressed to someone who is not signed in, so it
+ * has no company or record to look up.
+ */
+export function buildPasswordResetEmail(input: {
+  to: string;
+  firstName: string;
+  code: string;
+  ttlMinutes: number;
+}): EmailMessage {
+  const subject = "Your Aera password reset code";
+  const greeting = `Hi ${input.firstName},`;
+  const intro = "Enter this code in the Aera app to choose a new password:";
+  const outro = `The code works once and expires in ${input.ttlMinutes} minutes. If you did not ask for this, ignore this email: your password has not changed.`;
+
+  const { html } = renderShell(subject, [
+    escapeHtml(greeting),
+    escapeHtml(intro),
+    `<strong style="font-size:24px;letter-spacing:0.12em;color:#151917;">${escapeHtml(input.code)}</strong>`,
+    escapeHtml(outro),
+  ]);
+  const text = [subject, "", greeting, intro, "", input.code, "", outro].join(
+    "\n",
+  );
+  return { to: input.to, subject, html, text };
+}
+
+/** Sent after a successful reset so an account owner notices a hijack. */
+export function buildPasswordChangedEmail(input: {
+  to: string;
+  firstName: string;
+}): EmailMessage {
+  const subject = "Your Aera password was changed";
+  const lines = [
+    `Hi ${input.firstName},`,
+    "Your Aera password was just changed and you were signed out on every device.",
+    "If this was not you, request a password reset right away and contact your company administrator.",
+  ];
+  const { html } = renderShell(subject, lines.map(escapeHtml));
+  const text = [subject, "", ...lines].join("\n");
+  return { to: input.to, subject, html, text };
+}
+
 /**
  * Builds the email for one notification event, or returns null when there's
  * nothing worth sending (the referenced record is gone/cross-tenant, or the

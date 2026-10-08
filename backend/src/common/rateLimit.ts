@@ -62,6 +62,60 @@ export const invitationRateLimiter = rateLimit({
 });
 
 /**
+ * Password-reset limiters (OWASP API4). Keyed by IP + email, like
+ * authRateLimiter, so one attacker cannot lock a real user out of recovery for
+ * everyone else while a single address still cannot be flooded with codes.
+ *
+ * Requesting a code is capped tightly because every request can send an email.
+ * Confirming is looser, but each issued code has its own 5-guess cap too
+ * (modules/auth/password-reset.service.ts).
+ */
+function passwordResetKey(request: {
+  ip?: string;
+  body?: { email?: unknown };
+}): string {
+  const email =
+    typeof request.body?.email === "string"
+      ? request.body.email.trim().toLowerCase()
+      : "unknown";
+  return `${request.ip}:${email}`;
+}
+
+export const passwordResetRequestRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: passwordResetKey,
+  handler: (_request, _response, next) => {
+    next(
+      new AppError(
+        "RATE_LIMITED",
+        "Too many attempts. Please try again later.",
+        429,
+      ),
+    );
+  },
+});
+
+export const passwordResetConfirmRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: passwordResetKey,
+  handler: (_request, _response, next) => {
+    next(
+      new AppError(
+        "RATE_LIMITED",
+        "Too many attempts. Please try again later.",
+        429,
+      ),
+    );
+  },
+});
+
+/**
  * Looser limiter for refresh-token rotation, which legitimate clients call
  * far more often than login, but which is still a credential-bearing
  * endpoint worth bounding against abuse/enumeration.

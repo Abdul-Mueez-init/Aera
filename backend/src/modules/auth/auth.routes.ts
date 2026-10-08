@@ -5,6 +5,8 @@ import { verifyAccessToken } from "../../common/auth/tokens.js";
 import {
   authRateLimiter,
   invitationRateLimiter,
+  passwordResetConfirmRateLimiter,
+  passwordResetRequestRateLimiter,
   refreshRateLimiter,
 } from "../../common/rateLimit.js";
 import {
@@ -16,6 +18,10 @@ import {
   revokeSessionById,
   rotateRefreshSession,
 } from "./auth.service.js";
+import {
+  requestPasswordReset,
+  resetPassword,
+} from "./password-reset.service.js";
 
 const router = Router();
 
@@ -39,6 +45,16 @@ const refreshSchema = z.object({
 
 const acceptInvitationSchema = z.object({
   token: z.string().min(1),
+  password: z.string().min(12),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().trim().email(),
+});
+
+const resetPasswordSchema = z.object({
+  email: z.string().trim().email(),
+  code: z.string().trim().min(1).max(64),
   password: z.string().min(12),
 });
 
@@ -99,6 +115,43 @@ router.post(
       parsed.data.password,
     );
     response.status(200).json({ data: result });
+  },
+);
+
+// Always answers 200 with the same body, whether or not the email has an
+// account, so this cannot be used to discover who is registered.
+router.post(
+  "/forgot-password",
+  passwordResetRequestRateLimiter,
+  async (request, response) => {
+    const parsed = forgotPasswordSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json(validationError(parsed.error));
+      return;
+    }
+
+    await requestPasswordReset(parsed.data.email);
+    response.status(200).json({
+      data: {
+        message:
+          "If an account exists for that email, a reset code is on its way.",
+      },
+    });
+  },
+);
+
+router.post(
+  "/reset-password",
+  passwordResetConfirmRateLimiter,
+  async (request, response) => {
+    const parsed = resetPasswordSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json(validationError(parsed.error));
+      return;
+    }
+
+    await resetPassword(parsed.data);
+    response.status(200).json({ data: { reset: true } });
   },
 );
 

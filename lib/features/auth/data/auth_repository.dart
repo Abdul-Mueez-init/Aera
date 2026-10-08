@@ -202,6 +202,31 @@ class AuthRepository {
     return session;
   }
 
+  /// Asks the server to email a password-reset code. The server answers the
+  /// same way whether or not the email has an account, so a success here does
+  /// NOT mean an email was sent.
+  Future<void> requestPasswordReset(String email) async {
+    await _client.post(
+      '/api/v1/auth/forgot-password',
+      body: {'email': email.trim()},
+      retryOnUnauthorized: false,
+    );
+  }
+
+  /// Sets a new password using the emailed code. Does not sign the user in:
+  /// every existing session is revoked server-side and the user logs in again.
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String password,
+  }) async {
+    await _client.post(
+      '/api/v1/auth/reset-password',
+      body: {'email': email.trim(), 'code': code.trim(), 'password': password},
+      retryOnUnauthorized: false,
+    );
+  }
+
   /// Exchanges the saved refresh token for a new access/refresh pair.
   ///
   /// Returns null when there is nothing to refresh with. Errors from the

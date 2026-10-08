@@ -122,6 +122,7 @@ model User {
   isActive     Boolean         @default(true)
   memberships  CompanyMember[]
   refreshSessions RefreshSession[]
+  passwordResetTokens PasswordResetToken[]
   assignedJobs  Job[]             @relation("AssignedJobs")
   statusChanges JobStatusHistory[] @relation("JobStatusActors")
   authoredNotes JobNote[]         @relation("JobNoteAuthors")
@@ -209,6 +210,24 @@ model RefreshSession {
 
   @@index([userId, revokedAt, expiresAt])
   @@map("refresh_sessions")
+}
+
+// Single-use password-reset codes. Only an HMAC of the code is stored, never the
+// code itself, and a code dies after `failedAttempts` reaches the cap in
+// auth/password-reset.service.ts.
+model PasswordResetToken {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @db.Uuid
+  codeHash       String
+  expiresAt      DateTime
+  usedAt         DateTime?
+  failedAttempts Int       @default(0)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
 
 model Customer {

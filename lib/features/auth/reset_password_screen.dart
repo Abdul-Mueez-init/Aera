@@ -1,276 +1,233 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
-import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
+import '../../core/widgets/aera_text_field.dart';
+import 'data/auth_repository.dart';
 
-class ResetPasswordScreen extends StatefulWidget {
-  const ResetPasswordScreen({super.key});
+/// Step 2 of password recovery: the emailed code plus a new password.
+///
+/// A successful reset signs the user out everywhere (the server revokes every
+/// session), so this screen sends them to Sign In rather than logging them in.
+class ResetPasswordScreen extends ConsumerStatefulWidget {
+  const ResetPasswordScreen({super.key, this.initialEmail});
+
+  final String? initialEmail;
 
   @override
-  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+  ConsumerState<ResetPasswordScreen> createState() =>
+      _ResetPasswordScreenState();
 }
 
-class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
-  final _passwordController =
-      TextEditingController(text: 'ApexCraftsman2025!');
-  final _confirmController =
-      TextEditingController(text: 'ApexCraftsman2025!');
-  bool _obscure1 = true;
-  bool _obscure2 = true;
+class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
+  static const int _minPasswordLength = 12;
+
+  late final TextEditingController _emailController;
+  final _codeController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _obscure = true;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.initialEmail ?? '');
+  }
 
   @override
   void dispose() {
+    _emailController.dispose();
+    _codeController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(backgroundColor: AeraColors.danger, content: Text(message)),
+    );
+  }
+
+  String _messageFor(Object error) {
+    if (error is ApiException) {
+      if (error.code == 'PASSWORD_RESET_INVALID_OR_EXPIRED') {
+        return 'That code is wrong or has expired. Check the email, or go '
+            'back and request a new code.';
+      }
+      if (error.statusCode == 429) {
+        return 'Too many attempts. Please wait a few minutes and try again.';
+      }
+      return error.message;
+    }
+    return 'Could not reach the server. Check your internet connection and try again.';
+  }
+
+  Future<void> _handleReset() async {
+    final email = _emailController.text.trim();
+    final code = _codeController.text.trim();
+    final password = _passwordController.text;
+    final confirm = _confirmController.text;
+
+    if (email.isEmpty || !email.contains('@')) {
+      _showError('Please enter your email address');
+      return;
+    }
+    if (code.isEmpty) {
+      _showError('Please enter the code from your email');
+      return;
+    }
+    if (password.length < _minPasswordLength) {
+      _showError('Password must be at least $_minPasswordLength characters');
+      return;
+    }
+    if (password != confirm) {
+      _showError('The two passwords do not match');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await ref
+          .read(authRepositoryProvider)
+          .resetPassword(email: email, code: code, password: password);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password changed. Sign in with your new password.'),
+        ),
+      );
+      context.go('/login');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showError(_messageFor(error));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AeraColors.canvas,
-      appBar: const AeraAppBar(
-        title: 'Reset Password',
-        showBrand: true,
-      ),
+      appBar: const AeraAppBar(title: 'Choose a new password', showBrand: true),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           children: [
-            // Verified Badge Banner
-            AeraCard(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: const BoxDecoration(
-                          color: AeraColors.accentSoft,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.verified_user, color: AeraColors.accent, size: 18),
-                      ),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'ACCOUNT RECOVERY',
-                            style: AeraTypography.labelUpper.copyWith(fontSize: 10),
-                          ),
-                          Text(
-                            'marcus@apexheating.com',
-                            style: AeraTypography.bodySm.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: AeraColors.ink,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AeraColors.successSoft,
-                      borderRadius: AeraRadii.borderFull,
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.check_circle, color: AeraColors.success, size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Verified',
-                          style: AeraTypography.label.copyWith(
-                            color: AeraColors.success,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
+            const SizedBox(height: 8),
             Text(
-              'Set new password',
+              'Enter your code',
               style: AeraTypography.display.copyWith(fontSize: 26),
             ),
             const SizedBox(height: 6),
             Text(
-              'Create a resilient credential to secure your dispatch console and field tickets.',
+              'If an account exists for that email, a code is on its way. '
+              'It works once and expires in 30 minutes.',
               style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft),
             ),
             const SizedBox(height: 24),
-
             AeraCard(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // New password
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'New Password',
-                        style: AeraTypography.label.copyWith(
-                          color: AeraColors.inkSoft,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: AeraColors.success,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Strong',
-                            style: AeraTypography.label.copyWith(
-                              color: AeraColors.success,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                  AeraTextField(
+                    label: 'Email',
+                    hintText: 'name@company.com',
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    prefixIcon: const Icon(Icons.mail_outline, size: 20),
                   ),
-                  const SizedBox(height: 6),
-                  TextFormField(
+                  const SizedBox(height: 16),
+                  AeraTextField(
+                    label: 'Code from your email',
+                    hintText: 'XXXXX-XXXXX',
+                    controller: _codeController,
+                    keyboardType: TextInputType.text,
+                    prefixIcon: const Icon(Icons.pin_outlined, size: 20),
+                  ),
+                  const SizedBox(height: 16),
+                  AeraTextField(
+                    label: 'New password',
+                    hintText: 'At least $_minPasswordLength characters',
                     controller: _passwordController,
-                    obscureText: _obscure1,
-                    style: AeraTypography.body.copyWith(fontSize: 15),
-                    decoration: InputDecoration(
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscure1 ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          size: 20,
-                          color: AeraColors.outline,
-                        ),
-                        onPressed: () => setState(() => _obscure1 = !_obscure1),
+                    obscureText: _obscure,
+                    prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        size: 20,
                       ),
-                      filled: true,
-                      fillColor: AeraColors.surface,
+                      onPressed: () => setState(() => _obscure = !_obscure),
                     ),
                   ),
-                  const SizedBox(height: 12),
-
-                  // Password Checklist
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AeraColors.surfaceSubtle.withValues(alpha: 0.7),
-                      borderRadius: AeraRadii.borderMd,
-                    ),
-                    child: Column(
-                      children: [
-                        _checklistRow('8 or more characters'),
-                        const SizedBox(height: 6),
-                        _checklistRow('At least one number or special symbol'),
-                        const SizedBox(height: 6),
-                        _checklistRow('Distinct from previous passwords'),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Confirm Password
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Confirm New Password',
-                        style: AeraTypography.label.copyWith(
-                          color: AeraColors.inkSoft,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          const Icon(Icons.check, size: 14, color: AeraColors.success),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Passwords match',
-                            style: AeraTypography.label.copyWith(
-                              color: AeraColors.success,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  TextFormField(
+                  const SizedBox(height: 16),
+                  AeraTextField(
+                    label: 'Confirm new password',
                     controller: _confirmController,
-                    obscureText: _obscure2,
-                    style: AeraTypography.body.copyWith(fontSize: 15),
-                    decoration: InputDecoration(
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscure2 ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          size: 20,
-                          color: AeraColors.outline,
-                        ),
-                        onPressed: () => setState(() => _obscure2 = !_obscure2),
-                      ),
-                      filled: true,
-                      fillColor: AeraColors.surface,
+                    obscureText: _obscure,
+                    prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Changing your password signs you out on every device.',
+                    style: AeraTypography.label.copyWith(
+                      color: AeraColors.outline,
                     ),
                   ),
-                  const SizedBox(height: 24),
-
+                  const SizedBox(height: 20),
                   AeraButton(
-                    text: 'Save Password & Sign In',
-                    icon: const Icon(Icons.arrow_forward, size: 18, color: Colors.white),
-                    onPressed: () => context.go('/login'),
+                    text: 'Change password',
+                    isLoading: _isLoading,
+                    onPressed: _isLoading ? null : _handleReset,
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: TextButton(
+                onPressed: () => context.go(
+                  Uri(
+                    path: '/forgot-password',
+                    queryParameters: {
+                      if (_emailController.text.trim().isNotEmpty)
+                        'email': _emailController.text.trim(),
+                    },
+                  ).toString(),
+                ),
+                child: Text(
+                  'Request a new code',
+                  style: AeraTypography.bodySm.copyWith(
+                    color: AeraColors.accent,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            Center(
+              child: TextButton(
+                onPressed: () => context.go('/login'),
+                child: Text(
+                  'Back to sign in',
+                  style: AeraTypography.bodySm.copyWith(
+                    color: AeraColors.inkSoft,
+                  ),
+                ),
               ),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _checklistRow(String rule) {
-    return Row(
-      children: [
-        Container(
-          width: 16,
-          height: 16,
-          decoration: const BoxDecoration(
-            color: AeraColors.successSoft,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.check, size: 11, color: AeraColors.success),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          rule,
-          style: AeraTypography.bodySm.copyWith(
-            fontSize: 12,
-            color: AeraColors.ink,
-          ),
-        ),
-      ],
     );
   }
 }

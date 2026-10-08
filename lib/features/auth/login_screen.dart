@@ -133,7 +133,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       fillColor: AeraColors.surface,
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => context.push(
+                        Uri(
+                          path: '/forgot-password',
+                          queryParameters: {
+                            if (_emailController.text.trim().isNotEmpty)
+                              'email': _emailController.text.trim(),
+                          },
+                        ).toString(),
+                      ),
+                      child: Text(
+                        'Forgot password?',
+                        style: AeraTypography.bodySm.copyWith(
+                          color: AeraColors.accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   AeraButton(
                     text: 'Sign In',
                     isLoading: _isLoading,
