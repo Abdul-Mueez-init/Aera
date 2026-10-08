@@ -10,6 +10,7 @@ import { prisma } from "./db/prisma.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { companyRouter } from "./modules/companies/company.routes.js";
 import { customerRouter } from "./modules/customers/customer.routes.js";
+import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
 import { jobRouter } from "./modules/jobs/job.routes.js";
 import { schedulingRouter } from "./modules/scheduling/scheduling.routes.js";
 import { quoteRouter } from "./modules/quotes/quote.routes.js";
@@ -94,6 +95,7 @@ export function buildApp() {
   app.use("/api/v1/auth", authRouter);
   app.use("/api/v1/companies", companyRouter);
   app.use("/api/v1/customers", customerRouter);
+  app.use("/api/v1/dashboard", dashboardRouter);
   app.use("/api/v1/jobs", jobRouter);
   app.use("/api/v1/schedule", schedulingRouter);
   app.use("/api/v1/quotes", quoteRouter);
