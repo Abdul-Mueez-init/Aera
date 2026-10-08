@@ -89,6 +89,7 @@ router.post(
 import {
   listMembers,
   inviteMember,
+  resendInvitation,
   updateMember,
   removeMember,
 } from "./member.service.js";
@@ -136,6 +137,19 @@ router.post(
     }
     const member = await inviteMember(request.auth!, parsed.data);
     response.status(201).json({ data: member });
+  },
+);
+
+router.post(
+  "/current/members/:memberId/resend-invitation",
+  requireAuth,
+  requireRole("OWNER"),
+  async (request, response) => {
+    const memberId = Array.isArray(request.params.memberId)
+      ? request.params.memberId[0]
+      : request.params.memberId;
+    const member = await resendInvitation(request.auth!, memberId);
+    response.status(200).json({ data: member });
   },
 );
 

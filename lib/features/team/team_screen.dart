@@ -236,6 +236,22 @@ class _MemberCard extends ConsumerWidget {
         if (!ok) return;
         await repo.updateMember(member.id, status: 'SUSPENDED');
         messenger.showSnackBar(SnackBar(content: Text('$_name suspended')));
+      } else if (action == 'resend') {
+        final resent = await repo.resendInvitation(member.id);
+        ref.invalidate(teamMembersProvider);
+        final token = resent.invitationToken;
+        if (token == null || token.isEmpty || !context.mounted) return;
+        final company = ref.read(currentCompanyProvider)?.name ?? 'your company';
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => _InvitationCodeDialog(
+            member: resent,
+            token: token,
+            companyName: company,
+          ),
+        );
+        return;
       } else if (action == 'reactivate') {
         await repo.updateMember(member.id, status: 'ACTIVE');
         messenger.showSnackBar(SnackBar(content: Text('$_name reactivated')));
@@ -265,6 +281,14 @@ class _MemberCard extends ConsumerWidget {
 
   List<PopupMenuEntry<String>> _menuItems() {
     final items = <PopupMenuEntry<String>>[];
+    if (member.status == 'INVITED') {
+      items.add(
+        const PopupMenuItem(
+          value: 'resend',
+          child: Text('Resend invitation'),
+        ),
+      );
+    }
     if (member.status == 'ACTIVE') {
       if (member.role != 'DISPATCHER') {
         items.add(
@@ -350,10 +374,15 @@ class _MemberCard extends ConsumerWidget {
                 if (member.status == 'INVITED') ...[
                   const SizedBox(height: 8),
                   Text(
-                    'Waiting to accept. The code was shown once; remove and '
-                    're-invite for a new one.',
+                    member.isInvitationExpired
+                        ? 'This invitation has expired. Use Resend invitation '
+                              'to issue a new code.'
+                        : 'Waiting to accept. The code was shown once; use '
+                              'Resend invitation if it was lost.',
                     style: AeraTypography.label.copyWith(
-                      color: AeraColors.outline,
+                      color: member.isInvitationExpired
+                          ? AeraColors.danger
+                          : AeraColors.outline,
                     ),
                   ),
                 ],

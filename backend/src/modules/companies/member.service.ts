@@ -29,6 +29,7 @@ export async function listMembers(context: AuthContext) {
       role: true,
       status: true,
       createdAt: true,
+      invitationTokenExpiresAt: true,
       user: {
         select: {
           id: true,
@@ -47,6 +48,10 @@ export async function listMembers(context: AuthContext) {
     role: m.role,
     status: m.status,
     createdAt: m.createdAt,
+    // Only meaningful while the invitation is pending. The token itself is
+    // never returned here: only its hash is stored.
+    invitationExpiresAt:
+      m.status === "INVITED" ? m.invitationTokenExpiresAt : null,
     user: m.user,
   }));
 }
@@ -78,6 +83,16 @@ export async function inviteMember(
         },
       },
     });
+
+    if (existingMembership?.status === "INVITED") {
+      // Typically an invitation that was never accepted (or has expired).
+      // Point the owner at the resend action instead of a dead end.
+      throw new AppError(
+        "MEMBER_INVITATION_PENDING",
+        "An invitation for this email is already pending. Use Resend invitation to issue a new code.",
+        409,
+      );
+    }
 
     if (existingMembership) {
       throw new AppError(
@@ -122,8 +137,80 @@ export async function inviteMember(
     // API response once an email adapter is wired up. Returning it here is a
     // deliberate, temporary stand-in so invitations are usable end-to-end
     // before Phase 10 (Notifications) lands.
-    return { ...member, invitationToken };
+    return {
+      ...member,
+      invitationToken,
+      invitationExpiresAt: invitationTokenExpiresAt,
+    };
   });
+}
+
+/**
+ * Issues a fresh one-time code for a member who has not accepted yet.
+ *
+ * This is the way out of an expired (or lost) invitation: the old code stops
+ * working the moment the new hash is stored, and the 7-day window restarts.
+ * Only a still-INVITED member of the caller's own company qualifies; the
+ * conditional update means a concurrent acceptance can never be overwritten.
+ */
+export async function resendInvitation(context: AuthContext, memberId: string) {
+  const member = await prisma.companyMember.findFirst({
+    where: { id: memberId, companyId: context.companyId },
+    select: { id: true, status: true },
+  });
+
+  if (!member) {
+    throw new AppError("RESOURCE_NOT_FOUND", "Member not found", 404);
+  }
+
+  const notPending = new AppError(
+    "MEMBER_NOT_INVITED",
+    "Only a pending invitation can be resent",
+    409,
+  );
+  if (member.status !== "INVITED") {
+    throw notPending;
+  }
+
+  const invitationToken = createInvitationToken();
+  const invitationTokenExpiresAt = new Date(
+    Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000,
+  );
+
+  const result = await prisma.companyMember.updateMany({
+    where: {
+      id: member.id,
+      companyId: context.companyId,
+      status: "INVITED",
+    },
+    data: {
+      invitationTokenHash: hashInvitationToken(invitationToken),
+      invitationTokenExpiresAt,
+    },
+  });
+
+  if (result.count === 0) {
+    throw notPending;
+  }
+
+  const updated = await prisma.companyMember.findFirstOrThrow({
+    where: { id: member.id, companyId: context.companyId },
+    select: {
+      id: true,
+      role: true,
+      status: true,
+      createdAt: true,
+      user: {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      },
+    },
+  });
+
+  return {
+    ...updated,
+    invitationToken,
+    invitationExpiresAt: invitationTokenExpiresAt,
+  };
 }
 
 export async function acceptInvitation(
@@ -235,6 +322,17 @@ export async function updateMember(
 
   if (!member) {
     throw new AppError("RESOURCE_NOT_FOUND", "Member not found", 404);
+  }
+
+  // Only the invited person can turn INVITED into ACTIVE, by accepting with
+  // their code. Letting the owner flip it would put someone who never joined
+  // into the assign list. Role changes on a pending invitation stay allowed.
+  if (member.status === "INVITED" && updates.status !== undefined) {
+    throw new AppError(
+      "MEMBER_NOT_ACCEPTED",
+      "This person has not accepted their invitation yet. Resend or remove the invitation instead.",
+      409,
+    );
   }
 
   if (member.userId === context.userId && updates.status === "SUSPENDED") {

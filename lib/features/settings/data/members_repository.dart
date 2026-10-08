@@ -14,6 +14,7 @@ class Member {
     required this.createdAt,
     required this.user,
     this.invitationToken,
+    this.invitationExpiresAt,
   });
 
   final String id;
@@ -23,6 +24,15 @@ class Member {
   final MemberUser user;
   final String? invitationToken;
 
+  /// When a pending invitation stops working. Null for people who already
+  /// joined. The code itself is never part of the members list.
+  final DateTime? invitationExpiresAt;
+
+  bool get isInvitationExpired =>
+      status == 'INVITED' &&
+      invitationExpiresAt != null &&
+      invitationExpiresAt!.isBefore(DateTime.now());
+
   factory Member.fromJson(Map<String, dynamic> json) => Member(
     id: json['id'] as String,
     role: json['role'] as String,
@@ -30,6 +40,9 @@ class Member {
     createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
     user: MemberUser.fromJson(json['user'] as Map<String, dynamic>),
     invitationToken: json['invitationToken'] as String?,
+    invitationExpiresAt: DateTime.tryParse(
+      json['invitationExpiresAt'] as String? ?? '',
+    ),
   );
 }
 
@@ -94,8 +107,19 @@ class MembersRepository {
     return Member.fromJson(res as Map<String, dynamic>);
   }
 
+  /// Issues a new one-time code for a member who has not accepted yet (OWNER
+  /// only). The old code stops working. The returned [Member] carries the new
+  /// `invitationToken`, which is shown to the owner once.
+  Future<Member> resendInvitation(String memberId) async {
+    final res = await _client.post(
+      '/api/v1/companies/current/members/$memberId/resend-invitation',
+    );
+    return Member.fromJson(res as Map<String, dynamic>);
+  }
+
   /// Changes a member's role and/or status (OWNER only; the server enforces
-  /// it). Only ACTIVE <-> SUSPENDED is allowed for status.
+  /// it). Only ACTIVE <-> SUSPENDED is allowed for status, and never for a
+  /// member who is still INVITED.
   Future<void> updateMember(
     String memberId, {
     String? role,
