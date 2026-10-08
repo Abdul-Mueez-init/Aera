@@ -51,6 +51,24 @@ class CreateCompanyInput {
   };
 }
 
+class UpdateCompanyInput {
+  const UpdateCompanyInput({
+    this.name,
+    this.timezone,
+    this.defaultCurrency,
+  });
+
+  final String? name;
+  final String? timezone;
+  final String? defaultCurrency;
+
+  Map<String, dynamic> toJson() => {
+    if (name != null && name!.trim().isNotEmpty) 'name': name!.trim(),
+    if (timezone != null) 'timezone': timezone,
+    if (defaultCurrency != null) 'defaultCurrency': defaultCurrency,
+  };
+}
+
 class CompanyRepository {
   CompanyRepository(this._client);
 
@@ -66,6 +84,14 @@ class CompanyRepository {
 
   Future<Company> getCurrentCompany() async {
     final res = await _client.get('/api/v1/companies/current');
+    return Company.fromJson(res as Map<String, dynamic>);
+  }
+
+  Future<Company> updateCompany(UpdateCompanyInput input) async {
+    final res = await _client.patch(
+      '/api/v1/companies/current',
+      body: input.toJson(),
+    );
     return Company.fromJson(res as Map<String, dynamic>);
   }
 }

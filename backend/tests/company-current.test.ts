@@ -92,3 +92,104 @@ describe("GET /api/v1/companies/current", () => {
     expect(res.body.data.id).toBe(owner.company.id);
   });
 });
+
+describe("PATCH /api/v1/companies/current", () => {
+  it("rejects requests without a token", async () => {
+    const res = await request(app)
+      .patch("/api/v1/companies/current")
+      .send({ name: "New Name" });
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects requests from non-owners", async () => {
+    const owner = await registerOwner("patch-owner");
+    const suffix = uniqueSuffix("patch-dispatcher");
+    const dispatcherRes = await request(app)
+      .post("/api/v1/companies/current/invitations")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({
+        email: `dispatcher-${suffix}@example.com`,
+        firstName: "Dispatcher",
+        lastName: "Test",
+        role: "DISPATCHER",
+      });
+    expect(dispatcherRes.status).toBe(201);
+
+    // Accept the invitation to create an active dispatcher
+    // The user is newly created, so they set their password
+    const dispatcherAuth = await request(app)
+      .post("/api/v1/auth/accept-invitation")
+      .send({
+        token: dispatcherRes.body.data.invitationToken,
+        password: "correct-horse-battery-staple",
+      });
+    expect(dispatcherAuth.status).toBe(200);
+
+    const res = await request(app)
+      .patch("/api/v1/companies/current")
+      .set("Authorization", `Bearer ${dispatcherAuth.body.data.accessToken}`)
+      .send({ name: "New Name" });
+    expect(res.status).toBe(403);
+  });
+
+  it("allows owners to update company name", async () => {
+    const owner = await registerOwner("patch-name");
+
+    const res = await request(app)
+      .patch("/api/v1/companies/current")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({ name: "Updated Company Name" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.name).toBe("Updated Company Name");
+    expect(res.body.data.id).toBe(owner.company.id);
+  });
+
+  it("allows owners to update timezone", async () => {
+    const owner = await registerOwner("patch-timezone");
+
+    const res = await request(app)
+      .patch("/api/v1/companies/current")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({ timezone: "America/New_York" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.timezone).toBe("America/New_York");
+  });
+
+  it("allows owners to update currency", async () => {
+    const owner = await registerOwner("patch-currency");
+
+    const res = await request(app)
+      .patch("/api/v1/companies/current")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({ defaultCurrency: "EUR" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.defaultCurrency).toBe("EUR");
+  });
+
+  it("validates that at least one field is provided", async () => {
+    const owner = await registerOwner("patch-validation");
+
+    const res = await request(app)
+      .patch("/api/v1/companies/current")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({});
+
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("VALIDATION_FAILED");
+  });
+
+  it("validates currency is 3 characters", async () => {
+    const owner = await registerOwner("patch-currency-validation");
+
+    const res = await request(app)
+      .patch("/api/v1/companies/current")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({ defaultCurrency: "US" });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("VALIDATION_FAILED");
+  });
+});

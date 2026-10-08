@@ -13,6 +13,14 @@ const createCompanySchema = z.object({
   defaultCurrency: z.string().trim().length(3).toUpperCase().default("USD"),
 });
 
+const updateCompanySchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  timezone: z.string().trim().min(1).max(80).optional(),
+  defaultCurrency: z.string().trim().length(3).toUpperCase().optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: "At least one field must be provided",
+});
+
 function createSlug(value: string): string {
   return value
     .trim()
@@ -221,6 +229,45 @@ router.get("/current", requireAuth, async (request, response) => {
 
   response.status(200).json({ data: company });
 });
+
+router.patch(
+  "/current",
+  requireAuth,
+  requireRole("OWNER"),
+  async (request, response) => {
+    const parsed = updateCompanySchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: {
+          code: "VALIDATION_FAILED",
+          message: parsed.error.issues.map((issue) => issue.message).join(", "),
+        },
+      });
+      return;
+    }
+
+    const { companyId, userId } = request.auth!;
+
+    const company = await prisma.company.findFirst({
+      where: {
+        id: companyId,
+        memberships: { some: { userId, status: "ACTIVE", role: "OWNER" } },
+      },
+      select: companySelect,
+    });
+    if (!company) {
+      throw new AppError("TENANT_ACCESS_DENIED", "Company access denied", 403);
+    }
+
+    const updated = await prisma.company.update({
+      where: { id: companyId },
+      data: parsed.data,
+      select: companySelect,
+    });
+
+    response.status(200).json({ data: updated });
+  },
+);
 
 router.get("/:companyId", requireAuth, async (request, response) => {
   const companyId = Array.isArray(request.params.companyId)
