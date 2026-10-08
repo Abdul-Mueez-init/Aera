@@ -464,6 +464,20 @@ export async function transitionJob(
     );
   }
 
+  // Require technician assignment for active job states
+  if (
+    (toStatus === "EN_ROUTE" ||
+      toStatus === "IN_PROGRESS" ||
+      toStatus === "WAITING_PARTS") &&
+    !job.assignedTechnicianId
+  ) {
+    throw new AppError(
+      "JOB_REQUIRES_TECHNICIAN",
+      "A technician must be assigned before transitioning to this status",
+      422,
+    );
+  }
+
   const now = new Date();
   await prisma.$transaction(async (transaction) => {
     const result = await transaction.job.updateMany({

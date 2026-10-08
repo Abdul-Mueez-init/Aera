@@ -42,7 +42,7 @@ async function registerDispatcher(companyId: string, label: string) {
     },
   });
 
-  const member = await prisma.companyMember.create({
+  await prisma.companyMember.create({
     data: {
       companyId,
       userId: user.id,
@@ -79,7 +79,7 @@ async function registerTechnician(companyId: string, label: string) {
     },
   });
 
-  const member = await prisma.companyMember.create({
+  await prisma.companyMember.create({
     data: {
       companyId,
       userId: user.id,
@@ -116,7 +116,9 @@ describe("dashboard API boundaries", () => {
     expect(summaryRes.status).toBe(403);
     expect(summaryRes.body.error.code).toBe("AUTH_FORBIDDEN");
 
-    const todayRes = await request(app).get("/api/v1/dashboard/today").set(auth);
+    const todayRes = await request(app)
+      .get("/api/v1/dashboard/today")
+      .set(auth);
     expect(todayRes.status).toBe(403);
     expect(todayRes.body.error.code).toBe("AUTH_FORBIDDEN");
 
@@ -140,18 +142,16 @@ describe("dashboard summary endpoint", () => {
     expect(response.body.data.jobsToday).toBe(0);
     expect(response.body.data.unassignedJobs).toBe(0);
     expect(response.body.data.outstandingInvoices.count).toBe(0);
-    expect(response.body.data.revenueThisMonth.collectedByCurrency).toHaveLength(
-      0,
-    );
+    expect(
+      response.body.data.revenueThisMonth.collectedByCurrency,
+    ).toHaveLength(0);
   });
 
   it("aggregates metrics scoped to the company", async () => {
-    const { accessToken: tokenA, companyId: companyA } = await registerOwner(
-      "metrics-a",
-    );
-    const { accessToken: tokenB, companyId: companyB } = await registerOwner(
-      "metrics-b",
-    );
+    const { accessToken: tokenA, companyId: companyA } =
+      await registerOwner("metrics-a");
+    const { accessToken: tokenB, companyId: companyB } =
+      await registerOwner("metrics-b");
     const authA = { Authorization: `Bearer ${tokenA}` };
     const authB = { Authorization: `Bearer ${tokenB}` };
 
@@ -175,7 +175,7 @@ describe("dashboard summary endpoint", () => {
       },
     });
 
-    const jobA = await prisma.job.create({
+    await prisma.job.create({
       data: {
         companyId: companyA,
         customerId: customerA.id,
@@ -415,7 +415,7 @@ describe("dashboard alerts endpoint", () => {
       },
     });
 
-    const invoice = await prisma.invoice.create({
+    await prisma.invoice.create({
       data: {
         companyId,
         customerId: customer.id,

@@ -13,13 +13,15 @@ const createCompanySchema = z.object({
   defaultCurrency: z.string().trim().length(3).toUpperCase().default("USD"),
 });
 
-const updateCompanySchema = z.object({
-  name: z.string().trim().min(1).max(120).optional(),
-  timezone: z.string().trim().min(1).max(80).optional(),
-  defaultCurrency: z.string().trim().length(3).toUpperCase().optional(),
-}).refine((data) => Object.keys(data).length > 0, {
-  message: "At least one field must be provided",
-});
+const updateCompanySchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    timezone: z.string().trim().min(1).max(80).optional(),
+    defaultCurrency: z.string().trim().length(3).toUpperCase().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field must be provided",
+  });
 
 function createSlug(value: string): string {
   return value

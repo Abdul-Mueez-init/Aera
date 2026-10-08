@@ -46,10 +46,7 @@ router.get(
     }
 
     response.status(200).json({
-      data: await getDashboardToday(
-        request.auth!.companyId,
-        parsed.data.limit,
-      ),
+      data: await getDashboardToday(request.auth!.companyId, parsed.data.limit),
     });
   },
 );

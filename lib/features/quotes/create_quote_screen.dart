@@ -358,6 +358,7 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
 
             for (final item in _items)
               Padding(
+                key: ValueKey(item.descriptionController),
                 padding: const EdgeInsets.only(bottom: 10),
                 child: AeraCard(
                   padding: const EdgeInsets.all(14),

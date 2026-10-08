@@ -27,7 +27,7 @@ export function buildApp() {
     app.set("trust proxy", env.TRUST_PROXY);
   }
   app.use(helmet());
-  
+
   // Phase 5: CORS allowlist from environment. If CORS_ORIGINS is set, use it;
   // otherwise, fall back to open CORS for development.
   if (env.CORS_ORIGINS && env.CORS_ORIGINS.length > 0) {
@@ -35,7 +35,7 @@ export function buildApp() {
   } else {
     app.use(cors());
   }
-  
+
   app.use(express.json({ limit: "1mb" }));
 
   app.use((request, response, next) => {

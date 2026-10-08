@@ -29,7 +29,8 @@ class AppConfig {
   static bool get isSentryEnabled => sentryDsn.isNotEmpty;
 
   static String get apiBaseUrl {
-    final envBaseUrl = String.fromEnvironment(
+    // For web builds, use const fromEnvironment at build time
+    const envBaseUrl = String.fromEnvironment(
       'API_BASE_URL',
       defaultValue: '',
     );
@@ -38,32 +39,16 @@ class AppConfig {
       return envBaseUrl;
     }
 
-    return _defaultBaseUrl();
-  }
-
-  // Phase 5: Base URL for customer-facing web build (quote approval, invoice payment, portal).
-  // Required for production web builds. Falls back to empty string in development.
-  static const String customerWebBaseUrl = String.fromEnvironment(
-    'CUSTOMER_WEB_BASE_URL',
-    defaultValue: '',
-  );
-
-  static String _defaultBaseUrl() {
-    switch (environment) {
-      case 'production':
-        throw StateError('API_BASE_URL must be set for production builds');
-      case 'staging':
-        throw StateError('API_BASE_URL must be set for staging builds');
-      case 'development':
-      default:
-        return _developmentBaseUrl();
+    // Production/staging must have API_BASE_URL set
+    if (environment == 'production' || environment == 'staging') {
+      throw StateError('API_BASE_URL must be set for $environment builds');
     }
-  }
 
-  static String _developmentBaseUrl() {
+    // Development defaults
     if (kIsWeb) {
       return 'http://127.0.0.1:4000';
     }
+
     try {
       if (Platform.isAndroid) {
         return 'http://10.0.2.2:4000';
@@ -76,6 +61,13 @@ class AppConfig {
     }
     return 'http://127.0.0.1:4000';
   }
+
+  // Phase 5: Base URL for customer-facing web build (quote approval, invoice payment, portal).
+  // Required for production web builds. Falls back to empty string in development.
+  static const String customerWebBaseUrl = String.fromEnvironment(
+    'CUSTOMER_WEB_BASE_URL',
+    defaultValue: '',
+  );
 
   static bool get isProduction => environment == 'production';
   static bool get isStaging => environment == 'staging';

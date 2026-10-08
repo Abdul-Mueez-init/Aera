@@ -1,8 +1,5 @@
 import { prisma } from "../../db/prisma.js";
-import type {
-  InvoiceStatus,
-  JobStatus,
-} from "../../generated/prisma/index.js";
+import type { InvoiceStatus, JobStatus } from "../../generated/prisma/index.js";
 import {
   dayBoundsInTimezone,
   getCompanyTimezone,
@@ -60,7 +57,8 @@ export interface DashboardToday {
 }
 
 export interface Alert {
-  type: "UNASSIGNED_JOB" | "PAST_START_TIME" | "LONG_RUNNING" | "OVERDUE_INVOICE";
+  type:
+    "UNASSIGNED_JOB" | "PAST_START_TIME" | "LONG_RUNNING" | "OVERDUE_INVOICE";
   jobId?: string;
   jobNumber?: string;
   invoiceId?: string;
@@ -196,19 +194,21 @@ export async function getDashboardToday(
 
   return {
     date: dateStr,
-    jobs: jobs.map((job) => ({
-      id: job.id,
-      jobNumber: `JOB-${job.jobNumber}`,
-      customerName: `${job.customer.firstName} ${job.customer.lastName}`,
-      serviceType: job.serviceType,
-      addressLine: `${job.serviceAddress.line1}, ${job.serviceAddress.city}`,
-      technicianName: job.assignedTechnician
-        ? `${job.assignedTechnician.firstName} ${job.assignedTechnician.lastName}`
-        : null,
-      status: job.status,
-      windowStart: job.scheduledStart.toISOString(),
-      windowEnd: job.scheduledEnd.toISOString(),
-    })),
+    jobs: jobs
+      .filter((job): job is typeof job & { scheduledStart: Date; scheduledEnd: Date } => job.scheduledStart !== null && job.scheduledEnd !== null)
+      .map((job) => ({
+        id: job.id,
+        jobNumber: `JOB-${job.jobNumber}`,
+        customerName: `${job.customer.firstName} ${job.customer.lastName}`,
+        serviceType: job.serviceType,
+        addressLine: `${job.serviceAddress.line1}, ${job.serviceAddress.city}`,
+        technicianName: job.assignedTechnician
+          ? `${job.assignedTechnician.firstName} ${job.assignedTechnician.lastName}`
+          : null,
+        status: job.status,
+        windowStart: job.scheduledStart.toISOString(),
+        windowEnd: job.scheduledEnd.toISOString(),
+      })),
   };
 }
 
@@ -217,7 +217,6 @@ export async function getDashboardAlerts(
 ): Promise<DashboardAlerts> {
   const timezone = await getCompanyTimezone(companyId);
   const dateStr = todayInTimezone(timezone);
-  const todayBounds = dayBoundsInTimezone(dateStr, timezone);
   const now = new Date();
 
   const alerts: Alert[] = [];
@@ -274,8 +273,8 @@ export async function getDashboardAlerts(
       customerName: `${job.customer.firstName} ${job.customer.lastName}`,
       technicianName: job.assignedTechnician
         ? `${job.assignedTechnician.firstName} ${job.assignedTechnician.lastName}`
-        : null,
-      message: `Job JOB-${job.jobNumber} was scheduled to start at ${job.scheduledStart.toISOString()} but is still SCHEDULED`,
+        : undefined,
+      message: `Job JOB-${job.jobNumber} was scheduled to start at ${job.scheduledStart?.toISOString()} but is still SCHEDULED`,
       severity: "warning",
     });
   }
@@ -299,9 +298,11 @@ export async function getDashboardAlerts(
   });
 
   for (const job of longRunningJobs) {
-    const hoursElapsed = Math.floor(
-      (now.getTime() - job.scheduledStart.getTime()) / (60 * 60 * 1000),
-    );
+    const hoursElapsed = job.scheduledStart
+      ? Math.floor(
+          (now.getTime() - job.scheduledStart.getTime()) / (60 * 60 * 1000),
+        )
+      : 0;
     alerts.push({
       type: "LONG_RUNNING",
       jobId: job.id,
@@ -309,7 +310,7 @@ export async function getDashboardAlerts(
       customerName: `${job.customer.firstName} ${job.customer.lastName}`,
       technicianName: job.assignedTechnician
         ? `${job.assignedTechnician.firstName} ${job.assignedTechnician.lastName}`
-        : null,
+        : undefined,
       message: `Job JOB-${job.jobNumber} has been in progress for ${hoursElapsed} hours`,
       severity: "warning",
     });

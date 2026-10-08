@@ -14,8 +14,14 @@ import '../../core/widgets/aera_status_chip.dart';
 import '../auth/providers/auth_provider.dart';
 import '../invoices/data/invoices_repository.dart';
 import '../invoices/providers/invoices_provider.dart';
-import 'data/jobs_repository.dart';
+import 'data/jobs_repository.dart' show Technician;
 import 'providers/jobs_provider.dart';
+
+// Needed for technician list
+final techniciansProvider = FutureProvider.autoDispose<List<Technician>>((ref) async {
+  final repo = ref.watch(jobsRepositoryProvider);
+  return repo.listTechnicians();
+});
 
 AeraStatusType _jobStatusType(String status) {
   switch (status) {
@@ -63,6 +69,7 @@ class JobDetailScreen extends ConsumerStatefulWidget {
 class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
   bool _updating = false;
   bool _generatingInvoice = false;
+  bool _assigning = false;
 
   /// Opens the phone's maps app with directions to the service address.
   /// Works for every role, and needs no customer portal token.
@@ -262,6 +269,83 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
 
   void _scheduleThis(Job job) {
     context.push('/schedule-job/${job.id}');
+  }
+
+  Future<void> _assignTechnician(Job job) async {
+    final techniciansAsync = ref.read(techniciansProvider);
+    final technicians = techniciansAsync.value ?? [];
+
+    if (technicians.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No active technicians available')),
+        );
+      }
+      return;
+    }
+
+    final selectedTechnicianId = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AeraColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
+        title: Text(
+          'Assign Technician',
+          style: AeraTypography.h3.copyWith(fontSize: 17),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: technicians
+              .map(
+                (tech) => ListTile(
+                  title: Text(tech.fullName),
+                  onTap: () => Navigator.of(dialogContext).pop(tech.id),
+                ),
+              )
+              .toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(
+              'Cancel',
+              style: AeraTypography.bodyMedium.copyWith(
+                color: AeraColors.inkSoft,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (selectedTechnicianId == null) return;
+
+    setState(() => _assigning = true);
+    try {
+      await ref
+          .read(jobsRepositoryProvider)
+          .assignTechnician(job.id, selectedTechnicianId);
+      ref.invalidate(jobDetailProvider(job.id));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Technician assigned')),
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not assign technician')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _assigning = false);
+    }
   }
 
   @override
@@ -473,11 +557,25 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                             color: AeraColors.accent,
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            job.assignedTechnician?.fullName ??
-                                'No technician assigned',
-                            style: AeraTypography.bodySm.copyWith(fontSize: 12),
+                          Expanded(
+                            child: Text(
+                              job.assignedTechnician?.fullName ??
+                                  'No technician assigned',
+                              style: AeraTypography.bodySm.copyWith(fontSize: 12),
+                            ),
                           ),
+                          if (job.assignedTechnician == null &&
+                              (job.status == 'NEW' || job.status == 'QUOTING'))
+                            TextButton(
+                              onPressed: _assigning ? null : () => _assignTechnician(job),
+                              child: Text(
+                                'Assign',
+                                style: AeraTypography.label.copyWith(
+                                  fontSize: 11,
+                                  color: AeraColors.accent,
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ],

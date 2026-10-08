@@ -115,7 +115,7 @@ export async function getJobsAtRisk(
       status: { notIn: ["COMPLETED", "CANCELLED"] },
       OR: [
         { scheduledStart: { gte: dayStart, lt: dayEnd } },
-        { status: { in: ["IN_PROGRESS", "WAITING_PARTS", "EN_ROUTE"] } },
+        { status: { in: ["IN_PROGRESS", "WAITING_PARTS", "EN_ROUTE", "SCHEDULED"] } },
         { priority: "URGENT", status: { in: ["NEW", "QUOTING"] } },
       ],
     },

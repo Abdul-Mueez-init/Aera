@@ -222,8 +222,8 @@ class CreateQuoteItemInput {
 
   Map<String, dynamic> toJson() => {
     'description': description.trim(),
-    'quantity': quantity,
-    'unitPriceMinor': unitPriceMinor,
+    'quantity': quantity.toString(),
+    'unitPriceMinor': unitPriceMinor.toInt(),
   };
 }
 
@@ -241,8 +241,8 @@ class CreateQuoteInput {
   final String customerId;
   final String? jobId;
   final String currency;
-  final int discountMinor;
-  final int taxRateBps;
+  final num discountMinor;
+  final num taxRateBps;
   final DateTime? expiresAt;
   final List<CreateQuoteItemInput> items;
 
@@ -282,7 +282,9 @@ class QuotesRepository {
   /// Server computes all totals — the [input] carries raw items only.
   /// Never recompute a total client-side and treat it as truth.
   Future<Quote> createQuote(CreateQuoteInput input) async {
-    final res = await _client.post('/api/v1/quotes', body: input.toJson());
+    final jsonBody = input.toJson();
+    print('DEBUG Quote JSON: $jsonBody');
+    final res = await _client.post('/api/v1/quotes', body: jsonBody);
     return Quote.fromJson(res as Map<String, dynamic>);
   }
 

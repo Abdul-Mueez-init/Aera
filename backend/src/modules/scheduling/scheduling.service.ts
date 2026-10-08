@@ -98,6 +98,15 @@ export async function scheduleJob(
         );
       }
 
+      // Require technician assignment for scheduling
+      if (!job.assignedTechnicianId) {
+        throw new AppError(
+          "JOB_REQUIRES_TECHNICIAN",
+          "A technician must be assigned before scheduling the job",
+          422,
+        );
+      }
+
       // Lock the technician row to serialize concurrent scheduling for the same technician
       // We update a dummy field to force a row-level lock
       if (job.assignedTechnicianId) {
