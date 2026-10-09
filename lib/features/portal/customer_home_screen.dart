@@ -506,6 +506,7 @@ class _CustomerHomeBody extends ConsumerWidget {
                       rating: rating,
                       comment: commentController.text,
                     );
+                commentController.dispose();
                 ref.invalidate(portalSnapshotProvider(token));
                 if (dialogContext.mounted) Navigator.of(dialogContext).pop();
               } on ApiException catch (e) {
@@ -578,7 +579,10 @@ class _CustomerHomeBody extends ConsumerWidget {
                 TextButton(
                   onPressed: submitting
                       ? null
-                      : () => Navigator.of(dialogContext).pop(),
+                      : () {
+                          commentController.dispose();
+                          Navigator.of(dialogContext).pop();
+                        },
                   child: const Text('Cancel'),
                 ),
                 AeraButton(

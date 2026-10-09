@@ -81,10 +81,19 @@ async function createTechnician(
   const tempCompanyId = techUser.body.data.company.id;
   const techUserId = techUser.body.data.user.id;
 
-  // Reassign the user to the test company as a technician
-  await prisma.companyMember.updateMany({
+  // Delete the old companyMember record (from temp company)
+  await prisma.companyMember.deleteMany({
     where: { userId: techUserId },
-    data: { companyId: companyId, role: "TECHNICIAN", status: "ACTIVE" },
+  });
+
+  // Create a new companyMember record for the test company as a technician
+  await prisma.companyMember.create({
+    data: {
+      userId: techUserId,
+      companyId: companyId,
+      role: "TECHNICIAN",
+      status: "ACTIVE",
+    },
   });
 
   // Delete the temporary company
@@ -116,8 +125,8 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/schedule/jobs/${job1}/schedule`)
       .set(auth)
       .send({
-        scheduledStart: new Date("2026-09-25T10:00:00.000Z"),
-        scheduledEnd: new Date("2026-09-25T12:00:00.000Z"),
+        scheduledStart: new Date(Date.now() + 86400 * 1000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 7200 * 1000).toISOString(),
       });
     expect(schedule1.status).toBe(200);
     expect(schedule1.body.data.warnings).toHaveLength(0);
@@ -133,8 +142,8 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/schedule/jobs/${job2}/schedule`)
       .set(auth)
       .send({
-        scheduledStart: new Date("2026-09-25T11:00:00.000Z"),
-        scheduledEnd: new Date("2026-09-25T13:00:00.000Z"),
+        scheduledStart: new Date(Date.now() + 86400 * 1000 + 3600 * 1000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 10800 * 1000).toISOString(),
       });
     expect(schedule2.status).toBe(200);
     expect(schedule2.body.data.warnings).toHaveLength(1);
@@ -162,8 +171,8 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/schedule/jobs/${job1}/schedule`)
       .set(auth)
       .send({
-        scheduledStart: new Date("2026-09-25T10:00:00.000Z"),
-        scheduledEnd: new Date("2026-09-25T12:00:00.000Z"),
+        scheduledStart: new Date(Date.now() + 86400 * 1000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 7200 * 1000).toISOString(),
       });
     expect(schedule1.status).toBe(200);
     expect(schedule1.body.data.warnings).toHaveLength(0);
@@ -179,8 +188,8 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/schedule/jobs/${job2}/schedule`)
       .set(auth)
       .send({
-        scheduledStart: new Date("2026-09-25T14:00:00.000Z"),
-        scheduledEnd: new Date("2026-09-25T16:00:00.000Z"),
+        scheduledStart: new Date(Date.now() + 86400 * 1000 + 14400 * 1000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 21600 * 1000).toISOString(),
       });
     expect(schedule2.status).toBe(200);
     expect(schedule2.body.data.warnings).toHaveLength(0);
@@ -204,28 +213,28 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/schedule/jobs/${job1}/schedule`)
       .set(auth)
       .send({
-        scheduledStart: new Date("2026-09-25T10:00:00.000Z"),
-        scheduledEnd: new Date("2026-09-25T12:00:00.000Z"),
+        scheduledStart: new Date(Date.now() + 86400 * 1000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 7200 * 1000).toISOString(),
       });
 
     // Create second job with overlapping time and assign same technician
     const job2 = await createJob(auth, customerId, serviceAddressId);
+    // Assign second job to same technician first
+    await request(app)
+      .post(`/api/v1/jobs/${job2}/assign`)
+      .set(auth)
+      .send({ technicianId: technician.userId });
+
     const schedule2 = await request(app)
       .post(`/api/v1/schedule/jobs/${job2}/schedule`)
       .set(auth)
       .send({
-        scheduledStart: new Date("2026-09-25T11:00:00.000Z"),
-        scheduledEnd: new Date("2026-09-25T13:00:00.000Z"),
+        scheduledStart: new Date(Date.now() + 86400 * 1000 + 3600 * 1000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 10800 * 1000).toISOString(),
       });
     expect(schedule2.status).toBe(200);
-
-    const assign = await request(app)
-      .post(`/api/v1/jobs/${job2}/assign`)
-      .set(auth)
-      .send({ technicianId: technician.userId });
-    expect(assign.status).toBe(200);
-    expect(assign.body.data.warnings).toHaveLength(1);
-    expect(assign.body.data.warnings[0].code).toBe(
+    expect(schedule2.body.data.warnings).toHaveLength(1);
+    expect(schedule2.body.data.warnings[0].code).toBe(
       "TECHNICIAN_SCHEDULE_CONFLICT",
     );
   });
@@ -253,8 +262,8 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
 
     // Try to schedule both jobs for overlapping times concurrently
     const overlappingTime = {
-      scheduledStart: new Date("2026-09-25T10:00:00.000Z"),
-      scheduledEnd: new Date("2026-09-25T12:00:00.000Z"),
+      scheduledStart: new Date(Date.now() + 86400 * 1000).toISOString(),
+      scheduledEnd: new Date(Date.now() + 86400 * 1000 + 7200 * 1000).toISOString(),
     };
 
     const [schedule1, schedule2] = await Promise.all([
@@ -296,8 +305,8 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/schedule/jobs/${job1}/schedule`)
       .set(auth)
       .send({
-        scheduledStart: new Date("2026-09-25T10:00:00.000Z"),
-        scheduledEnd: new Date("2026-09-25T12:00:00.000Z"),
+        scheduledStart: new Date(Date.now() + 86400 * 1000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 7200 * 1000).toISOString(),
       });
 
     // Verify job1 is scheduled
@@ -317,8 +326,8 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/schedule/jobs/${job2}/schedule`)
       .set(auth)
       .send({
-        scheduledStart: new Date("2026-09-25T11:00:00.000Z"),
-        scheduledEnd: new Date("2026-09-25T13:00:00.000Z"),
+        scheduledStart: new Date(Date.now() + 86400 * 1000 + 3600 * 1000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 10800 * 1000).toISOString(),
       });
 
     // Schedule should succeed with conflict warning (not hard error)
@@ -348,23 +357,23 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/schedule/jobs/${job}/schedule`)
       .set(auth)
       .send({
-        scheduledStart: new Date("2026-09-25T10:00:00.000Z"),
-        scheduledEnd: new Date("2026-09-25T12:00:00.000Z"),
+        scheduledStart: new Date(Date.now() + 86400 * 1000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 7200 * 1000).toISOString(),
       });
 
     // Try to reschedule multiple times concurrently
     const newTimes = [
       {
-        scheduledStart: new Date("2026-09-25T14:00:00.000Z"),
-        scheduledEnd: new Date("2026-09-25T16:00:00.000Z"),
+        scheduledStart: new Date(Date.now() + 86400 * 1000 + 14400 * 1000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 21600 * 1000).toISOString(),
       },
       {
-        scheduledStart: new Date("2026-09-25T16:00:00.000Z"),
-        scheduledEnd: new Date("2026-09-25T18:00:00.000Z"),
+        scheduledStart: new Date(Date.now() + 86400 * 1000 + 21600 * 1000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 28800 * 1000).toISOString(),
       },
       {
-        scheduledStart: new Date("2026-09-25T18:00:00.000Z"),
-        scheduledEnd: new Date("2026-09-25T20:00:00.000Z"),
+        scheduledStart: new Date(Date.now() + 86400 * 1000 + 28800 * 1000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 36000 * 1000).toISOString(),
       },
     ];
 

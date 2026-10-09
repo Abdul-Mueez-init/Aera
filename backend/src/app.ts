@@ -29,9 +29,14 @@ export function buildApp() {
   app.use(helmet());
 
   // Phase 5: CORS allowlist from environment. If CORS_ORIGINS is set, use it;
-  // otherwise, fall back to open CORS for development.
+  // otherwise, fall back to open CORS for development. Production/staging must
+  // have CORS_ORIGINS set to restrict origins.
   if (env.CORS_ORIGINS && env.CORS_ORIGINS.length > 0) {
     app.use(cors({ origin: env.CORS_ORIGINS }));
+  } else if (env.NODE_ENV === "production" || env.NODE_ENV === "staging") {
+    throw new Error(
+      "CORS_ORIGINS must be set in production/staging environments to restrict allowed origins",
+    );
   } else {
     app.use(cors());
   }

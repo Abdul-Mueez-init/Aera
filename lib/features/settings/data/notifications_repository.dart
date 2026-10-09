@@ -16,14 +16,22 @@ class Notification {
   });
 
   factory Notification.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDateTime(String? value) {
+      if (value == null) return null;
+      try {
+        return DateTime.parse(value);
+      } catch (_) {
+        // Return a fallback timestamp if parsing fails
+        return DateTime.now();
+      }
+    }
+
     return Notification(
       id: json['id'] as String,
       type: json['type'] as String,
       payload: json['payload'] as Map<String, dynamic>?,
-      readAt: json['readAt'] != null
-          ? DateTime.parse(json['readAt'] as String)
-          : null,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      readAt: parseDateTime(json['readAt'] as String?),
+      createdAt: parseDateTime(json['createdAt'] as String?) ?? DateTime.now(),
     );
   }
 

@@ -72,45 +72,6 @@ beforeAll(async () => {
 
       console.log("company_counters table created successfully");
     }
-
-    // Check if payment_operations table exists and recreate if needed
-    console.log(
-      "Recreating payment_operations table to ensure correct schema...",
-    );
-    await prisma.$executeRaw`
-      DROP TABLE IF EXISTS "payment_operations";
-    `;
-    await prisma.$executeRaw`
-      DROP TYPE IF EXISTS "PaymentOperationStatus";
-    `;
-    await prisma.$executeRaw`
-      CREATE TYPE "PaymentOperationStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED');
-    `;
-    await prisma.$executeRaw`
-      CREATE TABLE "payment_operations" (
-        "id" UUID NOT NULL,
-        "companyId" UUID NOT NULL,
-        "invoiceId" UUID NOT NULL,
-        "userId" UUID NOT NULL,
-        "amountMinor" BIGINT NOT NULL,
-        "currency" CHAR(3) NOT NULL,
-        "method" "PaymentMethod" NOT NULL,
-        "provider" TEXT NOT NULL,
-        "reference" TEXT,
-        "idempotencyKey" TEXT NOT NULL,
-        "status" "PaymentOperationStatus" NOT NULL DEFAULT 'PENDING',
-        "providerPaymentId" TEXT,
-        "errorMessage" TEXT,
-        "retryCount" INTEGER NOT NULL DEFAULT 0,
-        "completedAt" TIMESTAMP(3),
-        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" TIMESTAMP(3) NOT NULL,
-
-        CONSTRAINT "payment_operations_pkey" PRIMARY KEY ("id")
-      );
-    `;
-
-    console.log("payment_operations table created successfully");
   } catch (error) {
     console.error("Error setting up test database:", error);
     // Don't fail the test suite if setup fails
@@ -222,7 +183,48 @@ async function sendQuote(auth: { Authorization: string }, quoteId: string) {
   return res.body.data;
 }
 
-async function scheduleJob(auth: { Authorization: string }, jobId: string) {
+async function scheduleJob(auth: { Authorization: string }, jobId: string, companyId: string) {
+  // Assign a technician first (required for scheduling)
+  const suffix = `tech-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  const techUser = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `tech-${suffix}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Tech",
+      lastName: suffix,
+      companyName: `Temp Company ${suffix}`,
+    });
+
+  const tempCompanyId = techUser.body.data.company.id;
+  const techUserId = techUser.body.data.user.id;
+
+  // Delete the old companyMember record (from temp company)
+  await prisma.companyMember.deleteMany({
+    where: { userId: techUserId },
+  });
+
+  // Create a new companyMember record for the test company as a technician
+  await prisma.companyMember.create({
+    data: {
+      userId: techUserId,
+      companyId: companyId,
+      role: "TECHNICIAN",
+      status: "ACTIVE",
+    },
+  });
+
+  // Delete the temporary company
+  await prisma.company.delete({
+    where: { id: tempCompanyId },
+  });
+
+  const assignRes = await request(app)
+    .post(`/api/v1/jobs/${jobId}/assign`)
+    .set(auth)
+    .send({ technicianId: techUserId });
+  expect(assignRes.status).toBe(200);
+
   const scheduledStart = new Date(Date.now() + 172800 * 1000); // 2 days from now
   const scheduledEnd = new Date(Date.now() + 176400 * 1000); // 2 days + 1 hour
   const res = await request(app)
@@ -431,7 +433,7 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     }
 
     // STEP 7: Schedule the job
-    const scheduledJob = await scheduleJob(auth, jobId);
+    const scheduledJob = await scheduleJob(auth, jobId, owner.companyId);
     // The API returns { data: { job: {...}, warnings: [...] } }
     expect(scheduledJob.data.job.scheduledStart).toBeDefined();
     expect(scheduledJob.data.job.scheduledEnd).toBeDefined();

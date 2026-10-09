@@ -17,7 +17,7 @@ const optionalUrl = z
 
 const envSchema = z.object({
   NODE_ENV: z
-    .enum(["development", "test", "production"])
+    .enum(["development", "test", "staging", "production"])
     .default("development"),
   HOST: z.string().default("127.0.0.1"),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -111,7 +111,8 @@ const envSchema = z.object({
   SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.1),
   // Phase 5 — CORS allowlist for customer-facing web build. Comma-separated
   // list of allowed origins (e.g., "https://customer.example.com,http://localhost:3000").
-  // If unset, falls back to open CORS for development only.
+  // Required in production/staging to restrict origins. Falls back to open CORS
+  // in development only.
   CORS_ORIGINS: z
     .string()
     .trim()
@@ -120,6 +121,9 @@ const envSchema = z.object({
       if (!value || value === "") return undefined;
       return value.split(",").map((origin) => origin.trim());
     }),
+  // Phase 5 — Maximum queue size for in-memory queue. Default 1000.
+  // Should be replaced with durable queue (Redis/BullMQ) in production.
+  QUEUE_MAX_SIZE: z.coerce.number().min(1).max(10000).optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

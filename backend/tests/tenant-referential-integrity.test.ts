@@ -142,6 +142,8 @@ describe("Tenant Referential Integrity - Current Limitations", () => {
       // This test documents the current limitation: the database does not have
       // composite foreign keys, so cross-company inserts are technically possible
       // at the database level. Application-level scoping must prevent this.
+      // Phase 3 deferred: Adding composite FKs requires migration reset due to drift.
+      // Application-level checks in all services enforce tenant isolation.
       const job = await prisma.job.create({
         data: {
           id: crypto.randomUUID(),
@@ -165,6 +167,8 @@ describe("Tenant Referential Integrity - Current Limitations", () => {
   describe("ServiceAddress foreign key constraints", () => {
     it("should allow direct database insert with mismatched companyId (current schema limitation)", async () => {
       // This test documents the current limitation
+      // Phase 3 deferred: Adding composite FKs requires migration reset due to drift.
+      // Application-level checks in all services enforce tenant isolation.
       const address = await prisma.serviceAddress.create({
         data: {
           id: crypto.randomUUID(),

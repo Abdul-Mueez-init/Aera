@@ -27,12 +27,17 @@ android {
 
     signingConfigs {
         create("release") {
-            if (keystoreProps.isNotEmpty()) {
-                keyAlias = keystoreProps.getProperty("keyAlias")
-                keyPassword = keystoreProps.getProperty("keyPassword")
-                storeFile = file(keystoreProps.getProperty("storeFile"))
-                storePassword = keystoreProps.getProperty("storePassword")
+            if (keystoreProps.isEmpty()) {
+                throw GradleException(
+                    "Release signing configuration missing. " +
+                    "Create key.properties with keyAlias, keyPassword, storeFile, and storePassword. " +
+                    "For debug builds, use the development flavor instead."
+                )
             }
+            keyAlias = keystoreProps.getProperty("keyAlias")
+            keyPassword = keystoreProps.getProperty("keyPassword")
+            storeFile = file(keystoreProps.getProperty("storeFile"))
+            storePassword = keystoreProps.getProperty("storePassword")
         }
     }
 
@@ -42,10 +47,10 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // IMPORTANT: Set your unique reverse-DNS application ID before store distribution.
+        // Example: com.yourcompany.aera
+        // See: https://developer.android.com/studio/build/application-id.html
         applicationId = "com.example.aera"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -72,10 +77,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (keystoreProps.isNotEmpty())
-                signingConfigs.getByName("release")
-            else
-                signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

@@ -1,8 +1,20 @@
-# Android signing configuration for release builds
+# Android Release Signing Configuration
 # Copy this file to key.properties and fill in your actual values
 # DO NOT commit key.properties to version control
 
+# The alias for the key in the keystore
+keyAlias=your-key-alias
+
+# The password for the key
+keyPassword=your-key-password
+
+# The path to the keystore file (relative to this directory or absolute path)
 storeFile=path/to/your/keystore.jks
-storePassword=your_store_password
-keyAlias=your_key_alias
-keyPassword=your_key_password
+
+# The password for the keystore
+storePassword=your-keystore-password
+
+# To generate a keystore for development/testing:
+# keytool -genkey -v -keystore ~/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# For production, use a properly secured keystore and store the credentials in a secure location.

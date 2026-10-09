@@ -65,6 +65,7 @@ class _JobEvidenceScreenState extends ConsumerState<JobEvidenceScreen> {
     );
     if (file == null) return;
     final bytes = await file.readAsBytes();
+    if (!mounted) return;
     setState(() {
       _picked = file;
       _pickedBytes = bytes;
@@ -79,12 +80,14 @@ class _JobEvidenceScreenState extends ConsumerState<JobEvidenceScreen> {
 
     final mimeType = mimeTypeForImagePath(file.path);
     if (mimeType == null) {
+      if (!mounted) return;
       setState(
         () => _error = 'Unsupported image format. Use JPEG, PNG, or WebP.',
       );
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       _uploading = true;
       _error = null;
@@ -121,11 +124,13 @@ class _JobEvidenceScreenState extends ConsumerState<JobEvidenceScreen> {
         });
       }
     } catch (e) {
-      setState(() {
-        _error = e is ApiException
-            ? e.message
-            : 'Upload failed. Check your connection and try again.';
-      });
+      if (mounted) {
+        setState(() {
+          _error = e is ApiException
+              ? e.message
+              : 'Upload failed. Check your connection and try again.';
+        });
+      }
     } finally {
       if (mounted) setState(() => _uploading = false);
     }

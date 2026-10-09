@@ -134,6 +134,7 @@ export async function getJobsAtRisk(
       assignedTechnician: { select: { firstName: true, lastName: true } },
     },
     orderBy: [{ scheduledStart: "asc" }, { createdAt: "asc" }],
+    take: 200, // Add limit to prevent unbounded loading for companies with many jobs
   });
 
   // Per-technician job counts for the same company-local day, so a job's

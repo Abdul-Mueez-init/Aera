@@ -3,12 +3,22 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import '../data/auth_repository.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
+import '../../jobs/providers/jobs_provider.dart';
+import '../../technician/providers/technician_provider.dart';
+import '../../customers/providers/customers_provider.dart';
+import '../../invoices/providers/invoices_provider.dart';
+import '../../quotes/providers/quotes_provider.dart';
+import '../../calendar/providers/calendar_provider.dart';
+import '../../team/providers/team_provider.dart';
+import '../../settings/providers/company_provider.dart';
+import '../../settings/providers/notifications_provider.dart';
+import '../../ai/providers/ai_provider.dart';
 
 final authNotifierProvider =
     StateNotifierProvider<AuthNotifier, AsyncValue<AuthSession?>>((ref) {
   final repo = ref.watch(authRepositoryProvider);
   final client = ref.watch(apiClientProvider);
-  final notifier = AuthNotifier(repo);
+  final notifier = AuthNotifier(repo, ref);
   client.setSessionExpiredCallback(notifier.handleSessionExpired);
   ref.onDispose(() => client.setSessionExpiredCallback(null));
   return notifier;
@@ -30,11 +40,12 @@ final currentRoleProvider = Provider<String?>((ref) {
 });
 
 class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
-  AuthNotifier(this._repo) : super(const AsyncValue.data(null)) {
+  AuthNotifier(this._repo, this._ref) : super(const AsyncValue.data(null)) {
     restoreSession();
   }
 
   final AuthRepository _repo;
+  final Ref _ref;
 
   Future<void> restoreSession() async {
     state = const AsyncValue.loading();
@@ -138,6 +149,25 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
     await _repo.logout();
     await _clearSentryUser();
     state = const AsyncValue.data(null);
+
+    // Invalidate key feature providers to prevent stale data on account switch
+    // Note: This invalidates the providers themselves; their dependencies will
+    // cascade. For company-specific invalidation, add a company-scoped provider
+    // key or explicitly invalidate company-specific providers.
+    //
+    // Currently invalidating main feature providers. In a larger app, consider
+    // grouping providers under a session/company provider for automatic invalidation.
+    _ref.invalidate(jobsListProvider);
+    _ref.invalidate(technicianTodayProvider);
+    _ref.invalidate(customersListProvider);
+    _ref.invalidate(invoicesListProvider);
+    _ref.invalidate(quotesListProvider);
+    _ref.invalidate(dayScheduleProvider);
+    _ref.invalidate(workloadProvider);
+    _ref.invalidate(teamMembersProvider);
+    _ref.invalidate(companyDetailsProvider);
+    _ref.invalidate(notificationsRepositoryProvider);
+    _ref.invalidate(aiConversationsListProvider);
   }
 
   /// Called by [ApiClient] when the server has definitively rejected the

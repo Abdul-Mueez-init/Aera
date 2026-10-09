@@ -225,6 +225,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                               }
                             : null,
                         icon: const Icon(Icons.chevron_left),
+                        tooltip: 'Previous page',
                       ),
                       Text('Page ${page.meta.page} of ${page.meta.pageCount}',
                           style: AeraTypography.bodySm),
@@ -239,6 +240,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                               }
                             : null,
                         icon: const Icon(Icons.chevron_right),
+                        tooltip: 'Next page',
                       ),
                     ],
                   ),

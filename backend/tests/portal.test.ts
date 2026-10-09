@@ -1,6 +1,7 @@
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
+import { prisma } from "../src/db/prisma.js";
 
 const app = buildApp();
 const customerId = "00000000-0000-0000-0000-000000000000";
@@ -15,8 +16,14 @@ async function registerOwner(label: string) {
     companyName: `Company ${suffix}`,
   };
   const res = await request(app).post("/api/v1/auth/register").send(payload);
+  if (res.status !== 201) {
+    console.error(`registerOwner failed for ${label}:`, res.body);
+  }
   expect(res.status).toBe(201);
-  return { accessToken: res.body.data.accessToken as string };
+  return {
+    accessToken: res.body.data.accessToken as string,
+    companyId: res.body.data.company.id as string,
+  };
 }
 
 async function createCustomerWithAddress(auth: { Authorization: string }) {
@@ -56,7 +63,48 @@ async function createJob(
   return job.body.data.id as string;
 }
 
-async function completeJobFlow(auth: { Authorization: string }, jobId: string) {
+async function completeJobFlow(auth: { Authorization: string }, jobId: string, companyId: string) {
+  // Assign a technician first (required for active job transitions)
+  const suffix = `tech-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  const techUser = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `tech-${suffix}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Tech",
+      lastName: suffix,
+      companyName: `Temp Company ${suffix}`,
+    });
+
+  const tempCompanyId = techUser.body.data.company.id;
+  const techUserId = techUser.body.data.user.id;
+
+  // Delete the old companyMember record (from temp company)
+  await prisma.companyMember.deleteMany({
+    where: { userId: techUserId },
+  });
+
+  // Create a new companyMember record for the test company as a technician
+  await prisma.companyMember.create({
+    data: {
+      userId: techUserId,
+      companyId: companyId,
+      role: "TECHNICIAN",
+      status: "ACTIVE",
+    },
+  });
+
+  // Delete the temporary company
+  await prisma.company.delete({
+    where: { id: tempCompanyId },
+  });
+
+  const assignRes = await request(app)
+    .post(`/api/v1/jobs/${jobId}/assign`)
+    .set(auth)
+    .send({ technicianId: techUserId });
+  expect(assignRes.status).toBe(200);
+
   for (const status of ["SCHEDULED", "EN_ROUTE", "IN_PROGRESS"]) {
     const transition = await request(app)
       .post(`/api/v1/jobs/${jobId}/status`)
@@ -96,8 +144,8 @@ describe("customer portal API boundaries", () => {
 
 describe("public portal access (Phase 9)", () => {
   it("resolves a valid token with customer, job, quote, and invoice data", async () => {
-    const { accessToken } = await registerOwner("portal-happy");
-    const auth = { Authorization: `Bearer ${accessToken}` };
+    const owner = await registerOwner("portal-happy");
+    const auth = { Authorization: `Bearer ${owner.accessToken}` };
     const { customerId, serviceAddressId } =
       await createCustomerWithAddress(auth);
     await createJob(auth, customerId, serviceAddressId);
@@ -118,8 +166,8 @@ describe("public portal access (Phase 9)", () => {
   });
 
   it("rejects an expired token", async () => {
-    const { accessToken } = await registerOwner("portal-expired");
-    const auth = { Authorization: `Bearer ${accessToken}` };
+    const owner = await registerOwner("portal-expired");
+    const auth = { Authorization: `Bearer ${owner.accessToken}` };
     const { customerId } = await createCustomerWithAddress(auth);
     const token = await issuePortalToken(auth, customerId);
 
@@ -151,12 +199,12 @@ describe("public portal access (Phase 9)", () => {
 
 describe("public review submission (Phase 9)", () => {
   it("accepts a review for a completed job via a valid portal token", async () => {
-    const { accessToken } = await registerOwner("review-happy");
-    const auth = { Authorization: `Bearer ${accessToken}` };
+    const owner = await registerOwner("review-happy");
+    const auth = { Authorization: `Bearer ${owner.accessToken}` };
     const { customerId, serviceAddressId } =
       await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
-    await completeJobFlow(auth, jobId);
+    await completeJobFlow(auth, jobId, owner.companyId);
     const token = await issuePortalToken(auth, customerId);
 
     const review = await request(app)
@@ -168,12 +216,12 @@ describe("public review submission (Phase 9)", () => {
   });
 
   it("rejects a duplicate review for the same job", async () => {
-    const { accessToken } = await registerOwner("review-duplicate");
-    const auth = { Authorization: `Bearer ${accessToken}` };
+    const owner = await registerOwner("review-duplicate");
+    const auth = { Authorization: `Bearer ${owner.accessToken}` };
     const { customerId, serviceAddressId } =
       await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
-    await completeJobFlow(auth, jobId);
+    await completeJobFlow(auth, jobId, owner.companyId);
     const token = await issuePortalToken(auth, customerId);
 
     const first = await request(app)
@@ -189,8 +237,8 @@ describe("public review submission (Phase 9)", () => {
   });
 
   it("rejects a review for a job that is not completed", async () => {
-    const { accessToken } = await registerOwner("review-ineligible");
-    const auth = { Authorization: `Bearer ${accessToken}` };
+    const owner = await registerOwner("review-ineligible");
+    const auth = { Authorization: `Bearer ${owner.accessToken}` };
     const { customerId, serviceAddressId } =
       await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
@@ -204,12 +252,12 @@ describe("public review submission (Phase 9)", () => {
   });
 
   it("rejects a review submitted with an invalid/expired token", async () => {
-    const { accessToken } = await registerOwner("review-badtoken");
-    const auth = { Authorization: `Bearer ${accessToken}` };
+    const owner = await registerOwner("review-badtoken");
+    const auth = { Authorization: `Bearer ${owner.accessToken}` };
     const { customerId, serviceAddressId } =
       await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
-    await completeJobFlow(auth, jobId);
+    await completeJobFlow(auth, jobId, owner.companyId);
 
     const review = await request(app)
       .post("/api/v1/portal/not-a-real-token/reviews")
@@ -219,12 +267,12 @@ describe("public review submission (Phase 9)", () => {
   });
 
   it("rejects a review with an out-of-range rating before it ever reaches the service", async () => {
-    const { accessToken } = await registerOwner("review-validation");
-    const auth = { Authorization: `Bearer ${accessToken}` };
+    const owner = await registerOwner("review-validation");
+    const auth = { Authorization: `Bearer ${owner.accessToken}` };
     const { customerId, serviceAddressId } =
       await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
-    await completeJobFlow(auth, jobId);
+    await completeJobFlow(auth, jobId, owner.companyId);
     const token = await issuePortalToken(auth, customerId);
 
     const review = await request(app)
@@ -244,7 +292,7 @@ describe("public review submission (Phase 9)", () => {
       customerOne.customerId,
       customerOne.serviceAddressId,
     );
-    await completeJobFlow(auth, jobForCustomerOne);
+    await completeJobFlow(auth, jobForCustomerOne, owner.companyId);
     const tokenForCustomerTwo = await issuePortalToken(
       auth,
       customerTwo.customerId,

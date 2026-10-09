@@ -26,6 +26,7 @@ async function registerOwner(label: string) {
   return {
     ...res.body.data,
     email,
+    companyId: res.body.data.company.id,
   };
 }
 
@@ -76,7 +77,57 @@ async function createJob(
   return jobRes.body.data;
 }
 
-async function completeJob(ownerAccessToken: string, jobId: string) {
+async function createTechnician(ownerAccessToken: string, companyId: string) {
+  // Create a technician user by registering a new company, then reassign the user to the test company
+  const suffix = `tech-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  const techUser = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `tech-${suffix}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Tech",
+      lastName: suffix,
+      companyName: `Temp Company ${suffix}`,
+    });
+
+  const tempCompanyId = techUser.body.data.company.id;
+  const techUserId = techUser.body.data.user.id;
+
+  // Delete the old companyMember record (from temp company)
+  await prisma.companyMember.deleteMany({
+    where: { userId: techUserId },
+  });
+
+  // Create a new companyMember record for the test company as a technician
+  await prisma.companyMember.create({
+    data: {
+      userId: techUserId,
+      companyId: companyId,
+      role: "TECHNICIAN",
+      status: "ACTIVE",
+    },
+  });
+
+  // Delete the temporary company
+  await prisma.company.delete({
+    where: { id: tempCompanyId },
+  });
+
+  return techUserId;
+}
+
+async function completeJob(ownerAccessToken: string, jobId: string, companyId: string) {
+  // Assign a technician first (required for active job transitions)
+  const technicianId = await createTechnician(ownerAccessToken, companyId);
+  const assignRes = await request(app)
+    .post(`/api/v1/jobs/${jobId}/assign`)
+    .set("Authorization", `Bearer ${ownerAccessToken}`)
+    .send({ technicianId });
+  if (assignRes.status !== 200) {
+    console.error("Assign failed:", assignRes.body);
+  }
+  expect(assignRes.status).toBe(200);
+
   await request(app)
     .post(`/api/v1/jobs/${jobId}/status`)
     .set("Authorization", `Bearer ${ownerAccessToken}`)
@@ -117,7 +168,7 @@ describe("Phase G1: Payment Idempotency Integration Tests", () => {
       owner.accessToken,
     );
     const job = await createJob(owner.accessToken, customerId, addressId);
-    await completeJob(owner.accessToken, job.id);
+    await completeJob(owner.accessToken, job.id, owner.companyId);
     const invoice = await createInvoice(owner.accessToken, job.id);
 
     await request(app)
@@ -164,7 +215,7 @@ describe("Phase G1: Payment Idempotency Integration Tests", () => {
     const { customerId: cust1, addressId: addr1 } =
       await createCustomerAndAddress(owner.accessToken);
     const job1 = await createJob(owner.accessToken, cust1, addr1);
-    await completeJob(owner.accessToken, job1.id);
+    await completeJob(owner.accessToken, job1.id, owner.companyId);
     const invoice1 = await createInvoice(owner.accessToken, job1.id);
     await request(app)
       .post(`/api/v1/invoices/${invoice1.id}/issue`)
@@ -173,7 +224,7 @@ describe("Phase G1: Payment Idempotency Integration Tests", () => {
     const { customerId: cust2, addressId: addr2 } =
       await createCustomerAndAddress(owner.accessToken);
     const job2 = await createJob(owner.accessToken, cust2, addr2);
-    await completeJob(owner.accessToken, job2.id);
+    await completeJob(owner.accessToken, job2.id, owner.companyId);
     const invoice2 = await createInvoice(owner.accessToken, job2.id);
     await request(app)
       .post(`/api/v1/invoices/${invoice2.id}/issue`)
@@ -212,7 +263,7 @@ describe("Phase G1: Payment Idempotency Integration Tests", () => {
       owner.accessToken,
     );
     const job = await createJob(owner.accessToken, customerId, addressId);
-    await completeJob(owner.accessToken, job.id);
+    await completeJob(owner.accessToken, job.id, owner.companyId);
     const invoice = await createInvoice(owner.accessToken, job.id);
 
     await request(app)
@@ -254,7 +305,7 @@ describe("Phase G1: Payment Idempotency Integration Tests", () => {
       owner.accessToken,
     );
     const job = await createJob(owner.accessToken, customerId, addressId);
-    await completeJob(owner.accessToken, job.id);
+    await completeJob(owner.accessToken, job.id, owner.companyId);
     const invoice = await createInvoice(owner.accessToken, job.id);
     await request(app)
       .post(`/api/v1/invoices/${invoice.id}/issue`)
@@ -295,7 +346,7 @@ describe("Phase G1: Payment Idempotency Integration Tests", () => {
     const { customerId: custA, addressId: addrA } =
       await createCustomerAndAddress(ownerA.accessToken);
     const jobA = await createJob(ownerA.accessToken, custA, addrA);
-    await completeJob(ownerA.accessToken, jobA.id);
+    await completeJob(ownerA.accessToken, jobA.id, ownerA.companyId);
     const invoiceA = await createInvoice(ownerA.accessToken, jobA.id);
     await request(app)
       .post(`/api/v1/invoices/${invoiceA.id}/issue`)
@@ -304,7 +355,7 @@ describe("Phase G1: Payment Idempotency Integration Tests", () => {
     const { customerId: custB, addressId: addrB } =
       await createCustomerAndAddress(ownerB.accessToken);
     const jobB = await createJob(ownerB.accessToken, custB, addrB);
-    await completeJob(ownerB.accessToken, jobB.id);
+    await completeJob(ownerB.accessToken, jobB.id, ownerB.companyId);
     const invoiceB = await createInvoice(ownerB.accessToken, jobB.id);
     await request(app)
       .post(`/api/v1/invoices/${invoiceB.id}/issue`)

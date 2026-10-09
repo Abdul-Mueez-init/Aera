@@ -80,7 +80,10 @@ class _WorkInProgressScreenState extends ConsumerState<WorkInProgressScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () {
+              controller.dispose();
+              Navigator.of(dialogContext).pop();
+            },
             child: Text(
               'Cancel',
               style: AeraTypography.bodyMedium.copyWith(
@@ -92,6 +95,7 @@ class _WorkInProgressScreenState extends ConsumerState<WorkInProgressScreen> {
             onPressed: () {
               final text = controller.text.trim();
               if (text.isEmpty) return;
+              controller.dispose();
               Navigator.of(dialogContext).pop(text);
             },
             child: Text(

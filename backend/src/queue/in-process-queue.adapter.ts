@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { logger } from "../common/logger.js";
 import { captureBackgroundError } from "../common/observability.js";
+import { env } from "../config/env.js";
 import type {
   EnqueueOptions,
   QueueHandler,
@@ -9,6 +10,7 @@ import type {
 } from "./queue.port.js";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
+const DEFAULT_MAX_QUEUE_SIZE = 1000; // Bounded capacity to prevent unbounded memory growth
 
 // Short, fixed backoff steps. There is no external rate limit to respect
 // here (jobs today are local DB writes), so these only need to be long
@@ -26,19 +28,30 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
- * In-process, in-memory queue. Jobs are processed one at a time in FIFO
- * order, so a burst of enqueues can never open more concurrent database
- * connections than the request path itself would.
+ * In-process, in-memory queue with bounded capacity and backpressure.
+ * Jobs are processed one at a time in FIFO order, so a burst of enqueues
+ * can never open more concurrent database connections than the request path
+ * itself would.
+ *
+ * The queue has a maximum size to prevent unbounded memory growth. When the
+ * queue is full, new jobs are rejected with backpressure logging.
  *
  * There is no persistence: jobs still in flight when the process exits are
  * lost. That is an accepted limitation for the non-critical side effects
- * this currently carries (notifications, per ADR-009) and is exactly the
- * gap Redis/BullMQ closes when this adapter is swapped out later.
+ * this currently carries (notifications, per ADR-009). For production,
+ * this should be replaced with a durable queue (Redis/BullMQ) which would
+ * provide persistence, cluster-wide coordination, and true backpressure.
  */
 export class InProcessQueue implements QueuePort {
   private readonly handlers = new Map<string, QueueHandler>();
   private readonly jobs: InternalJob[] = [];
   private draining = false;
+  private readonly maxQueueSize: number;
+
+  constructor() {
+    // Allow overriding max queue size via env, default to 1000
+    this.maxQueueSize = env.QUEUE_MAX_SIZE ?? DEFAULT_MAX_QUEUE_SIZE;
+  }
 
   registerHandler<TPayload = unknown>(
     type: string,
@@ -58,6 +71,20 @@ export class InProcessQueue implements QueuePort {
         "Queue: no handler registered for job type; dropping job",
       );
       return;
+    }
+
+    // Apply backpressure: reject if queue is at capacity
+    if (this.jobs.length >= this.maxQueueSize) {
+      logger.error(
+        { jobType: type, queueSize: this.jobs.length, maxQueueSize: this.maxQueueSize },
+        "Queue: at capacity; rejecting job (backpressure)",
+      );
+      captureBackgroundError(
+        new Error("Queue at capacity"),
+        "queue-backpressure",
+        { jobType: type, queueSize: this.jobs.length },
+      );
+      throw new Error("Queue at capacity - job rejected");
     }
 
     this.jobs.push({

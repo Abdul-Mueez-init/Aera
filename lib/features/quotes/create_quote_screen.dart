@@ -31,8 +31,9 @@ class _DraftItem {
 
   double get quantity => double.tryParse(quantityController.text.trim()) ?? 0;
   double get unitPrice => double.tryParse(unitPriceController.text.trim()) ?? 0;
-  // Preview only — the server recomputes and returns the authoritative
-  // total. Never treat this as truth.
+  // Note: This preview uses Dart double for display only.
+  // The server recomputes the authoritative total using exact BigInt arithmetic
+  // in money.service.ts. The preview may show minor rounding differences.
   double get previewTotal => quantity * unitPrice;
 
   void dispose() {
@@ -70,6 +71,9 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
     super.dispose();
   }
 
+  // Note: These preview calculations use Dart double for display only.
+  // The server recomputes the authoritative total using exact BigInt arithmetic
+  // in money.service.ts. The preview may show minor rounding differences.
   double get _previewSubtotal =>
       _items.fold(0, (sum, it) => sum + it.previewTotal);
   double get _previewDiscount =>
@@ -431,9 +435,11 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'Line total (preview)',
+                              'Line total (approximate)',
                               style: AeraTypography.bodySm.copyWith(
                                 fontSize: 12,
+                                color: AeraColors.inkSoft,
+                                fontStyle: FontStyle.italic,
                               ),
                             ),
                             Text(
@@ -526,8 +532,12 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Total (preview)',
-                        style: AeraTypography.h2.copyWith(fontSize: 17),
+                        'Total (approximate)',
+                        style: AeraTypography.h2.copyWith(
+                          fontSize: 17,
+                          color: AeraColors.inkSoft,
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
                       Text(
                         '$_currency ${_previewTotal.toStringAsFixed(2)}',

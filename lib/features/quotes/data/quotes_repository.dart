@@ -283,7 +283,8 @@ class QuotesRepository {
   /// Never recompute a total client-side and treat it as truth.
   Future<Quote> createQuote(CreateQuoteInput input) async {
     final jsonBody = input.toJson();
-    print('DEBUG Quote JSON: $jsonBody');
+    // SECURITY: Removed debug logging of quote payload to prevent exposure of
+    // business data (descriptions, prices, customer/job IDs) in logs
     final res = await _client.post('/api/v1/quotes', body: jsonBody);
     return Quote.fromJson(res as Map<String, dynamic>);
   }

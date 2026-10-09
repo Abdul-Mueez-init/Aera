@@ -189,6 +189,7 @@ export async function getDaySchedule(context: AuthContext, date: string) {
       status: { not: "CANCELLED" },
     },
     orderBy: { scheduledStart: "asc" },
+    take: 100, // Add pagination to prevent unbounded loading
     select: {
       id: true,
       jobNumber: true,
@@ -226,19 +227,27 @@ export async function getTechnicianWorkload(
     orderBy: { createdAt: "asc" },
   });
 
-  const workload = await Promise.all(
-    technicians.map(async ({ user }) => ({
-      technician: user,
-      jobCount: await prisma.job.count({
-        where: {
-          companyId: context.companyId,
-          assignedTechnicianId: user.id,
-          scheduledStart: { gte: start, lt: end },
-          status: { notIn: ["CANCELLED", "COMPLETED"] },
-        },
-      }),
-    })),
+  // Batch query: get all job counts in a single query using grouping
+  const jobCounts = await prisma.job.groupBy({
+    by: ['assignedTechnicianId'],
+    where: {
+      companyId: context.companyId,
+      assignedTechnicianId: { in: technicians.map(t => t.user.id) },
+      scheduledStart: { gte: start, lt: end },
+      status: { notIn: ["CANCELLED", "COMPLETED"] },
+    },
+    _count: true,
+  });
+
+  // Create a map for O(1) lookup
+  const countMap = new Map(
+    jobCounts.map(item => [item.assignedTechnicianId, item._count])
   );
+
+  const workload = technicians.map(({ user }) => ({
+    technician: user,
+    jobCount: countMap.get(user.id) || 0,
+  }));
 
   return { date, technicians: workload };
 }

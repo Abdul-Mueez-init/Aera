@@ -407,6 +407,47 @@ describe("Phase C1/C2 — Quote Approval Advances Linked Job", () => {
 
     const jobId = await createJob(auth, customerId, serviceAddressId);
 
+    // Assign a technician first (required for scheduling)
+    const suffix = `tech-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+    const techUser = await request(app)
+      .post("/api/v1/auth/register")
+      .send({
+        email: `tech-${suffix}@example.com`,
+        password: "correct-horse-battery-staple",
+        firstName: "Tech",
+        lastName: suffix,
+        companyName: `Temp Company ${suffix}`,
+      });
+
+    const tempCompanyId = techUser.body.data.company.id;
+    const techUserId = techUser.body.data.user.id;
+
+    // Delete the old companyMember record (from temp company)
+    await prisma.companyMember.deleteMany({
+      where: { userId: techUserId },
+    });
+
+    // Create a new companyMember record for the test company as a technician
+    await prisma.companyMember.create({
+      data: {
+        userId: techUserId,
+        companyId: owner.companyId,
+        role: "TECHNICIAN",
+        status: "ACTIVE",
+      },
+    });
+
+    // Delete the temporary company
+    await prisma.company.delete({
+      where: { id: tempCompanyId },
+    });
+
+    const assignRes = await request(app)
+      .post(`/api/v1/jobs/${jobId}/assign`)
+      .set(auth)
+      .send({ technicianId: techUserId });
+    expect(assignRes.status).toBe(200);
+
     // Schedule the job first
     const scheduledStart = new Date(Date.now() + 172800 * 1000);
     const scheduledEnd = new Date(Date.now() + 176400 * 1000);

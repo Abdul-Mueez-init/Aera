@@ -18,6 +18,7 @@ class AeraTextField extends StatelessWidget {
     this.validator,
     this.readOnly = false,
     this.onTap,
+    this.semanticLabel,
   });
 
   final String? label;
@@ -32,6 +33,7 @@ class AeraTextField extends StatelessWidget {
   final FormFieldValidator<String>? validator;
   final bool readOnly;
   final VoidCallback? onTap;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +89,12 @@ class AeraTextField extends StatelessWidget {
               borderSide: const BorderSide(color: AeraColors.accent, width: 1.5),
             ),
           ),
+        ),
+        // Use semanticLabel or fallback to label for screen readers
+        Semantics(
+          label: semanticLabel ?? label,
+          textField: true,
+          child: const SizedBox.shrink(),
         ),
       ],
     );

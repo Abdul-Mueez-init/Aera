@@ -42,6 +42,7 @@ class NotificationListState {
 
 class NotificationListNotifier extends StateNotifier<NotificationListState> {
   final NotificationsRepository _repository;
+  int _loadGeneration = 0;
 
   NotificationListNotifier(this._repository)
     : super(
@@ -57,6 +58,7 @@ class NotificationListNotifier extends StateNotifier<NotificationListState> {
       );
 
   Future<void> loadNotifications({bool unreadOnly = false}) async {
+    final generation = ++_loadGeneration;
     state = state.copyWith(
       isLoading: true,
       error: null,
@@ -68,13 +70,18 @@ class NotificationListNotifier extends StateNotifier<NotificationListState> {
         pageSize: 20,
         unreadOnly: unreadOnly,
       );
-      state = state.copyWith(
-        items: response.items,
-        meta: response.meta,
-        isLoading: false,
-      );
+      // Only update state if this is still the latest load
+      if (generation == _loadGeneration && mounted) {
+        state = state.copyWith(
+          items: response.items,
+          meta: response.meta,
+          isLoading: false,
+        );
+      }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      if (generation == _loadGeneration && mounted) {
+        state = state.copyWith(isLoading: false, error: e.toString());
+      }
     }
   }
 
@@ -111,14 +118,21 @@ class NotificationListNotifier extends StateNotifier<NotificationListState> {
 
       state = state.copyWith(items: updatedItems, meta: updatedMeta);
     } catch (e) {
-      // Don't update state on error, but could show error to user
+      // Surface error to user via state
+      state = state.copyWith(error: 'Failed to mark notification as read: ${e.toString()}');
     }
   }
 
   Future<void> markAllAsRead() async {
     final unreadItems = state.items.where((n) => n.isUnread).toList();
-    for (final item in unreadItems) {
-      await markAsRead(item.id);
+    // Use bounded parallelism to avoid overwhelming the server
+    const batchSize = 5;
+    for (int i = 0; i < unreadItems.length; i += batchSize) {
+      final batch = unreadItems.skip(i).take(batchSize);
+      await Future.wait(
+        batch.map((item) => markAsRead(item.id)),
+        eagerError: false, // Continue even if some fail
+      );
     }
   }
 }

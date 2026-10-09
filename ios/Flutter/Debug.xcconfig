@@ -1,1 +1,3 @@
 #include "Generated.xcconfig"
+// Debug build configuration
+ENABLE_BITCODE=NO

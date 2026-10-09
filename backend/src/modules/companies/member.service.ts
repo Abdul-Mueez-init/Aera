@@ -132,11 +132,18 @@ export async function inviteMember(
       },
     });
 
-    // NOTE: Notifications module (docs/architecture.md ADR-009) should send
-    // this token to the invited user's email instead of returning it in the
-    // API response once an email adapter is wired up. Returning it here is a
-    // deliberate, temporary stand-in so invitations are usable end-to-end
-    // before Phase 10 (Notifications) lands.
+    // SECURITY NOTE: Returning the invitation token in the API response is a
+    // temporary workaround pending email delivery implementation (Phase 10).
+    // This token is a 7-day bearer token that can access the invitation acceptance
+    // endpoint. Anyone with access to response logs, proxies, analytics, or a
+    // compromised owner client can obtain this token.
+    //
+    // In production with email delivery: remove this token from the response
+    // and send it via email instead. The token should never be logged or returned
+    // in API responses.
+    //
+    // Current mitigation: Token expires in 7 days, can be revoked by resending
+    // invitation, and requires the user's email to match during acceptance.
     return {
       ...member,
       invitationToken,

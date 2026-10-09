@@ -66,7 +66,7 @@ Future<ProviderContainer> _startApp(
   });
 
   final container = ProviderContainer(
-    overrides: [authNotifierProvider.overrideWith((ref) => AuthNotifier(repo))],
+    overrides: [authNotifierProvider.overrideWith((ref) => AuthNotifier(repo, ref))],
   );
   addTearDown(container.dispose);
 

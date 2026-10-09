@@ -10,6 +10,7 @@ import {
 import {
   createPaymentOperation,
   processPaymentOperation,
+  completePaymentOperation,
 } from "../payments/payment-operation.service.js";
 import { notificationPublisher } from "../notifications/notification.port.js";
 import { getNextInvoiceNumber } from "../../common/counters/counter.service.js";
@@ -499,7 +500,8 @@ export async function recordPayment(
   // Provider succeeded - now update invoice balance and create payment record in transaction
   try {
     await prisma.$transaction(async (transaction) => {
-      const update = await transaction.invoice.updateMany({
+      // First, atomically update the invoice balance and get the post-update state
+      const updatedInvoice = await transaction.invoice.update({
         where: {
           id: invoiceId,
           companyId: context.companyId,
@@ -509,39 +511,35 @@ export async function recordPayment(
         data: {
           amountPaidMinor: { increment: BigInt(input.amountMinor) },
           balanceDueMinor: { decrement: BigInt(input.amountMinor) },
-          status:
-            invoice.balanceDueMinor === BigInt(input.amountMinor) ||
-            (invoice.balanceDueMinor === 0n && input.amountMinor === 0)
-              ? "PAID"
-              : "PARTIALLY_PAID",
-          ...(invoice.balanceDueMinor === BigInt(input.amountMinor) ||
-          (invoice.balanceDueMinor === 0n && input.amountMinor === 0)
-            ? { paidAt: new Date() }
-            : {}),
+        },
+        select: {
+          id: true,
+          balanceDueMinor: true,
+          amountPaidMinor: true,
         },
       });
-      if (update.count !== 1) {
-        throw new AppError(
-          "PAYMENT_EXCEEDS_BALANCE",
-          "Payment exceeds the invoice balance",
-          422,
-        );
-      }
-      if (update.count !== 1) {
-        throw new AppError(
-          "PAYMENT_EXCEEDS_BALANCE",
-          "Payment exceeds the invoice balance",
-          422,
-        );
-      }
 
-      // Get the completed operation to get providerPaymentId
-      const completedOperation = await transaction.paymentOperation.findUnique({
+      // Derive status from the authoritative post-update balance
+      const newStatus = updatedInvoice.balanceDueMinor === 0n ? "PAID" : "PARTIALLY_PAID";
+      const paidAt = newStatus === "PAID" ? new Date() : null;
+
+      // Update the status and paidAt in the same transaction
+      await transaction.invoice.update({
+        where: { id: invoiceId },
+        data: {
+          status: newStatus,
+          ...(paidAt ? { paidAt } : {}),
+        },
+      });
+
+      // Get the PROVIDER_ACCEPTED operation to get providerPaymentId
+      const acceptedOperation = await transaction.paymentOperation.findUnique({
         where: { id: paymentOperation.id },
         select: { providerPaymentId: true },
       });
 
-      await transaction.payment.create({
+      // Create the payment record
+      const payment = await transaction.payment.create({
         data: {
           companyId: context.companyId,
           invoiceId,
@@ -550,15 +548,31 @@ export async function recordPayment(
           currency: input.currency.toUpperCase(),
           method: input.method,
           provider: provider.name,
-          providerPaymentId: completedOperation?.providerPaymentId,
+          providerPaymentId: acceptedOperation?.providerPaymentId,
           reference: input.reference?.trim(),
           idempotencyKey: input.idempotencyKey,
         },
       });
+
+      // Mark the operation as COMPLETED with the ledger payment ID
+      await completePaymentOperation(paymentOperation.id, payment.id, transaction);
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       return getInvoice(context, invoiceId);
+    }
+    // Handle case where invoice is already paid (status check failed)
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "P2025"
+    ) {
+      throw new AppError(
+        "INVOICE_ALREADY_PAID",
+        "Invoice is already paid in full",
+        422,
+      );
     }
     throw error;
   }

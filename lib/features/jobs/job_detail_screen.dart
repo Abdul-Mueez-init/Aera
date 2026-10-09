@@ -14,7 +14,7 @@ import '../../core/widgets/aera_status_chip.dart';
 import '../auth/providers/auth_provider.dart';
 import '../invoices/data/invoices_repository.dart';
 import '../invoices/providers/invoices_provider.dart';
-import 'data/jobs_repository.dart' show Technician;
+import 'data/jobs_repository.dart' show Job, Technician, jobsRepositoryProvider;
 import 'providers/jobs_provider.dart';
 
 // Needed for technician list
@@ -212,7 +212,10 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () {
+              summaryController.dispose();
+              Navigator.of(dialogContext).pop();
+            },
             child: Text(
               'Cancel',
               style: AeraTypography.bodyMedium.copyWith(
@@ -224,6 +227,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
             onPressed: () {
               final text = summaryController.text.trim();
               if (text.isEmpty) return;
+              summaryController.dispose();
               Navigator.of(dialogContext).pop(text);
             },
             child: Text(
@@ -272,7 +276,43 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
   }
 
   Future<void> _assignTechnician(Job job) async {
+    // Show loading dialog while technicians are being fetched
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AeraColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading technicians...'),
+          ],
+        ),
+      ),
+    );
+
+    // Wait for technicians to load
     final techniciansAsync = ref.read(techniciansProvider);
+    
+    // Dismiss loading dialog
+    if (!mounted) return;
+    Navigator.of(context).pop();
+
+    // Handle error state
+    if (techniciansAsync.hasError) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load technicians')),
+        );
+      }
+      return;
+    }
+
     final technicians = techniciansAsync.value ?? [];
 
     if (technicians.isEmpty) {

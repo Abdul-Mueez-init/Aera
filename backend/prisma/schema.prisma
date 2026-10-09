@@ -525,7 +525,8 @@ model Payment {
   invoice           Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   creator           User?         @relation("PaymentCreators", fields: [createdBy], references: [id], onDelete: SetNull)
 
-  @@unique([companyId, idempotencyKey])
+  // Idempotency is enforced by PaymentOperation's unique constraint on (companyId, idempotencyKey).
+  // Payment retains idempotencyKey for traceability but does not enforce uniqueness separately.
   @@index([companyId, invoiceId, receivedAt(sort: Desc)])
   @@index([companyId, createdBy])
   @@map("payments")
@@ -667,6 +668,7 @@ model PresignedUpload {
 enum PaymentOperationStatus {
   PENDING
   PROCESSING
+  PROVIDER_ACCEPTED
   COMPLETED
   FAILED
 }
@@ -684,6 +686,7 @@ model PaymentOperation {
   idempotencyKey  String
   status          PaymentOperationStatus @default(PENDING)
   providerPaymentId String?
+  ledgerPaymentId String?
   errorMessage    String?
   retryCount      Int                    @default(0)
   completedAt     DateTime?

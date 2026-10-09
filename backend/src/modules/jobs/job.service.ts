@@ -127,6 +127,50 @@ function jobSelect() {
   } as const;
 }
 
+// Role-specific select for technicians: redacts customer contact details and invoice financial data
+// Technicians need customer name and service address to perform the job, but not email/phone or billing data
+function technicianJobSelect() {
+  return {
+    id: true,
+    companyId: true,
+    jobNumber: true,
+    serviceType: true,
+    problemDescription: true,
+    priority: true,
+    status: true,
+    scheduledStart: true,
+    scheduledEnd: true,
+    startedAt: true,
+    completedAt: true,
+    completionSummary: true,
+    createdAt: true,
+    updatedAt: true,
+    customer: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        // Redacted: email, phone - technicians don't need customer contact details
+      },
+    },
+    serviceAddress: {
+      select: {
+        id: true,
+        label: true,
+        line1: true,
+        line2: true,
+        city: true,
+        region: true,
+        postalCode: true,
+        countryCode: true,
+      },
+    },
+    assignedTechnician: {
+      select: { id: true, firstName: true, lastName: true, email: true },
+    },
+  } as const;
+}
+
 async function assertJobReferences(companyId: string, input: JobInput) {
   const address = await prisma.serviceAddress.findFirst({
     where: {
@@ -154,10 +198,12 @@ export async function listJobs(context: AuthContext, filters: JobFilters) {
     ...(filters.priority ? { priority: filters.priority } : {}),
   };
   const skip = (filters.page - 1) * filters.pageSize;
+  // Use role-specific select: technicians get redacted customer data
+  const baseSelect = context.role === "TECHNICIAN" ? technicianJobSelect() : jobSelect();
   const [items, total] = await prisma.$transaction([
     prisma.job.findMany({
       where,
-      select: jobSelect(),
+      select: baseSelect,
       orderBy: [{ scheduledStart: "asc" }, { createdAt: "desc" }],
       skip,
       take: filters.pageSize,
@@ -217,12 +263,16 @@ export async function getJob(context: AuthContext, jobId: string) {
 
   assertCanViewJob(context, jobMeta);
 
+  // Use role-specific select: technicians get redacted customer data and no invoice financials
+  const baseSelect = context.role === "TECHNICIAN" ? technicianJobSelect() : jobSelect();
+
   const job = await prisma.job.findFirst({
     where: { id: jobId, companyId: context.companyId },
     select: {
-      ...jobSelect(),
+      ...baseSelect,
       statusHistory: {
         orderBy: { createdAt: "desc" },
+        take: 50, // Limit history to prevent unbounded loading
         select: {
           id: true,
           fromStatus: true,
@@ -234,6 +284,7 @@ export async function getJob(context: AuthContext, jobId: string) {
       },
       notes: {
         orderBy: { createdAt: "desc" },
+        take: 100, // Limit notes to prevent unbounded loading
         select: {
           id: true,
           body: true,
@@ -245,6 +296,7 @@ export async function getJob(context: AuthContext, jobId: string) {
       },
       photos: {
         orderBy: { createdAt: "desc" },
+        take: 100, // Limit photos to prevent unbounded loading
         select: {
           id: true,
           objectKey: true,
@@ -258,6 +310,7 @@ export async function getJob(context: AuthContext, jobId: string) {
       },
       parts: {
         orderBy: { createdAt: "desc" },
+        take: 100, // Limit parts to prevent unbounded loading
         select: {
           id: true,
           name: true,
@@ -267,21 +320,30 @@ export async function getJob(context: AuthContext, jobId: string) {
           createdAt: true,
         },
       },
+      // Technicians only see invoice existence and status, not financial data
       invoices: {
         orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          invoiceNumber: true,
-          status: true,
-          subtotalMinor: true,
-          discountMinor: true,
-          taxMinor: true,
-          totalMinor: true,
-          amountPaidMinor: true,
-          balanceDueMinor: true,
-          currency: true,
-          createdAt: true,
-        },
+        take: 10, // Limit invoices to prevent unbounded loading
+        select: context.role === "TECHNICIAN"
+          ? {
+              id: true,
+              invoiceNumber: true,
+              status: true,
+              createdAt: true,
+            }
+          : {
+              id: true,
+              invoiceNumber: true,
+              status: true,
+              subtotalMinor: true,
+              discountMinor: true,
+              taxMinor: true,
+              totalMinor: true,
+              amountPaidMinor: true,
+              balanceDueMinor: true,
+              currency: true,
+              createdAt: true,
+            },
       },
     },
   });
@@ -620,16 +682,7 @@ export async function addJobPhoto(
     );
   }
 
-  // Check if this upload has already been confirmed
-  if (presignedUpload.confirmedAt) {
-    throw new AppError(
-      "UPLOAD_ALREADY_CONFIRMED",
-      "This upload has already been confirmed and cannot be reused",
-      409,
-    );
-  }
-
-  // Verify the object exists in storage
+  // Verify the object exists in storage before the transaction
   const verification = await supabaseStorageAdapter.verifyUpload({
     objectKey: input.objectKey.trim(),
     expectedMimeType: presignedUpload.mimeType,
@@ -662,33 +715,50 @@ export async function addJobPhoto(
     );
   }
 
-  // Create the photo record
-  const photo = await prisma.jobPhoto.create({
-    data: {
-      companyId: context.companyId,
-      jobId,
-      uploadedBy: context.userId,
-      objectKey: input.objectKey.trim(),
-      mimeType: input.mimeType,
-      sizeBytes: BigInt(input.sizeBytes),
-      kind: input.kind,
-      caption: input.caption?.trim() || undefined,
-    },
-    select: {
-      id: true,
-      objectKey: true,
-      mimeType: true,
-      sizeBytes: true,
-      kind: true,
-      caption: true,
-      createdAt: true,
-    },
-  });
+  // Create the photo record and mark upload as confirmed in a single transaction
+  // This makes the confirmation atomic and prevents duplicate confirmations
+  const photo = await prisma.$transaction(async (tx) => {
+    // Atomically claim the upload by updating confirmedAt only if null
+    const claimed = await tx.presignedUpload.updateMany({
+      where: {
+        id: presignedUpload.id,
+        confirmedAt: null,
+      },
+      data: {
+        confirmedAt: new Date(),
+      },
+    });
 
-  // Mark the presigned upload as confirmed
-  await prisma.presignedUpload.update({
-    where: { id: presignedUpload.id },
-    data: { confirmedAt: new Date() },
+    if (claimed.count === 0) {
+      throw new AppError(
+        "UPLOAD_ALREADY_CONFIRMED",
+        "This upload has already been confirmed and cannot be reused",
+        409,
+      );
+    }
+
+    // Create the photo record
+    return await tx.jobPhoto.create({
+      data: {
+        companyId: context.companyId,
+        jobId,
+        uploadedBy: context.userId,
+        objectKey: input.objectKey.trim(),
+        mimeType: input.mimeType,
+        sizeBytes: BigInt(input.sizeBytes),
+        kind: input.kind,
+        caption: input.caption?.trim() || undefined,
+      },
+      select: {
+        id: true,
+        objectKey: true,
+        mimeType: true,
+        sizeBytes: true,
+        kind: true,
+        caption: true,
+        createdAt: true,
+      },
+    });
   });
 
   return jsonSafe(photo);

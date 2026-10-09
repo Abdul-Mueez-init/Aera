@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -83,6 +84,9 @@ class TechnicianRepository {
       Uri.parse(uploadUrl),
       headers: {'Content-Type': mimeType},
       body: bytes,
+    ).timeout(
+      const Duration(minutes: 5),
+      onTimeout: () => throw TimeoutException('Photo upload timed out'),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(

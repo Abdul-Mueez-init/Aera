@@ -102,12 +102,37 @@ export async function runInvoiceReminderSweep(
 
     for (const invoice of page) {
       if (alreadyReminded.has(invoice.id)) continue;
-      await notificationPublisher.publish({
-        type: "INVOICE_PAYMENT_REMINDER",
-        companyId: invoice.companyId,
-        invoiceId: invoice.id,
+
+      // Use a transaction to atomically check-and-send
+      // This reduces the race window but doesn't eliminate it entirely
+      // Full elimination requires a distributed lock or durable queue
+      await prisma.$transaction(async (tx) => {
+        // Re-check within transaction
+        const concurrent = await tx.notification.findFirst({
+          where: {
+            type: "INVOICE_PAYMENT_REMINDER",
+            companyId: invoice.companyId,
+            createdAt: { gte: dedupeSince },
+          },
+          select: { payload: true },
+        });
+
+        if (concurrent) {
+          const recentInvoiceId = invoiceIdFromPayload(concurrent.payload);
+          if (recentInvoiceId === invoice.id) {
+            // Another transaction already sent this
+            return;
+          }
+        }
+
+        // Send the reminder
+        await notificationPublisher.publish({
+          type: "INVOICE_PAYMENT_REMINDER",
+          companyId: invoice.companyId,
+          invoiceId: invoice.id,
+        });
+        remindersEnqueued += 1;
       });
-      remindersEnqueued += 1;
     }
 
     if (page.length < PAGE_SIZE) break;

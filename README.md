@@ -64,6 +64,11 @@ pnpm --filter backend prisma:migrate:deploy
 pnpm --filter backend prisma:generate
 ```
 
+**Note:** After pulling the latest code, apply the payment idempotency fix migration:
+```powershell
+pnpm --filter backend prisma:migrate deploy
+```
+
 ### 4. Seed Demo Data (Optional)
 
 For demo/testing purposes, seed the database with deterministic demo data:
@@ -494,7 +499,6 @@ If you encounter issues not covered here:
 3. Check existing test files for usage examples
 4. Verify your environment matches the prerequisites
 5. Review the troubleshooting section below
-6. Check the Phase H1 hardening evidence for known issues and resolutions
 
 ## Screenshots and Media
 
@@ -531,8 +535,6 @@ For now, refer to the demo workflow section to experience the application locall
 - ⚠️ 2 scheduling concurrency test failures (need investigation)
 - ⚠️ 7 quote lifecycle test failures (need investigation)
 
-For detailed hardening evidence, see [docs/phase_H1_final_hardening_evidence.md](docs/phase_H1_final_hardening_evidence.md).
-
 ## Documentation
 
 ### Core Documentation
@@ -545,33 +547,15 @@ For detailed hardening evidence, see [docs/phase_H1_final_hardening_evidence.md]
 - **[docs/design.md](docs/design.md)** - Design tokens and visual language
 
 ### Phase Documentation
-- **[docs/phase_H1_final_hardening_evidence.md](docs/phase_H1_final_hardening_evidence.md)** - Phase 12 hardening checklist and evidence
-- **[docs/phase_H1_state_verification.md](docs/phase_H1_state_verification.md)** - UI state verification
-- **[docs/phase_H1_animation_interaction_review.md](docs/phase_H1_animation_interaction_review.md)** - Animation and interaction review
-- **[docs/phase_H1_demo_seed_data.md](docs/phase_H1_demo_seed_data.md)** - Demo seed data documentation
-- **[docs/phase_G5_security_performance_evidence.md](docs/phase_G5_security_performance_evidence.md)** - Security and performance evidence
-- **[docs/phase_G5_clean_checkout_setup.md](docs/phase_G5_clean_checkout_setup.md)** - Clean checkout setup verification
-- **[docs/phase_G5_accessibility_checklist.md](docs/phase_G5_accessibility_checklist.md)** - Accessibility guidelines
-- **[docs/phase_G5_query_plan_review.md](docs/phase_G5_query_plan_review.md)** - Database query performance
-- **[docs/phase_G4_API_contract_tests.md](docs/phase_G4_API_contract_tests.md)** - API contract testing
-- **[docs/phase_E6_production_API_configuration.md](docs/phase_E6_production_API_configuration.md)** - Production API configuration
+- **[docs/phase_1_baseline_and_impact_analysis.md](docs/phase_1_baseline_and_impact_analysis.md)** - Phase 1 baseline and impact analysis
+- **[docs/phase_2_release_readiness_completion.md](docs/phase_2_release_readiness_completion.md)** - Phase 2 release readiness completion
+- **[docs/phase_3_access_control_privacy_completion.md](docs/phase_3_access_control_privacy_completion.md)** - Phase 3 access control and privacy completion
 
 ### Integration Documentation
 - **[SENTRY_INTEGRATION_COMPLETE.md](SENTRY_INTEGRATION_COMPLETE.md)** - Sentry crash/error reporting integration
 - **[docs/SENTRY_CI_CONFIGURATION.md](docs/SENTRY_CI_CONFIGURATION.md)** - CI/CD configuration for Sentry
 
-## Phase Documentation
 
-The project is organized into implementation phases. Current phase documentation:
-
-- **[docs/phase_H1_hardening_completion.md](docs/phase_H1_hardening_completion.md)** - Phase 12 hardening checklist
-- **[docs/phase_H1_state_verification.md](docs/phase_H1_state_verification.md)** - UI state verification
-- **[docs/phase_H1_animation_interaction_review.md](docs/phase_H1_animation_interaction_review.md)** - Animation and interaction review
-- **[docs/phase_H1_demo_seed_data.md](docs/phase_H1_demo_seed_data.md)** - Demo seed data documentation
-- **[docs/phase_G5_security_performance_evidence.md](docs/phase_G5_security_performance_evidence.md)** - Security and performance evidence
-- **[docs/phase_G5_clean_checkout_setup.md](docs/phase_G5_clean_checkout_setup.md)** - Clean checkout setup verification
-- **[docs/phase_G5_accessibility_checklist.md](docs/phase_G5_accessibility_checklist.md)** - Accessibility guidelines
-- **[docs/phase_G5_query_plan_review.md](docs/phase_G5_query_plan_review.md)** - Database query performance
 
 ## License
 

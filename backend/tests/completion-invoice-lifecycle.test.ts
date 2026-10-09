@@ -85,7 +85,53 @@ async function addJobPart(
   return res.body.data;
 }
 
-async function startJob(auth: { Authorization: string }, jobId: string) {
+async function createTechnician(companyId: string) {
+  const suffix = `tech-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  const techUser = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `tech-${suffix}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Tech",
+      lastName: suffix,
+      companyName: `Temp Company ${suffix}`,
+    });
+
+  const tempCompanyId = techUser.body.data.company.id;
+  const techUserId = techUser.body.data.user.id;
+
+  // Delete the old companyMember record (from temp company)
+  await prisma.companyMember.deleteMany({
+    where: { userId: techUserId },
+  });
+
+  // Create a new companyMember record for the test company as a technician
+  await prisma.companyMember.create({
+    data: {
+      userId: techUserId,
+      companyId: companyId,
+      role: "TECHNICIAN",
+      status: "ACTIVE",
+    },
+  });
+
+  // Delete the temporary company
+  await prisma.company.delete({
+    where: { id: tempCompanyId },
+  });
+
+  return techUserId;
+}
+
+async function startJob(auth: { Authorization: string }, jobId: string, companyId: string) {
+  // Assign a technician first (required for active job transitions)
+  const technicianId = await createTechnician(companyId);
+  const assignRes = await request(app)
+    .post(`/api/v1/jobs/${jobId}/assign`)
+    .set(auth)
+    .send({ technicianId });
+  expect(assignRes.status).toBe(200);
+
   // NEW -> SCHEDULED -> EN_ROUTE -> IN_PROGRESS
   const s1 = await request(app)
     .post(`/api/v1/jobs/${jobId}/status`)
@@ -114,7 +160,7 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
       await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
 
-    await startJob(auth, jobId);
+    await startJob(auth, jobId, owner.companyId);
 
     // Technician logs parts during work
     await addJobPart(auth, jobId, {
@@ -195,7 +241,7 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
       await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
 
-    await startJob(auth, jobId);
+    await startJob(auth, jobId, owner.companyId);
 
     await addJobPart(auth, jobId, {
       name: "Dual Run Capacitor 45/5",
@@ -234,7 +280,7 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
       await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
 
-    await startJob(auth, jobId);
+    await startJob(auth, jobId, owner.companyId);
 
     // Job has NO quote and NO parts ($0 total). Attempt autoInvoice without allowZeroAmountInvoice:
     const completeRes = await request(app)
@@ -271,7 +317,7 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
       await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
 
-    await startJob(auth, jobId);
+    await startJob(auth, jobId, owner.companyId);
 
     // Complete job manually without auto-invoice
     await request(app)
@@ -307,7 +353,7 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
       await createCustomerWithAddress(auth);
     const jobId = await createJob(auth, customerId, serviceAddressId);
 
-    await startJob(auth, jobId);
+    await startJob(auth, jobId, owner.companyId);
     await addJobPart(auth, jobId, {
       name: "Blower Motor 1/2 HP",
       quantity: 1,
@@ -362,7 +408,7 @@ describe("Phase C3 — Completion-to-Invoice Lifecycle & Concurrency", () => {
       await createCustomerWithAddress(authA);
     const jobIdA = await createJob(authA, customerId, serviceAddressId);
 
-    await startJob(authA, jobIdA);
+    await startJob(authA, jobIdA, ownerA.companyId);
     await addJobPart(authA, jobIdA, {
       name: "Air Filter 16x25x1",
       quantity: 1,

@@ -247,6 +247,28 @@ describe("Phase B2: Route Authorization Matrix & Function-Level Policies", () =>
     expect(viewRes.status).toBe(200);
     expect(viewRes.body.data.id).toBe(jobId);
 
+    // Technician response is redacted: no customer email/phone, no invoice financials
+    expect(viewRes.body.data.customer).not.toHaveProperty("email");
+    expect(viewRes.body.data.customer).not.toHaveProperty("phone");
+    if (viewRes.body.data.invoices && viewRes.body.data.invoices.length > 0) {
+      expect(viewRes.body.data.invoices[0]).not.toHaveProperty("subtotalMinor");
+      expect(viewRes.body.data.invoices[0]).not.toHaveProperty("totalMinor");
+      expect(viewRes.body.data.invoices[0]).not.toHaveProperty("balanceDueMinor");
+    }
+
+    // Owner CAN view full customer data and invoice financials
+    const ownerViewRes = await request(app)
+      .get(`/api/v1/jobs/${jobId}`)
+      .set("Authorization", `Bearer ${owner.accessToken}`);
+    expect(ownerViewRes.status).toBe(200);
+    expect(ownerViewRes.body.data.customer).toHaveProperty("email");
+    expect(ownerViewRes.body.data.customer).toHaveProperty("phone");
+    if (ownerViewRes.body.data.invoices && ownerViewRes.body.data.invoices.length > 0) {
+      expect(ownerViewRes.body.data.invoices[0]).toHaveProperty("subtotalMinor");
+      expect(ownerViewRes.body.data.invoices[0]).toHaveProperty("totalMinor");
+      expect(ownerViewRes.body.data.invoices[0]).toHaveProperty("balanceDueMinor");
+    }
+
     // Assigned technician CANNOT cancel job
     const cancelRes = await request(app)
       .post(`/api/v1/jobs/${jobId}/status`)

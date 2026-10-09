@@ -5,6 +5,11 @@ import '../config/app_config.dart';
 /// These links are meant to be opened in a browser without the app installed.
 /// The web build is hosted on a static host (e.g., Cloudflare Pages) with SPA fallback.
 class LinkBuilder {
+  /// Normalize a base URL by removing trailing slashes.
+  static String _normalizeBaseUrl(String baseUrl) {
+    return baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+  }
+
   /// Build a full quote approval link.
   ///
   /// Example: https://customer.example.com/quote-approval/abc123
@@ -16,7 +21,10 @@ class LinkBuilder {
         'Use --dart-define=CUSTOMER_WEB_BASE_URL=<url> when building.',
       );
     }
-    return '$baseUrl/quote-approval/$shareToken';
+    final normalizedBase = _normalizeBaseUrl(baseUrl);
+    final uri = Uri.parse('$normalizedBase/quote-approval/$shareToken');
+    _validateHttps(uri);
+    return uri.toString();
   }
 
   /// Build a full invoice payment link.
@@ -30,7 +38,10 @@ class LinkBuilder {
         'Use --dart-define=CUSTOMER_WEB_BASE_URL=<url> when building.',
       );
     }
-    return '$baseUrl/invoice-payment/$token/$invoiceId';
+    final normalizedBase = _normalizeBaseUrl(baseUrl);
+    final uri = Uri.parse('$normalizedBase/invoice-payment/$token/$invoiceId');
+    _validateHttps(uri);
+    return uri.toString();
   }
 
   /// Build a full customer portal link.
@@ -44,7 +55,10 @@ class LinkBuilder {
         'Use --dart-define=CUSTOMER_WEB_BASE_URL=<url> when building.',
       );
     }
-    return '$baseUrl/portal/$token';
+    final normalizedBase = _normalizeBaseUrl(baseUrl);
+    final uri = Uri.parse('$normalizedBase/portal/$token');
+    _validateHttps(uri);
+    return uri.toString();
   }
 
   /// Build a full technician tracking link.
@@ -58,6 +72,21 @@ class LinkBuilder {
         'Use --dart-define=CUSTOMER_WEB_BASE_URL=<url> when building.',
       );
     }
-    return '$baseUrl/technician-tracking/$token/$jobId';
+    final normalizedBase = _normalizeBaseUrl(baseUrl);
+    final uri = Uri.parse('$normalizedBase/technician-tracking/$token/$jobId');
+    _validateHttps(uri);
+    return uri.toString();
+  }
+
+  /// Validate that the URI uses HTTPS in production/staging environments.
+  static void _validateHttps(Uri uri) {
+    if (AppConfig.isProduction || AppConfig.isStaging) {
+      if (uri.scheme != 'https') {
+        throw StateError(
+          'CUSTOMER_WEB_BASE_URL must use HTTPS for ${AppConfig.environment} builds. '
+          'Current scheme: ${uri.scheme}',
+        );
+      }
+    }
   }
 }

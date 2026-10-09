@@ -64,7 +64,11 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.35.0'
+          # Use latest stable Flutter to ensure compatibility with Dart ^3.12.2.
+          # Flutter 3.35.0 bundles Dart 3.9.0, which is incompatible.
+          # Update this pin if a specific version is required.
+          flutter-version: 'stable'
+      - run: flutter --version
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos
       - run: flutter test

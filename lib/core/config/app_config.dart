@@ -36,6 +36,11 @@ class AppConfig {
     );
 
     if (envBaseUrl.isNotEmpty) {
+      // Production/staging must use HTTPS
+      if ((environment == 'production' || environment == 'staging') &&
+          !envBaseUrl.startsWith('https://')) {
+        throw StateError('API_BASE_URL must use HTTPS for $environment builds');
+      }
       return envBaseUrl;
     }
 
@@ -63,11 +68,18 @@ class AppConfig {
   }
 
   // Phase 5: Base URL for customer-facing web build (quote approval, invoice payment, portal).
-  // Required for production web builds. Falls back to empty string in development.
+  // Required for production/staging web builds. Falls back to empty string in development.
   static const String customerWebBaseUrl = String.fromEnvironment(
     'CUSTOMER_WEB_BASE_URL',
     defaultValue: '',
   );
+
+  static String get validatedCustomerWebBaseUrl {
+    if (customerWebBaseUrl.isEmpty && (isProduction || isStaging)) {
+      throw StateError('CUSTOMER_WEB_BASE_URL must be set for $environment web builds');
+    }
+    return customerWebBaseUrl;
+  }
 
   static bool get isProduction => environment == 'production';
   static bool get isStaging => environment == 'staging';

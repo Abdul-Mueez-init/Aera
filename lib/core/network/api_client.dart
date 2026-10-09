@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -26,6 +27,9 @@ class ApiClient {
   String? _accessToken;
   TokenRefreshCallback? _onTokenRefresh;
   SessionExpiredCallback? _onSessionExpired;
+
+  // Default timeout: 30 seconds for most requests
+  static const Duration _defaultTimeout = Duration(seconds: 30);
 
   /// The refresh that is currently running, shared by every request that hits
   /// a 401 in the meantime. The backend rotates refresh tokens and revokes the
@@ -185,10 +189,14 @@ class ApiClient {
     String path, {
     Map<String, String>? queryParameters,
     Map<String, String>? headers,
+    Duration? timeout,
   }) async {
     final uri = _buildUri(path, queryParameters);
     final response = await _sendWithRefresh(
-      () => _client.get(uri, headers: _buildHeaders(headers)),
+      () => _client.get(uri, headers: _buildHeaders(headers)).timeout(
+        timeout ?? _defaultTimeout,
+        onTimeout: () => throw TimeoutException('GET request timed out'),
+      ),
     );
     return _processResponse(response);
   }
@@ -199,6 +207,7 @@ class ApiClient {
     Map<String, String>? headers,
     Map<String, String>? queryParameters,
     bool retryOnUnauthorized = true,
+    Duration? timeout,
   }) async {
     final uri = _buildUri(path, queryParameters);
     final response = await _sendWithRefresh(
@@ -206,6 +215,9 @@ class ApiClient {
         uri,
         headers: _buildHeaders(headers),
         body: body != null ? jsonEncode(body) : null,
+      ).timeout(
+        timeout ?? _defaultTimeout,
+        onTimeout: () => throw TimeoutException('POST request timed out'),
       ),
       retryOnUnauthorized: retryOnUnauthorized,
     );
@@ -216,6 +228,7 @@ class ApiClient {
     String path, {
     dynamic body,
     Map<String, String>? headers,
+    Duration? timeout,
   }) async {
     final uri = _buildUri(path);
     final response = await _sendWithRefresh(
@@ -223,6 +236,9 @@ class ApiClient {
         uri,
         headers: _buildHeaders(headers),
         body: body != null ? jsonEncode(body) : null,
+      ).timeout(
+        timeout ?? _defaultTimeout,
+        onTimeout: () => throw TimeoutException('PATCH request timed out'),
       ),
     );
     return _processResponse(response);
@@ -231,10 +247,34 @@ class ApiClient {
   Future<dynamic> delete(
     String path, {
     Map<String, String>? headers,
+    Duration? timeout,
   }) async {
     final uri = _buildUri(path);
     final response = await _sendWithRefresh(
-      () => _client.delete(uri, headers: _buildHeaders(headers)),
+      () => _client.delete(uri, headers: _buildHeaders(headers)).timeout(
+        timeout ?? _defaultTimeout,
+        onTimeout: () => throw TimeoutException('DELETE request timed out'),
+      ),
+    );
+    return _processResponse(response);
+  }
+
+  Future<dynamic> put(
+    String path, {
+    dynamic body,
+    Map<String, String>? headers,
+    Duration? timeout,
+  }) async {
+    final uri = _buildUri(path);
+    final response = await _sendWithRefresh(
+      () => _client.put(
+        uri,
+        headers: _buildHeaders(headers),
+        body: body != null ? jsonEncode(body) : null,
+      ).timeout(
+        timeout ?? _defaultTimeout,
+        onTimeout: () => throw TimeoutException('PUT request timed out'),
+      ),
     );
     return _processResponse(response);
   }

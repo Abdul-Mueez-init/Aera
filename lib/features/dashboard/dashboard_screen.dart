@@ -95,6 +95,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ],
             ),
             onPressed: () => context.push('/notifications'),
+            tooltip: 'Notifications',
           ),
           IconButton(
             icon: CircleAvatar(
@@ -102,6 +103,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               backgroundColor: AeraColors.primary,
               child: const Icon(Icons.person, color: Colors.white, size: 16),
             ),
+            tooltip: 'Profile',
             onPressed: () => context.push('/profile-settings'),
           ),
           const SizedBox(width: 8),

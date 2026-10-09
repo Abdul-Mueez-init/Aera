@@ -47,7 +47,53 @@ async function createCustomerWithAddress(auth: { Authorization: string }) {
   };
 }
 
-async function startJob(auth: { Authorization: string }, jobId: string) {
+async function createTechnician(companyId: string) {
+  const suffix = `tech-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  const techUser = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `tech-${suffix}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Tech",
+      lastName: suffix,
+      companyName: `Temp Company ${suffix}`,
+    });
+
+  const tempCompanyId = techUser.body.data.company.id;
+  const techUserId = techUser.body.data.user.id;
+
+  // Delete the old companyMember record (from temp company)
+  await prisma.companyMember.deleteMany({
+    where: { userId: techUserId },
+  });
+
+  // Create a new companyMember record for the test company as a technician
+  await prisma.companyMember.create({
+    data: {
+      userId: techUserId,
+      companyId: companyId,
+      role: "TECHNICIAN",
+      status: "ACTIVE",
+    },
+  });
+
+  // Delete the temporary company
+  await prisma.company.delete({
+    where: { id: tempCompanyId },
+  });
+
+  return techUserId;
+}
+
+async function startJob(auth: { Authorization: string }, jobId: string, companyId: string) {
+  // Assign a technician first (required for active job transitions)
+  const technicianId = await createTechnician(companyId);
+  const assignRes = await request(app)
+    .post(`/api/v1/jobs/${jobId}/assign`)
+    .set(auth)
+    .send({ technicianId });
+  expect(assignRes.status).toBe(200);
+
   const s1 = await request(app)
     .post(`/api/v1/jobs/${jobId}/status`)
     .set(auth)
@@ -139,7 +185,7 @@ describe("Phase C4 — Job and Invoice Number Allocation Concurrency", () => {
       jobIds.push(job.body.data.id);
 
       // Start and complete each job
-      await startJob(auth, job.body.data.id);
+      await startJob(auth, job.body.data.id, owner.companyId);
       await request(app)
         .post(`/api/v1/jobs/${job.body.data.id}/complete`)
         .set(auth)

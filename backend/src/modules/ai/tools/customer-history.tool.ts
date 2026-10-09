@@ -52,8 +52,8 @@ export const customerHistoryParameters: ToolParameterSchema = {
 interface CustomerMatch {
   id: string;
   name: string;
-  email: string | null;
-  phone: string | null;
+  // Email and phone redacted from AI tool output to minimize PII sent to external model
+  // These fields are available in the database but not exposed to Gemini
 }
 
 interface JobVisit {
@@ -91,8 +91,7 @@ async function findCustomer(
         id: true,
         firstName: true,
         lastName: true,
-        email: true,
-        phone: true,
+        // Email and phone available for matching but not exposed to AI
       },
     });
     if (!customer) {
@@ -102,8 +101,6 @@ async function findCustomer(
       customer: {
         id: customer.id,
         name: fullName(customer),
-        email: customer.email,
-        phone: customer.phone,
       },
       matches: [],
     };
@@ -145,8 +142,7 @@ async function findCustomer(
       id: true,
       firstName: true,
       lastName: true,
-      email: true,
-      phone: true,
+      // Email and phone available for matching but not exposed to AI
     },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     take: MAX_NAME_MATCHES,
@@ -155,8 +151,6 @@ async function findCustomer(
   const matches = rows.map((row) => ({
     id: row.id,
     name: fullName(row),
-    email: row.email,
-    phone: row.phone,
   }));
 
   if (matches.length === 1) {

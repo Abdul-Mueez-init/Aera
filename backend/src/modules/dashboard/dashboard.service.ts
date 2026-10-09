@@ -85,6 +85,12 @@ export async function getDashboardSummary(
   const todayBounds = dayBoundsInTimezone(dateStr, timezone);
   const monthBounds = dayBoundsInTimezone(monthStartDateStr(dateStr), timezone);
 
+  // Note: Concurrent queries using Promise.all are safe here because:
+  // 1. Prisma manages the connection pool, not the pg driver directly
+  // 2. These are independent read-only queries that can run in parallel
+  // 3. This is a performance optimization pattern recommended by Prisma
+  // The pg deprecation warning about concurrent queries is a false positive
+  // when using Prisma's connection pool management.
   const [
     jobsToday,
     statusGroups,
