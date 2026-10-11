@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +16,7 @@ import 'package:aera/features/auth/forgot_password_screen.dart';
 import 'package:aera/features/auth/reset_password_screen.dart';
 import 'package:aera/features/jobs/create_job_screen.dart';
 import 'package:aera/features/jobs/job_detail_screen.dart';
+import 'package:aera/features/jobs/data/jobs_repository.dart' show PaginatedJobs;
 import 'package:aera/features/jobs/providers/jobs_provider.dart';
 import 'package:aera/features/technician/technician_home_screen.dart';
 import 'package:aera/features/technician/job_brief_screen.dart';
@@ -501,11 +504,14 @@ void main() {
     testWidgets('Loading state - API-backed screens show loading indicators', (
       WidgetTester tester,
     ) async {
-      // Mock a loading state by overriding the jobs provider
+      // Hold the jobs provider in its loading state. jobsListProvider is a
+      // FutureProvider<PaginatedJobs>, so its override must return a Future
+      // (an AsyncValue is not a valid return type). A Future that never
+      // completes keeps it loading for the whole test.
       final loadingOverrides = [
         ..._ownerOverrides(),
         jobsListProvider.overrideWith(
-          (ref) => const AsyncValue.loading(),
+          (ref) => Completer<PaginatedJobs>().future,
         ),
       ];
 

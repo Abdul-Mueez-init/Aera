@@ -128,6 +128,10 @@ Future<void> bootstrapWithSentry(FutureOr<void> Function() appRunner) async {
 
       // Disable screenshots and view hierarchy attachments (they can capture customer data)
       options.attachScreenshot = false;
+      // attachViewHierarchy is marked @experimental in sentry_flutter. We keep
+      // the explicit opt-out on purpose: the view hierarchy can capture
+      // customer data, and it must stay off even if the default changes.
+      // ignore: experimental_member_use
       options.attachViewHierarchy = false;
 
       // Low traces sample rate for free plans
