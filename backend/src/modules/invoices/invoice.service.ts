@@ -520,7 +520,8 @@ export async function recordPayment(
       });
 
       // Derive status from the authoritative post-update balance
-      const newStatus = updatedInvoice.balanceDueMinor === 0n ? "PAID" : "PARTIALLY_PAID";
+      const newStatus =
+        updatedInvoice.balanceDueMinor === 0n ? "PAID" : "PARTIALLY_PAID";
       const paidAt = newStatus === "PAID" ? new Date() : null;
 
       // Update the status and paidAt in the same transaction
@@ -555,7 +556,11 @@ export async function recordPayment(
       });
 
       // Mark the operation as COMPLETED with the ledger payment ID
-      await completePaymentOperation(paymentOperation.id, payment.id, transaction);
+      await completePaymentOperation(
+        paymentOperation.id,
+        payment.id,
+        transaction,
+      );
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {

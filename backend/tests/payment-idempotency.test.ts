@@ -116,7 +116,11 @@ async function createTechnician(ownerAccessToken: string, companyId: string) {
   return techUserId;
 }
 
-async function completeJob(ownerAccessToken: string, jobId: string, companyId: string) {
+async function completeJob(
+  ownerAccessToken: string,
+  jobId: string,
+  companyId: string,
+) {
   // Assign a technician first (required for active job transitions)
   const technicianId = await createTechnician(ownerAccessToken, companyId);
   const assignRes = await request(app)

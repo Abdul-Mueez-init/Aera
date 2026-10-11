@@ -76,7 +76,11 @@ export class InProcessQueue implements QueuePort {
     // Apply backpressure: reject if queue is at capacity
     if (this.jobs.length >= this.maxQueueSize) {
       logger.error(
-        { jobType: type, queueSize: this.jobs.length, maxQueueSize: this.maxQueueSize },
+        {
+          jobType: type,
+          queueSize: this.jobs.length,
+          maxQueueSize: this.maxQueueSize,
+        },
         "Queue: at capacity; rejecting job (backpressure)",
       );
       captureBackgroundError(

@@ -199,7 +199,8 @@ export async function listJobs(context: AuthContext, filters: JobFilters) {
   };
   const skip = (filters.page - 1) * filters.pageSize;
   // Use role-specific select: technicians get redacted customer data
-  const baseSelect = context.role === "TECHNICIAN" ? technicianJobSelect() : jobSelect();
+  const baseSelect =
+    context.role === "TECHNICIAN" ? technicianJobSelect() : jobSelect();
   const [items, total] = await prisma.$transaction([
     prisma.job.findMany({
       where,
@@ -264,7 +265,8 @@ export async function getJob(context: AuthContext, jobId: string) {
   assertCanViewJob(context, jobMeta);
 
   // Use role-specific select: technicians get redacted customer data and no invoice financials
-  const baseSelect = context.role === "TECHNICIAN" ? technicianJobSelect() : jobSelect();
+  const baseSelect =
+    context.role === "TECHNICIAN" ? technicianJobSelect() : jobSelect();
 
   const job = await prisma.job.findFirst({
     where: { id: jobId, companyId: context.companyId },
@@ -324,26 +326,27 @@ export async function getJob(context: AuthContext, jobId: string) {
       invoices: {
         orderBy: { createdAt: "desc" },
         take: 10, // Limit invoices to prevent unbounded loading
-        select: context.role === "TECHNICIAN"
-          ? {
-              id: true,
-              invoiceNumber: true,
-              status: true,
-              createdAt: true,
-            }
-          : {
-              id: true,
-              invoiceNumber: true,
-              status: true,
-              subtotalMinor: true,
-              discountMinor: true,
-              taxMinor: true,
-              totalMinor: true,
-              amountPaidMinor: true,
-              balanceDueMinor: true,
-              currency: true,
-              createdAt: true,
-            },
+        select:
+          context.role === "TECHNICIAN"
+            ? {
+                id: true,
+                invoiceNumber: true,
+                status: true,
+                createdAt: true,
+              }
+            : {
+                id: true,
+                invoiceNumber: true,
+                status: true,
+                subtotalMinor: true,
+                discountMinor: true,
+                taxMinor: true,
+                totalMinor: true,
+                amountPaidMinor: true,
+                balanceDueMinor: true,
+                currency: true,
+                createdAt: true,
+              },
       },
     },
   });

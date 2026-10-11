@@ -63,7 +63,11 @@ async function createJob(
   return job.body.data.id as string;
 }
 
-async function completeJobFlow(auth: { Authorization: string }, jobId: string, companyId: string) {
+async function completeJobFlow(
+  auth: { Authorization: string },
+  jobId: string,
+  companyId: string,
+) {
   // Assign a technician first (required for active job transitions)
   const suffix = `tech-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
   const techUser = await request(app)

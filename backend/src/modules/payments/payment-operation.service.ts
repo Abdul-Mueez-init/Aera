@@ -62,7 +62,11 @@ export async function processPaymentOperation(
     }
 
     logger.info(
-      { operationId, status: operation.status, retryCount: operation.retryCount },
+      {
+        operationId,
+        status: operation.status,
+        retryCount: operation.retryCount,
+      },
       "Payment operation already claimed or exceeds retry limit",
     );
     return;
@@ -219,7 +223,9 @@ export async function processProviderAcceptedOperations(
         }
 
         if (invoice.balanceDueMinor < operation.amountMinor) {
-          throw new Error(`Insufficient balance on invoice ${operation.invoiceId}`);
+          throw new Error(
+            `Insufficient balance on invoice ${operation.invoiceId}`,
+          );
         }
 
         // Update invoice balance
@@ -236,7 +242,8 @@ export async function processProviderAcceptedOperations(
         });
 
         // Derive status from post-update balance
-        const newStatus = updatedInvoice.balanceDueMinor === 0n ? "PAID" : "PARTIALLY_PAID";
+        const newStatus =
+          updatedInvoice.balanceDueMinor === 0n ? "PAID" : "PARTIALLY_PAID";
         const paidAt = newStatus === "PAID" ? new Date() : null;
 
         await tx.invoice.update({
@@ -350,14 +357,18 @@ export async function reconcileOrphanedPaymentOperations(
   );
 
   for (const operation of orphaned) {
-    // Check if a payment record exists with the same idempotency key
-    const existingPayment = await prisma.payment.findUnique({
+    // Check if a payment record exists with the same idempotency key.
+    // Payment no longer has a unique (companyId, idempotencyKey) constraint
+    // (dropped in migration 20261009180000), so this is a scoped findFirst, not
+    // a findUnique. Scoping by companyId AND invoiceId keeps the lookup
+    // tenant-safe and served by the (companyId, invoiceId, receivedAt) index.
+    const existingPayment = await prisma.payment.findFirst({
       where: {
-        companyId_idempotencyKey: {
-          companyId: operation.companyId,
-          idempotencyKey: operation.idempotencyKey,
-        },
+        companyId: operation.companyId,
+        invoiceId: operation.invoiceId,
+        idempotencyKey: operation.idempotencyKey,
       },
+      orderBy: { createdAt: "asc" },
     });
 
     if (existingPayment) {

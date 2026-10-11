@@ -85,7 +85,11 @@ async function createTechnician(companyId: string) {
   return techUserId;
 }
 
-async function startJob(auth: { Authorization: string }, jobId: string, companyId: string) {
+async function startJob(
+  auth: { Authorization: string },
+  jobId: string,
+  companyId: string,
+) {
   // Assign a technician first (required for active job transitions)
   const technicianId = await createTechnician(companyId);
   const assignRes = await request(app)

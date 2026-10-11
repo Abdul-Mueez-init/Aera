@@ -63,11 +63,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
+          # Latest release on the stable channel. Do NOT set flutter-version to
+          # the word 'stable': it is not a version number and breaks SDK
+          # resolution. pubspec.yaml requires Dart ^3.12.2 (Flutter 3.44 or
+          # newer). If an exact pin is ever needed, use a real version string
+          # such as '3.47.1'.
           channel: stable
-          # Use latest stable Flutter to ensure compatibility with Dart ^3.12.2.
-          # Flutter 3.35.0 bundles Dart 3.9.0, which is incompatible.
-          # Update this pin if a specific version is required.
-          flutter-version: 'stable'
       - run: flutter --version
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos

@@ -229,10 +229,10 @@ export async function getTechnicianWorkload(
 
   // Batch query: get all job counts in a single query using grouping
   const jobCounts = await prisma.job.groupBy({
-    by: ['assignedTechnicianId'],
+    by: ["assignedTechnicianId"],
     where: {
       companyId: context.companyId,
-      assignedTechnicianId: { in: technicians.map(t => t.user.id) },
+      assignedTechnicianId: { in: technicians.map((t) => t.user.id) },
       scheduledStart: { gte: start, lt: end },
       status: { notIn: ["CANCELLED", "COMPLETED"] },
     },
@@ -241,7 +241,7 @@ export async function getTechnicianWorkload(
 
   // Create a map for O(1) lookup
   const countMap = new Map(
-    jobCounts.map(item => [item.assignedTechnicianId, item._count])
+    jobCounts.map((item) => [item.assignedTechnicianId, item._count]),
   );
 
   const workload = technicians.map(({ user }) => ({

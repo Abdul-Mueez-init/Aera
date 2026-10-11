@@ -253,7 +253,9 @@ describe("Phase B2: Route Authorization Matrix & Function-Level Policies", () =>
     if (viewRes.body.data.invoices && viewRes.body.data.invoices.length > 0) {
       expect(viewRes.body.data.invoices[0]).not.toHaveProperty("subtotalMinor");
       expect(viewRes.body.data.invoices[0]).not.toHaveProperty("totalMinor");
-      expect(viewRes.body.data.invoices[0]).not.toHaveProperty("balanceDueMinor");
+      expect(viewRes.body.data.invoices[0]).not.toHaveProperty(
+        "balanceDueMinor",
+      );
     }
 
     // Owner CAN view full customer data and invoice financials
@@ -263,10 +265,17 @@ describe("Phase B2: Route Authorization Matrix & Function-Level Policies", () =>
     expect(ownerViewRes.status).toBe(200);
     expect(ownerViewRes.body.data.customer).toHaveProperty("email");
     expect(ownerViewRes.body.data.customer).toHaveProperty("phone");
-    if (ownerViewRes.body.data.invoices && ownerViewRes.body.data.invoices.length > 0) {
-      expect(ownerViewRes.body.data.invoices[0]).toHaveProperty("subtotalMinor");
+    if (
+      ownerViewRes.body.data.invoices &&
+      ownerViewRes.body.data.invoices.length > 0
+    ) {
+      expect(ownerViewRes.body.data.invoices[0]).toHaveProperty(
+        "subtotalMinor",
+      );
       expect(ownerViewRes.body.data.invoices[0]).toHaveProperty("totalMinor");
-      expect(ownerViewRes.body.data.invoices[0]).toHaveProperty("balanceDueMinor");
+      expect(ownerViewRes.body.data.invoices[0]).toHaveProperty(
+        "balanceDueMinor",
+      );
     }
 
     // Assigned technician CANNOT cancel job

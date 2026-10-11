@@ -25,15 +25,18 @@ describe("Production Configuration Validation", () => {
       if (process.env.NODE_ENV === "production") {
         expect(env.CORS_ORIGINS).toBeDefined();
         expect(env.CORS_ORIGINS?.length).toBeGreaterThan(0);
-        expect(env.CORS_ORIGINS?.every((origin) => origin.startsWith("https://"))).toBe(
-          true,
-        );
+        expect(
+          env.CORS_ORIGINS?.every((origin) => origin.startsWith("https://")),
+        ).toBe(true);
       }
     });
 
     it("should allow unset CORS_ORIGINS in development/test", () => {
       // Development and test environments can use open CORS for convenience
-      if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
+      if (
+        process.env.NODE_ENV === "development" ||
+        process.env.NODE_ENV === "test"
+      ) {
         expect(env.CORS_ORIGINS).toBeUndefined();
       }
     });

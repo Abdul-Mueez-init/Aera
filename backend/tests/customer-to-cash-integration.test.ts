@@ -183,7 +183,11 @@ async function sendQuote(auth: { Authorization: string }, quoteId: string) {
   return res.body.data;
 }
 
-async function scheduleJob(auth: { Authorization: string }, jobId: string, companyId: string) {
+async function scheduleJob(
+  auth: { Authorization: string },
+  jobId: string,
+  companyId: string,
+) {
   // Assign a technician first (required for scheduling)
   const suffix = `tech-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
   const techUser = await request(app)

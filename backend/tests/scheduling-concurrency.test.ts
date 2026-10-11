@@ -126,7 +126,9 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .set(auth)
       .send({
         scheduledStart: new Date(Date.now() + 86400 * 1000).toISOString(),
-        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 7200 * 1000).toISOString(),
+        scheduledEnd: new Date(
+          Date.now() + 86400 * 1000 + 7200 * 1000,
+        ).toISOString(),
       });
     expect(schedule1.status).toBe(200);
     expect(schedule1.body.data.warnings).toHaveLength(0);
@@ -142,8 +144,12 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/schedule/jobs/${job2}/schedule`)
       .set(auth)
       .send({
-        scheduledStart: new Date(Date.now() + 86400 * 1000 + 3600 * 1000).toISOString(),
-        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 10800 * 1000).toISOString(),
+        scheduledStart: new Date(
+          Date.now() + 86400 * 1000 + 3600 * 1000,
+        ).toISOString(),
+        scheduledEnd: new Date(
+          Date.now() + 86400 * 1000 + 10800 * 1000,
+        ).toISOString(),
       });
     expect(schedule2.status).toBe(200);
     expect(schedule2.body.data.warnings).toHaveLength(1);
@@ -172,7 +178,9 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .set(auth)
       .send({
         scheduledStart: new Date(Date.now() + 86400 * 1000).toISOString(),
-        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 7200 * 1000).toISOString(),
+        scheduledEnd: new Date(
+          Date.now() + 86400 * 1000 + 7200 * 1000,
+        ).toISOString(),
       });
     expect(schedule1.status).toBe(200);
     expect(schedule1.body.data.warnings).toHaveLength(0);
@@ -188,8 +196,12 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/schedule/jobs/${job2}/schedule`)
       .set(auth)
       .send({
-        scheduledStart: new Date(Date.now() + 86400 * 1000 + 14400 * 1000).toISOString(),
-        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 21600 * 1000).toISOString(),
+        scheduledStart: new Date(
+          Date.now() + 86400 * 1000 + 14400 * 1000,
+        ).toISOString(),
+        scheduledEnd: new Date(
+          Date.now() + 86400 * 1000 + 21600 * 1000,
+        ).toISOString(),
       });
     expect(schedule2.status).toBe(200);
     expect(schedule2.body.data.warnings).toHaveLength(0);
@@ -214,7 +226,9 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .set(auth)
       .send({
         scheduledStart: new Date(Date.now() + 86400 * 1000).toISOString(),
-        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 7200 * 1000).toISOString(),
+        scheduledEnd: new Date(
+          Date.now() + 86400 * 1000 + 7200 * 1000,
+        ).toISOString(),
       });
 
     // Create second job with overlapping time and assign same technician
@@ -229,8 +243,12 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/schedule/jobs/${job2}/schedule`)
       .set(auth)
       .send({
-        scheduledStart: new Date(Date.now() + 86400 * 1000 + 3600 * 1000).toISOString(),
-        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 10800 * 1000).toISOString(),
+        scheduledStart: new Date(
+          Date.now() + 86400 * 1000 + 3600 * 1000,
+        ).toISOString(),
+        scheduledEnd: new Date(
+          Date.now() + 86400 * 1000 + 10800 * 1000,
+        ).toISOString(),
       });
     expect(schedule2.status).toBe(200);
     expect(schedule2.body.data.warnings).toHaveLength(1);
@@ -263,7 +281,9 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
     // Try to schedule both jobs for overlapping times concurrently
     const overlappingTime = {
       scheduledStart: new Date(Date.now() + 86400 * 1000).toISOString(),
-      scheduledEnd: new Date(Date.now() + 86400 * 1000 + 7200 * 1000).toISOString(),
+      scheduledEnd: new Date(
+        Date.now() + 86400 * 1000 + 7200 * 1000,
+      ).toISOString(),
     };
 
     const [schedule1, schedule2] = await Promise.all([
@@ -306,7 +326,9 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .set(auth)
       .send({
         scheduledStart: new Date(Date.now() + 86400 * 1000).toISOString(),
-        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 7200 * 1000).toISOString(),
+        scheduledEnd: new Date(
+          Date.now() + 86400 * 1000 + 7200 * 1000,
+        ).toISOString(),
       });
 
     // Verify job1 is scheduled
@@ -326,8 +348,12 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .post(`/api/v1/schedule/jobs/${job2}/schedule`)
       .set(auth)
       .send({
-        scheduledStart: new Date(Date.now() + 86400 * 1000 + 3600 * 1000).toISOString(),
-        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 10800 * 1000).toISOString(),
+        scheduledStart: new Date(
+          Date.now() + 86400 * 1000 + 3600 * 1000,
+        ).toISOString(),
+        scheduledEnd: new Date(
+          Date.now() + 86400 * 1000 + 10800 * 1000,
+        ).toISOString(),
       });
 
     // Schedule should succeed with conflict warning (not hard error)
@@ -358,22 +384,36 @@ describe("Phase C5 — Scheduling Conflict Detection Concurrency", () => {
       .set(auth)
       .send({
         scheduledStart: new Date(Date.now() + 86400 * 1000).toISOString(),
-        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 7200 * 1000).toISOString(),
+        scheduledEnd: new Date(
+          Date.now() + 86400 * 1000 + 7200 * 1000,
+        ).toISOString(),
       });
 
     // Try to reschedule multiple times concurrently
     const newTimes = [
       {
-        scheduledStart: new Date(Date.now() + 86400 * 1000 + 14400 * 1000).toISOString(),
-        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 21600 * 1000).toISOString(),
+        scheduledStart: new Date(
+          Date.now() + 86400 * 1000 + 14400 * 1000,
+        ).toISOString(),
+        scheduledEnd: new Date(
+          Date.now() + 86400 * 1000 + 21600 * 1000,
+        ).toISOString(),
       },
       {
-        scheduledStart: new Date(Date.now() + 86400 * 1000 + 21600 * 1000).toISOString(),
-        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 28800 * 1000).toISOString(),
+        scheduledStart: new Date(
+          Date.now() + 86400 * 1000 + 21600 * 1000,
+        ).toISOString(),
+        scheduledEnd: new Date(
+          Date.now() + 86400 * 1000 + 28800 * 1000,
+        ).toISOString(),
       },
       {
-        scheduledStart: new Date(Date.now() + 86400 * 1000 + 28800 * 1000).toISOString(),
-        scheduledEnd: new Date(Date.now() + 86400 * 1000 + 36000 * 1000).toISOString(),
+        scheduledStart: new Date(
+          Date.now() + 86400 * 1000 + 28800 * 1000,
+        ).toISOString(),
+        scheduledEnd: new Date(
+          Date.now() + 86400 * 1000 + 36000 * 1000,
+        ).toISOString(),
       },
     ];
 

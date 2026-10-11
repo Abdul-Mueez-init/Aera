@@ -201,7 +201,12 @@ export async function getDashboardToday(
   return {
     date: dateStr,
     jobs: jobs
-      .filter((job): job is typeof job & { scheduledStart: Date; scheduledEnd: Date } => job.scheduledStart !== null && job.scheduledEnd !== null)
+      .filter(
+        (
+          job,
+        ): job is typeof job & { scheduledStart: Date; scheduledEnd: Date } =>
+          job.scheduledStart !== null && job.scheduledEnd !== null,
+      )
       .map((job) => ({
         id: job.id,
         jobNumber: `JOB-${job.jobNumber}`,
