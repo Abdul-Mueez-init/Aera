@@ -1,5 +1,5 @@
 import request from "supertest";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { prisma } from "../src/db/prisma.js";
 import {
@@ -385,9 +385,17 @@ describe("get_schedule_workload", () => {
   it("counts unassigned jobs and flags a job over 15 minutes past its scheduled start", async () => {
     const company = await seedCompany("workload-late");
     const customer = await seedCustomer(company.companyId, "Waqas", "Iqbal");
-    const now = new Date();
-    const today = now.toISOString().slice(0, 10);
     const MINUTE_MS = 60_000;
+
+    // Anchor "now" at midday UTC today. The offsets below (+1h, -30min) must
+    // never cross a UTC date boundary, otherwise the test depends on the time
+    // of day it runs: with the real clock it failed between 23:00 and 00:30
+    // UTC (CI run #62 failed at 00:04 UTC). The service reads new Date(), so
+    // only Date is faked, and only around the call under test; timers and
+    // database I/O keep running on the real clock.
+    const now = new Date();
+    now.setUTCHours(12, 0, 0, 0);
+    const today = now.toISOString().slice(0, 10);
 
     await seedJob(
       { ...company, ...customer },
@@ -406,7 +414,14 @@ describe("get_schedule_workload", () => {
       },
     );
 
-    const result = await getScheduleWorkload(context(company), { date: today });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(now);
+    let result;
+    try {
+      result = await getScheduleWorkload(context(company), { date: today });
+    } finally {
+      vi.useRealTimers();
+    }
     expect(result.unassignedJobCount).toBe(2);
     expect(result.lateJobs.map((job) => job.jobId)).toContain(late.id);
   });

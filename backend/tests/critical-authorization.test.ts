@@ -82,16 +82,14 @@ async function createJob(
 }
 
 describe("Phase G1: Critical Backend Authorization Tests", () => {
-  it.skip("prevents cross-company access by guessing customer IDs - quote expiry test", async () => {
+  it("refuses to send an already-expired quote, so no public share link is ever issued", async () => {
     const owner = await registerOwner("quote-expiry");
 
-    // Create customer, address, and job
     const { customerId, addressId } = await createCustomerAndAddress(
       owner.accessToken,
     );
     const job = await createJob(owner.accessToken, customerId, addressId);
 
-    // Create a quote with an expiry date in the past
     const pastDate = new Date(Date.now() - 1000 * 60 * 60 * 24); // 1 day ago
     const quoteRes = await request(app)
       .post("/api/v1/quotes")
@@ -111,40 +109,25 @@ describe("Phase G1: Critical Backend Authorization Tests", () => {
       });
 
     expect(quoteRes.status).toBe(201);
-    const shareToken = quoteRes.body.data.shareToken;
+    // The share token is only minted when a quote is sent.
+    expect(quoteRes.body.data.shareToken).toBeFalsy();
 
-    // Send the quote to make it active
-    await request(app)
+    const sendRes = await request(app)
       .post(`/api/v1/quotes/${quoteRes.body.data.id}/send`)
       .set("Authorization", `Bearer ${owner.accessToken}`);
 
-    // Try to access the expired quote via public link
-    const publicAccess = await request(app).get(
-      `/api/v1/quotes/shared/${shareToken}`,
-    );
-
-    expect(publicAccess.status).toBe(410);
-    expect(publicAccess.body.error.code).toBe("QUOTE_EXPIRED");
-
-    // Try to respond to the expired quote
-    const respondAttempt = await request(app)
-      .post(`/api/v1/quotes/shared/${shareToken}/respond`)
-      .send({ action: "APPROVED" });
-
-    expect(respondAttempt.status).toBe(410);
-    expect(respondAttempt.body.error.code).toBe("QUOTE_EXPIRED");
+    expect(sendRes.status).toBe(422);
+    expect(sendRes.body.error.code).toBe("QUOTE_EXPIRED");
   });
 
-  it.skip("allows public quote access before expiry - requires job creation", async () => {
+  it("serves a public quote link before expiry using the token issued by send", async () => {
     const owner = await registerOwner("quote-valid");
 
-    // Create customer, address, and job
     const { customerId, addressId } = await createCustomerAndAddress(
       owner.accessToken,
     );
     const job = await createJob(owner.accessToken, customerId, addressId);
 
-    // Create a quote with an expiry date in the future
     const futureDate = new Date(Date.now() + 1000 * 60 * 60 * 24); // 1 day from now
     const quoteRes = await request(app)
       .post("/api/v1/quotes")
@@ -164,14 +147,14 @@ describe("Phase G1: Critical Backend Authorization Tests", () => {
       });
 
     expect(quoteRes.status).toBe(201);
-    const shareToken = quoteRes.body.data.id;
 
-    // Send the quote to make it active
-    await request(app)
+    const sendRes = await request(app)
       .post(`/api/v1/quotes/${quoteRes.body.data.id}/send`)
       .set("Authorization", `Bearer ${owner.accessToken}`);
+    expect(sendRes.status).toBe(200);
+    const shareToken = sendRes.body.data.shareToken;
+    expect(typeof shareToken).toBe("string");
 
-    // Access the valid quote via public link
     const publicAccess = await request(app).get(
       `/api/v1/quotes/shared/${shareToken}`,
     );

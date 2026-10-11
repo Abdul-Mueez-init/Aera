@@ -12,7 +12,7 @@ permissions:
 jobs:
   backend:
     name: Backend checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: .
@@ -58,7 +58,7 @@ jobs:
 
   flutter:
     name: Flutter checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
