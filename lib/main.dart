@@ -10,11 +10,11 @@ import 'core/observability/sentry_bootstrap.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Phase 5: Use path URL strategy for web builds so customer-facing links
   // work correctly with static hosting (e.g., Cloudflare Pages) and SPA fallback.
   usePathUrlStrategy();
-  
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -37,7 +37,7 @@ class AeraApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final router = ref.watch(routerProvider);
+    final router = ref.read(routerProvider);
     return MaterialApp.router(
       title: 'Aera Field Operations',
       debugShowCheckedModeBanner: false,

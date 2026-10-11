@@ -27,16 +27,9 @@ android {
 
     signingConfigs {
         create("release") {
-            if (keystoreProps.isEmpty()) {
-                throw GradleException(
-                    "Release signing configuration missing. " +
-                    "Create key.properties with keyAlias, keyPassword, storeFile, and storePassword. " +
-                    "For debug builds, use the development flavor instead."
-                )
-            }
             keyAlias = keystoreProps.getProperty("keyAlias")
             keyPassword = keystoreProps.getProperty("keyPassword")
-            storeFile = file(keystoreProps.getProperty("storeFile"))
+            storeFile = keystoreProps.getProperty("storeFile")?.let { file(it) }
             storePassword = keystoreProps.getProperty("storePassword")
         }
     }
@@ -79,6 +72,34 @@ android {
         release {
             signingConfig = signingConfigs.getByName("release")
         }
+    }
+}
+
+// Task to validate release signing configuration - only runs when release builds are executed
+tasks.register("validateReleaseSigning") {
+    doLast {
+        val releaseSigning = android.signingConfigs.getByName("release")
+        if (keystoreProps.isEmpty() ||
+            releaseSigning.keyAlias.isNullOrBlank() ||
+            releaseSigning.keyPassword.isNullOrBlank() ||
+            releaseSigning.storeFile == null ||
+            releaseSigning.storePassword.isNullOrBlank()) {
+            throw GradleException(
+                "Release signing configuration missing or incomplete. " +
+                "Create android/key.properties with keyAlias, keyPassword, storeFile, and storePassword. " +
+                "All four properties are required for release builds."
+            )
+        }
+    }
+}
+
+// Make all release assemble tasks depend on validation
+afterEvaluate {
+    tasks.named("assembleRelease") {
+        dependsOn("validateReleaseSigning")
+    }
+    tasks.named("bundleRelease") {
+        dependsOn("validateReleaseSigning")
     }
 }
 
