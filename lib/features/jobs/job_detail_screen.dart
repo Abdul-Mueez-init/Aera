@@ -296,15 +296,22 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
       ),
     );
 
-    // Wait for technicians to load
-    final techniciansAsync = ref.read(techniciansProvider);
-    
+    // Actually wait for the roster. ref.read(techniciansProvider) alone
+    // returns "loading" on the first tap, which looked like "no technicians".
+    List<Technician> technicians = const [];
+    Object? loadError;
+    try {
+      technicians = await ref.read(jobsRepositoryProvider).listTechnicians();
+    } catch (e) {
+      loadError = e;
+    }
+
     // Dismiss loading dialog
     if (!mounted) return;
     Navigator.of(context).pop();
 
     // Handle error state
-    if (techniciansAsync.hasError) {
+    if (loadError != null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to load technicians')),
@@ -312,8 +319,6 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
       }
       return;
     }
-
-    final technicians = techniciansAsync.value ?? [];
 
     if (technicians.isEmpty) {
       if (mounted) {

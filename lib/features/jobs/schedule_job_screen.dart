@@ -55,6 +55,13 @@ class _ScheduleJobScreenState extends ConsumerState<ScheduleJobScreen> {
   );
 
   Future<void> _confirm(Job job) async {
+    if (_selectedTechnicianId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a technician before dispatching')),
+      );
+      return;
+    }
+
     final day = _days[_selectedDay];
     final slot = _slots[_selectedSlot];
     final scheduledStart = DateTime(
@@ -75,16 +82,19 @@ class _ScheduleJobScreenState extends ConsumerState<ScheduleJobScreen> {
     setState(() => _submitting = true);
     try {
       final repo = ref.read(jobsRepositoryProvider);
+
+      // The server refuses to schedule a job that has no technician, so the
+      // assignment has to be saved BEFORE the schedule call.
+      if (_selectedTechnicianId != job.assignedTechnician?.id) {
+        await repo.assignTechnician(job.id, _selectedTechnicianId);
+      }
+
       final result = await repo.scheduleJob(
         job.id,
         scheduledStart: scheduledStart,
         scheduledEnd: scheduledEnd,
         reschedule: job.status == 'SCHEDULED',
       );
-
-      if (_selectedTechnicianId != job.assignedTechnician?.id) {
-        await repo.assignTechnician(job.id, _selectedTechnicianId);
-      }
 
       ref.invalidate(jobsListProvider);
       ref.invalidate(jobDetailProvider(job.id));
@@ -111,6 +121,9 @@ class _ScheduleJobScreenState extends ConsumerState<ScheduleJobScreen> {
         ).showSnackBar(const SnackBar(content: Text('Could not schedule job')));
       }
     } finally {
+      // The assignment may have been saved even if scheduling failed.
+      ref.invalidate(jobsListProvider);
+      ref.invalidate(jobDetailProvider(job.id));
       if (mounted) setState(() => _submitting = false);
     }
   }

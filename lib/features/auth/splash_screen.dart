@@ -16,7 +16,7 @@ class SplashScreen extends ConsumerStatefulWidget {
 class _SplashScreenState extends ConsumerState<SplashScreen> {
   /// Keep the brand visible at least this long, even if the session check
   /// finishes instantly.
-  static const _minimumBrandTime = Duration(milliseconds: 1200);
+  static const _minimumBrandTime = Duration(seconds: 2);
 
   Timer? _timer;
 
@@ -44,7 +44,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       body: SafeArea(
-        child: Padding(
+        // A Column only grows as wide as its widest child, which left the
+        // logo stuck at the left edge. A full-width Container gives the Column
+        // tight width so its children are centred horizontally.
+        child: Container(
+          width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

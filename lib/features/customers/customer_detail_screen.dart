@@ -188,7 +188,7 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Customer web URL not configured for this build'),
+            content: Text('Could not build the customer link'),
           ),
         );
       }

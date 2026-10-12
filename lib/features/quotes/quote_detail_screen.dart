@@ -114,7 +114,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Customer web URL not configured for this build'),
+          content: Text('Could not build the customer link'),
         ),
       );
     }
@@ -139,7 +139,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Customer web URL not configured for this build'),
+            content: Text('Could not build the customer link'),
           ),
         );
       }
@@ -165,7 +165,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Customer web URL not configured for this build'),
+            content: Text('Could not build the customer link'),
           ),
         );
       }
