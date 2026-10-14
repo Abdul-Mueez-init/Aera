@@ -139,7 +139,7 @@ class AuthRepository {
 
   /// Upper bound for the startup check, so a dead network can never keep the
   /// app on the splash screen.
-  static const _startupValidationTimeout = Duration(seconds: 8);
+  static const _startupValidationTimeout = Duration(seconds: 2);
 
   /// Upper bound for the best-effort server-side revoke, so Sign Out always
   /// completes even when offline.

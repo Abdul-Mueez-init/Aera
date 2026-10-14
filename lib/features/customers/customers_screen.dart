@@ -71,19 +71,28 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('AERA HVAC',
-                    style: AeraTypography.labelUpper.copyWith(fontSize: 9)),
-                Text('Customers',
-                    style: AeraTypography.h3
-                        .copyWith(fontSize: 16, fontWeight: FontWeight.w700)),
+                Text(
+                  'AERA HVAC',
+                  style: AeraTypography.labelUpper.copyWith(fontSize: 9),
+                ),
+                Text(
+                  'Customers',
+                  style: AeraTypography.h3.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined,
-                color: AeraColors.ink, size: 22),
+            icon: const Icon(
+              Icons.notifications_outlined,
+              color: AeraColors.ink,
+              size: 22,
+            ),
             onPressed: () => context.push('/notifications'),
           ),
           IconButton(
@@ -103,8 +112,10 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
         icon: const Icon(Icons.person_add, size: 20),
         label: Text(
           'Add Customer',
-          style: AeraTypography.bodyMedium
-              .copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+          style: AeraTypography.bodyMedium.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         onPressed: () => context.push('/create-customer'),
       ),
@@ -131,9 +142,10 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Customer Accounts',
-                            style:
-                                AeraTypography.display.copyWith(fontSize: 22)),
+                        Text(
+                          'Customer Accounts',
+                          style: AeraTypography.display.copyWith(fontSize: 22),
+                        ),
                         Row(
                           children: [
                             Container(
@@ -145,8 +157,10 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                               ),
                             ),
                             const SizedBox(width: 6),
-                            Text('${page.meta.total} Active Accounts',
-                                style: AeraTypography.bodySm),
+                            Text(
+                              '${page.meta.total} Active Accounts',
+                              style: AeraTypography.bodySm,
+                            ),
                           ],
                         ),
                       ],
@@ -162,18 +176,26 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                   ),
                   child: TextField(
                     controller: _searchController,
-                    style: AeraTypography.bodySm.copyWith(color: AeraColors.ink),
+                    style: AeraTypography.bodySm.copyWith(
+                      color: AeraColors.ink,
+                    ),
                     decoration: InputDecoration(
                       hintText: 'Search name, phone, email...',
-                      hintStyle: AeraTypography.bodySm
-                          .copyWith(color: AeraColors.outline),
-                      prefixIcon: const Icon(Icons.search,
-                          size: 20, color: AeraColors.inkSoft),
+                      hintStyle: AeraTypography.bodySm.copyWith(
+                        color: AeraColors.outline,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        size: 20,
+                        color: AeraColors.inkSoft,
+                      ),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                 ),
@@ -184,8 +206,11 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                     child: Center(
                       child: Column(
                         children: [
-                          const Icon(Icons.people_outline,
-                              size: 48, color: AeraColors.outline),
+                          const Icon(
+                            Icons.people_outline,
+                            size: 48,
+                            color: AeraColors.outline,
+                          ),
                           const SizedBox(height: 12),
                           Text(
                             _debouncedSearch.isEmpty
@@ -195,8 +220,10 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                           ),
                           if (_debouncedSearch.isEmpty) ...[
                             const SizedBox(height: 8),
-                            Text('Add your first customer to get started',
-                                style: AeraTypography.bodySm),
+                            Text(
+                              'Add your first customer to get started',
+                              style: AeraTypography.bodySm,
+                            ),
                           ],
                         ],
                       ),
@@ -217,30 +244,32 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       IconButton(
                         onPressed: page.meta.page > 1
                             ? () {
-                                ref.read(customersQueryProvider.notifier).state =
-                                    CustomersQuery(
+                                ref
+                                    .read(customersQueryProvider.notifier)
+                                    .state = CustomersQuery(
                                   page: page.meta.page - 1,
                                   search: _debouncedSearch,
                                 );
                               }
                             : null,
                         icon: const Icon(Icons.chevron_left),
-                        tooltip: 'Previous page',
                       ),
-                      Text('Page ${page.meta.page} of ${page.meta.pageCount}',
-                          style: AeraTypography.bodySm),
+                      Text(
+                        'Page ${page.meta.page} of ${page.meta.pageCount}',
+                        style: AeraTypography.bodySm,
+                      ),
                       IconButton(
                         onPressed: page.meta.page < page.meta.pageCount
                             ? () {
-                                ref.read(customersQueryProvider.notifier).state =
-                                    CustomersQuery(
+                                ref
+                                    .read(customersQueryProvider.notifier)
+                                    .state = CustomersQuery(
                                   page: page.meta.page + 1,
                                   search: _debouncedSearch,
                                 );
                               }
                             : null,
                         icon: const Icon(Icons.chevron_right),
-                        tooltip: 'Next page',
                       ),
                     ],
                   ),
@@ -291,12 +320,16 @@ class _CustomerCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(customer.fullName,
-                        style: AeraTypography.h3.copyWith(fontSize: 15)),
-                    Text(address,
-                        style: AeraTypography.bodySm.copyWith(fontSize: 11),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      customer.fullName,
+                      style: AeraTypography.h3.copyWith(fontSize: 15),
+                    ),
+                    Text(
+                      address,
+                      style: AeraTypography.bodySm.copyWith(fontSize: 11),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
@@ -309,11 +342,16 @@ class _CustomerCard extends StatelessWidget {
             Row(
               children: [
                 if (customer.phone != null) ...[
-                  const Icon(Icons.phone_outlined,
-                      size: 14, color: AeraColors.inkSoft),
+                  const Icon(
+                    Icons.phone_outlined,
+                    size: 14,
+                    color: AeraColors.inkSoft,
+                  ),
                   const SizedBox(width: 4),
-                  Text(customer.phone!,
-                      style: AeraTypography.bodySm.copyWith(fontSize: 11)),
+                  Text(
+                    customer.phone!,
+                    style: AeraTypography.bodySm.copyWith(fontSize: 11),
+                  ),
                 ],
                 const Spacer(),
                 if (customer.email != null)
@@ -347,7 +385,11 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: AeraColors.warning),
+            const Icon(
+              Icons.error_outline,
+              size: 48,
+              color: AeraColors.warning,
+            ),
             const SizedBox(height: 12),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 16),

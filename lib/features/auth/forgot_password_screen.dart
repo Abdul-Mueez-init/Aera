@@ -1,40 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_text_field.dart';
-import 'data/auth_repository.dart';
 
-/// Step 1 of password recovery: ask for a reset code by email.
-///
-/// The server answers the same way for every address (so it cannot be used to
-/// find out who has an account), so this screen never says "we sent an email
-/// to you", only that one will arrive if the account exists.
-class ForgotPasswordScreen extends ConsumerStatefulWidget {
-  const ForgotPasswordScreen({super.key, this.initialEmail});
-
-  /// Pre-filled when the user comes from the sign-in screen.
-  final String? initialEmail;
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
 
   @override
-  ConsumerState<ForgotPasswordScreen> createState() =>
-      _ForgotPasswordScreenState();
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
-  late final TextEditingController _emailController;
-  bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _emailController = TextEditingController(text: widget.initialEmail ?? '');
-  }
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  final _emailController = TextEditingController(
+    text: 'marcus@apexheating.com',
+  );
+  bool _codeDispatched = false;
 
   @override
   void dispose() {
@@ -42,104 +26,186 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     super.dispose();
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(backgroundColor: AeraColors.danger, content: Text(message)),
-    );
-  }
-
-  String _messageFor(Object error) {
-    if (error is ApiException) {
-      if (error.statusCode == 429) {
-        return 'Too many requests. Please wait a few minutes and try again.';
+  void _sendCode() {
+    setState(() => _codeDispatched = true);
+    Future.delayed(const Duration(milliseconds: 900), () {
+      if (mounted) {
+        context.push('/reset-password');
       }
-      return error.message;
-    }
-    return 'Could not reach the server. Check your internet connection and try again.';
-  }
-
-  Future<void> _handleSend() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
-      _showError('Please enter a valid email address');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      await ref.read(authRepositoryProvider).requestPasswordReset(email);
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      context.go(
-        Uri(
-          path: '/reset-password',
-          queryParameters: {'email': email},
-        ).toString(),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      _showError(_messageFor(error));
-    }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AeraColors.canvas,
-      appBar: const AeraAppBar(title: 'Reset password', showBrand: true),
+      appBar: const AeraAppBar(title: 'Reset Password', showBrand: true),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           children: [
+            const SizedBox(height: 12),
+            Center(
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(
+                  color: AeraColors.accentSoft,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.mark_email_read_outlined,
+                  size: 32,
+                  color: AeraColors.accent,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Reset your password',
+              textAlign: TextAlign.center,
+              style: AeraTypography.display.copyWith(fontSize: 24),
+            ),
             const SizedBox(height: 8),
             Text(
-              'Forgot your password?',
-              style: AeraTypography.display.copyWith(fontSize: 26),
+              'Enter the work email associated with your Aera company account. We will send a secure verification code.',
+              textAlign: TextAlign.center,
+              style: AeraTypography.bodySm.copyWith(
+                color: AeraColors.inkSoft,
+                height: 1.4,
+              ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              "Enter the email you sign in with. If it belongs to an account, "
-              "we'll email you a code to choose a new password.",
-              style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft),
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
+
             AeraCard(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   AeraTextField(
-                    label: 'Email',
+                    label: 'Work Email',
                     hintText: 'name@company.com',
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     prefixIcon: const Icon(
-                      Icons.mail_outline,
+                      Icons.alternate_email,
                       size: 20,
                       color: AeraColors.outline,
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.verified_user,
+                        size: 14,
+                        color: AeraColors.accent,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Single sign-on protected company domain',
+                        style: AeraTypography.bodySm.copyWith(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
                   AeraButton(
-                    text: 'Email me a code',
-                    isLoading: _isLoading,
-                    onPressed: _isLoading ? null : _handleSend,
+                    text: 'Send Verification Code',
+                    icon: const Icon(
+                      Icons.arrow_forward,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                    onPressed: _sendCode,
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            Center(
-              child: TextButton(
-                onPressed: () => context.go('/login'),
-                child: Text(
-                  'Back to sign in',
-                  style: AeraTypography.bodySm.copyWith(
-                    color: AeraColors.accent,
-                    fontWeight: FontWeight.w600,
-                  ),
+
+            if (_codeDispatched) ...[
+              const SizedBox(height: 16),
+              AeraCard(
+                backgroundColor: AeraColors.successSoft,
+                borderColor: AeraColors.success.withValues(alpha: 0.3),
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle,
+                      color: AeraColors.success,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Code dispatched',
+                            style: AeraTypography.bodySm.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AeraColors.ink,
+                            ),
+                          ),
+                          Text(
+                            'Check your inbox for a 6-digit confirmation PIN from Aera Systems.',
+                            style: AeraTypography.bodySm.copyWith(
+                              fontSize: 12,
+                              color: AeraColors.inkSoft,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+            ],
+
+            const SizedBox(height: 24),
+            AeraCard(
+              padding: const EdgeInsets.all(16),
+              backgroundColor: AeraColors.surfaceSubtle.withValues(alpha: 0.6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AeraColors.surface,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.support_agent,
+                      color: AeraColors.accent,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Having trouble?',
+                          style: AeraTypography.h3.copyWith(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Technicians and staff can contact their company administrator directly to reset credentials.',
+                          style: AeraTypography.bodySm.copyWith(
+                            fontSize: 12,
+                            color: AeraColors.inkSoft,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

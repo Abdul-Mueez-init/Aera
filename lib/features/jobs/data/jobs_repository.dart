@@ -493,9 +493,8 @@ class JobsRepository {
       '/api/v1/jobs/$jobId/complete',
       body: {
         'summary': summary.trim(),
-        if (autoInvoice != null) 'autoInvoice': autoInvoice,
-        if (allowZeroAmountInvoice != null)
-          'allowZeroAmountInvoice': allowZeroAmountInvoice,
+        'autoInvoice': ?autoInvoice,
+        'allowZeroAmountInvoice': ?allowZeroAmountInvoice,
       },
     );
     return Job.fromJson(res as Map<String, dynamic>);

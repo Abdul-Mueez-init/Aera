@@ -166,8 +166,11 @@ class _AiOperationsAssistantScreenState
               tooltip: 'New conversation',
               onPressed: _startNewConversation,
             ),
-          // Screen catalog drawer is only available in main app shell
-          // Removed broken openEndDrawer call
+          IconButton(
+            icon: const Icon(Icons.apps),
+            tooltip: 'Screen Catalog',
+            onPressed: () => Scaffold.of(context).openEndDrawer(),
+          ),
         ],
       ),
       body: Column(
@@ -259,7 +262,7 @@ class _EmptyState extends ConsumerWidget {
         ),
         recent.when(
           loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
+          error: (_, _) => const SizedBox.shrink(),
           data: (conversations) {
             if (conversations.isEmpty) return const SizedBox.shrink();
             return Padding(
@@ -378,7 +381,7 @@ class _ConversationThread extends ConsumerWidget {
           controller: scrollController,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           itemCount: messages.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          separatorBuilder: (_, _) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final message = messages[index];
             final showFullAnalysisLink =

@@ -23,27 +23,25 @@ class Member {
   final DateTime createdAt;
   final MemberUser user;
   final String? invitationToken;
-
-  /// When a pending invitation stops working. Null for people who already
-  /// joined. The code itself is never part of the members list.
   final DateTime? invitationExpiresAt;
-
-  bool get isInvitationExpired =>
-      status == 'INVITED' &&
-      invitationExpiresAt != null &&
-      invitationExpiresAt!.isBefore(DateTime.now());
 
   factory Member.fromJson(Map<String, dynamic> json) => Member(
     id: json['id'] as String,
     role: json['role'] as String,
     status: json['status'] as String,
-    createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+    createdAt:
+        DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
     user: MemberUser.fromJson(json['user'] as Map<String, dynamic>),
     invitationToken: json['invitationToken'] as String?,
-    invitationExpiresAt: DateTime.tryParse(
-      json['invitationExpiresAt'] as String? ?? '',
-    ),
+    invitationExpiresAt: json['invitationExpiresAt'] != null
+        ? DateTime.tryParse(json['invitationExpiresAt'] as String)
+        : null,
   );
+
+  bool get isInvitationExpired {
+    if (invitationExpiresAt == null) return false;
+    return DateTime.now().isAfter(invitationExpiresAt!);
+  }
 }
 
 class MemberUser {
@@ -107,19 +105,8 @@ class MembersRepository {
     return Member.fromJson(res as Map<String, dynamic>);
   }
 
-  /// Issues a new one-time code for a member who has not accepted yet (OWNER
-  /// only). The old code stops working. The returned [Member] carries the new
-  /// `invitationToken`, which is shown to the owner once.
-  Future<Member> resendInvitation(String memberId) async {
-    final res = await _client.post(
-      '/api/v1/companies/current/members/$memberId/resend-invitation',
-    );
-    return Member.fromJson(res as Map<String, dynamic>);
-  }
-
   /// Changes a member's role and/or status (OWNER only; the server enforces
-  /// it). Only ACTIVE <-> SUSPENDED is allowed for status, and never for a
-  /// member who is still INVITED.
+  /// it). Only ACTIVE <-> SUSPENDED is allowed for status.
   Future<void> updateMember(
     String memberId, {
     String? role,
@@ -127,10 +114,7 @@ class MembersRepository {
   }) async {
     await _client.patch(
       '/api/v1/companies/current/members/$memberId',
-      body: {
-        if (role != null) 'role': role,
-        if (status != null) 'status': status,
-      },
+      body: {'role': ?role, 'status': ?status},
     );
   }
 

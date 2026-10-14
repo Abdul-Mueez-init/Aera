@@ -108,7 +108,7 @@ class TeamScreen extends ConsumerWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
             itemCount: members.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
               final member = members[index];
               final isSelf = me != null && member.user.id == me.id;
@@ -236,22 +236,6 @@ class _MemberCard extends ConsumerWidget {
         if (!ok) return;
         await repo.updateMember(member.id, status: 'SUSPENDED');
         messenger.showSnackBar(SnackBar(content: Text('$_name suspended')));
-      } else if (action == 'resend') {
-        final resent = await repo.resendInvitation(member.id);
-        ref.invalidate(teamMembersProvider);
-        final token = resent.invitationToken;
-        if (token == null || token.isEmpty || !context.mounted) return;
-        final company = ref.read(currentCompanyProvider)?.name ?? 'your company';
-        await showDialog<void>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => _InvitationCodeDialog(
-            member: resent,
-            token: token,
-            companyName: company,
-          ),
-        );
-        return;
       } else if (action == 'reactivate') {
         await repo.updateMember(member.id, status: 'ACTIVE');
         messenger.showSnackBar(SnackBar(content: Text('$_name reactivated')));
@@ -281,14 +265,6 @@ class _MemberCard extends ConsumerWidget {
 
   List<PopupMenuEntry<String>> _menuItems() {
     final items = <PopupMenuEntry<String>>[];
-    if (member.status == 'INVITED') {
-      items.add(
-        const PopupMenuItem(
-          value: 'resend',
-          child: Text('Resend invitation'),
-        ),
-      );
-    }
     if (member.status == 'ACTIVE') {
       if (member.role != 'DISPATCHER') {
         items.add(
@@ -374,15 +350,10 @@ class _MemberCard extends ConsumerWidget {
                 if (member.status == 'INVITED') ...[
                   const SizedBox(height: 8),
                   Text(
-                    member.isInvitationExpired
-                        ? 'This invitation has expired. Use Resend invitation '
-                              'to issue a new code.'
-                        : 'Waiting to accept. The code was shown once; use '
-                              'Resend invitation if it was lost.',
+                    'Waiting to accept. The code was shown once; remove and '
+                    're-invite for a new one.',
                     style: AeraTypography.label.copyWith(
-                      color: member.isInvitationExpired
-                          ? AeraColors.danger
-                          : AeraColors.outline,
+                      color: AeraColors.outline,
                     ),
                   ),
                 ],
@@ -567,7 +538,9 @@ class _InvitationCodeDialogState extends State<_InvitationCodeDialog> {
   }
 
   Future<void> _shareWhatsApp() async {
-    final uri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(_message)}');
+    final uri = Uri.parse(
+      'https://wa.me/?text=${Uri.encodeComponent(_message)}',
+    );
     var opened = false;
     try {
       opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -575,16 +548,16 @@ class _InvitationCodeDialogState extends State<_InvitationCodeDialog> {
       opened = false;
     }
     if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open WhatsApp')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open WhatsApp')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = '${widget.member.user.firstName} ${widget.member.user.lastName}'
-        .trim();
+    final name =
+        '${widget.member.user.firstName} ${widget.member.user.lastName}'.trim();
     return AlertDialog(
       title: const Text('Invitation created'),
       content: SingleChildScrollView(

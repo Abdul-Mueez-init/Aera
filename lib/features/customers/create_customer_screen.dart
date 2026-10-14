@@ -25,7 +25,7 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
-  final _cityController = TextEditingController();
+  final _cityController = TextEditingController(text: 'Lahore');
   final _notesController = TextEditingController();
   bool _saving = false;
 
@@ -78,15 +78,17 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
       ref.invalidate(customersListProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Customer account created successfully!')),
+          const SnackBar(
+            content: Text('Customer account created successfully!'),
+          ),
         );
         context.pop();
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (_) {
       if (mounted) {
@@ -119,11 +121,16 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.person,
-                          size: 18, color: AeraColors.accent),
+                      const Icon(
+                        Icons.person,
+                        size: 18,
+                        color: AeraColors.accent,
+                      ),
                       const SizedBox(width: 8),
-                      Text('Primary Contact Information',
-                          style: AeraTypography.h3.copyWith(fontSize: 15)),
+                      Text(
+                        'Primary Contact Information',
+                        style: AeraTypography.h3.copyWith(fontSize: 15),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 14),
@@ -163,11 +170,16 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.location_on,
-                          size: 18, color: AeraColors.accent),
+                      const Icon(
+                        Icons.location_on,
+                        size: 18,
+                        color: AeraColors.accent,
+                      ),
                       const SizedBox(width: 8),
-                      Text('Primary Service Address',
-                          style: AeraTypography.h3.copyWith(fontSize: 15)),
+                      Text(
+                        'Primary Service Address',
+                        style: AeraTypography.h3.copyWith(fontSize: 15),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 14),

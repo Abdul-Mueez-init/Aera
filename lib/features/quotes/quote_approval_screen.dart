@@ -267,7 +267,7 @@ class _QuoteApprovalScreenState extends ConsumerState<QuoteApprovalScreen> {
                       color: AeraColors.successSoft,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: AeraColors.success.withOpacity(0.3),
+                        color: AeraColors.success.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Column(
@@ -303,7 +303,7 @@ class _QuoteApprovalScreenState extends ConsumerState<QuoteApprovalScreen> {
                       color: AeraColors.dangerSoft,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: AeraColors.danger.withOpacity(0.3),
+                        color: AeraColors.danger.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Column(
@@ -339,7 +339,7 @@ class _QuoteApprovalScreenState extends ConsumerState<QuoteApprovalScreen> {
                       color: AeraColors.warningSoft,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: AeraColors.warning.withOpacity(0.3),
+                        color: AeraColors.warning.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Column(

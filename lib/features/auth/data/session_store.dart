@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,7 +15,7 @@ abstract class SessionStore {
 }
 
 final sessionStoreProvider = Provider<SessionStore>(
-  (ref) => SecureSessionStore(),
+  (ref) => kIsWeb ? WebSessionStore() : SecureSessionStore(),
 );
 
 /// Keeps the session in the platform keystore (Android Keystore-backed
@@ -82,5 +84,35 @@ class SecureSessionStore implements SessionStore {
     }
     await prefs.remove(legacyPrefsKey);
     return legacy;
+  }
+}
+
+/// Web-compatible session store using SharedPreferences.
+///
+/// On web, we don't have access to platform secure storage, so we use
+/// SharedPreferences (localStorage in browsers). This is acceptable for
+/// development and web builds. For production web, consider additional
+/// security measures like httpOnly cookies.
+class WebSessionStore implements SessionStore {
+  WebSessionStore();
+
+  static const String storageKey = 'aera_auth_session';
+
+  @override
+  Future<String?> read() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(storageKey);
+  }
+
+  @override
+  Future<void> write(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(storageKey, value);
+  }
+
+  @override
+  Future<void> delete() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(storageKey);
   }
 }

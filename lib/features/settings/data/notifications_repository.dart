@@ -16,22 +16,14 @@ class Notification {
   });
 
   factory Notification.fromJson(Map<String, dynamic> json) {
-    DateTime? parseDateTime(String? value) {
-      if (value == null) return null;
-      try {
-        return DateTime.parse(value);
-      } catch (_) {
-        // Return a fallback timestamp if parsing fails
-        return DateTime.now();
-      }
-    }
-
     return Notification(
       id: json['id'] as String,
       type: json['type'] as String,
       payload: json['payload'] as Map<String, dynamic>?,
-      readAt: parseDateTime(json['readAt'] as String?),
-      createdAt: parseDateTime(json['createdAt'] as String?) ?? DateTime.now(),
+      readAt: json['readAt'] != null
+          ? DateTime.parse(json['readAt'] as String)
+          : null,
+      createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }
 
@@ -86,8 +78,7 @@ class NotificationsRepository {
   /// Always built with the app-wide [ApiClient] (see
   /// `notificationsRepositoryProvider`). A private `ApiClient()` would have no
   /// access token, no token refresh and no session-expiry handling.
-  NotificationsRepository({required ApiClient apiClient})
-    : _apiClient = apiClient;
+  NotificationsRepository({required this._apiClient});
 
   Future<NotificationListResponse> listNotifications({
     int page = 1,

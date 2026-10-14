@@ -284,15 +284,10 @@ class InvoicesRepository {
   /// is returned instead of erroring. Callers don't need to pre-check.
   /// If the job has no approved quote and no parts ($0 total), set
   /// [allowZeroAmount] to true to explicitly confirm a zero-cost invoice.
-  Future<Invoice> generateFromJob(
-    String jobId, {
-    bool? allowZeroAmount,
-  }) async {
+  Future<Invoice> generateFromJob(String jobId, {bool? allowZeroAmount}) async {
     final res = await _client.post(
       '/api/v1/invoices/from-job/$jobId',
-      body: {
-        if (allowZeroAmount != null) 'allowZeroAmount': allowZeroAmount,
-      },
+      body: {'allowZeroAmount': ?allowZeroAmount},
     );
     return Invoice.fromJson(res as Map<String, dynamic>);
   }
@@ -325,16 +320,6 @@ class InvoicesRepository {
       headers: {'Idempotency-Key': idempotencyKey},
     );
     return Invoice.fromJson(res as Map<String, dynamic>);
-  }
-
-  /// Generate a portal access token for the invoice's customer.
-  /// Returns the token string which can be used to build an invoice payment link.
-  Future<String> createInvoicePaymentLink(String customerId) async {
-    final res = await _client.post(
-      '/api/v1/customers/$customerId/portal-access',
-    );
-    final data = res as Map<String, dynamic>;
-    return data['token'] as String;
   }
 }
 
