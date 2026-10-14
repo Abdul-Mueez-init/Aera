@@ -124,15 +124,29 @@ class NotificationListNotifier extends StateNotifier<NotificationListState> {
   }
 
   Future<void> markAllAsRead() async {
-    final unreadItems = state.items.where((n) => n.isUnread).toList();
-    // Use bounded parallelism to avoid overwhelming the server
-    const batchSize = 5;
-    for (int i = 0; i < unreadItems.length; i += batchSize) {
-      final batch = unreadItems.skip(i).take(batchSize);
-      await Future.wait(
-        batch.map((item) => markAsRead(item.id)),
-        eagerError: false, // Continue even if some fail
+    try {
+      await _repository.markAllAsRead();
+      final updatedItems = state.items.map((notif) {
+        return Notification(
+          id: notif.id,
+          type: notif.type,
+          payload: notif.payload,
+          readAt: notif.readAt ?? DateTime.now(),
+          createdAt: notif.createdAt,
+        );
+      }).toList();
+
+      final updatedMeta = NotificationMeta(
+        page: state.meta.page,
+        pageSize: state.meta.pageSize,
+        total: state.meta.total,
+        pageCount: state.meta.pageCount,
+        unreadCount: 0,
       );
+
+      state = state.copyWith(items: updatedItems, meta: updatedMeta);
+    } catch (e) {
+      state = state.copyWith(error: 'Failed to mark all as read: ${e.toString()}');
     }
   }
 }

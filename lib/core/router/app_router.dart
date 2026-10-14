@@ -5,6 +5,8 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../config/app_config.dart';
 import 'app_scaffold.dart';
+import 'route_guard.dart';
+import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/splash_screen.dart';
 import '../../features/auth/welcome_screen.dart';
 import '../../features/auth/login_screen.dart';
@@ -54,8 +56,6 @@ import '../../features/settings/profile_settings_screen.dart';
 import '../../features/settings/company_settings_screen.dart';
 import '../../features/more/more_screen.dart';
 
-part 'app_router.g.dart';
-
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 // Build observers list, only adding SentryNavigatorObserver when Sentry is enabled
@@ -67,16 +67,46 @@ List<NavigatorObserver> _buildObservers() {
   return observers;
 }
 
-@riverpod
-GoRouter router(RouterRef ref) {
-  return appRouter;
-}
+final routerProvider = Provider<GoRouter>((ref) {
+  final refresh = ValueNotifier<int>(0);
+  void notifyRouter() => refresh.value++;
+
+  ref.listen(authNotifierProvider, (previous, next) => notifyRouter());
+  ref.listen(splashGateProvider, (previous, next) => notifyRouter());
+
+  final router = GoRouter(
+    navigatorKey: _rootNavigatorKey,
+    observers: _buildObservers(),
+    initialLocation: kSplashPath,
+    refreshListenable: refresh,
+    redirect: (context, state) {
+      final authState = ref.read(authNotifierProvider);
+      final holdSplash = !ref.read(splashGateProvider);
+      return resolveRedirect(
+        gate: authGateFor(authState),
+        role: authState.valueOrNull?.role,
+        path: state.uri.path,
+        holdSplash: holdSplash,
+      );
+    },
+    routes: _routes,
+  );
+
+  ref.onDispose(() {
+    router.dispose();
+    refresh.dispose();
+  });
+  return router;
+});
 
 final GoRouter appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
   observers: _buildObservers(),
   initialLocation: '/splash',
-  routes: [
+  routes: _routes,
+);
+
+final List<RouteBase> _routes = [
     // Auth Routes
     GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
     GoRoute(
@@ -268,14 +298,14 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/jobs/:jobId',
       builder: (context, state) {
-        final jobId = state.pathParameters['jobId'] ?? 'JOB-4019';
+        final jobId = state.pathParameters['jobId'] ?? '';
         return JobDetailScreen(jobId: jobId);
       },
     ),
     GoRoute(
       path: '/customers/:customerId',
       builder: (context, state) {
-        final customerId = state.pathParameters['customerId'] ?? 'CUST-1002';
+        final customerId = state.pathParameters['customerId'] ?? '';
         return CustomerDetailScreen(customerId: customerId);
       },
     ),
@@ -344,5 +374,4 @@ final GoRouter appRouter = GoRouter(
         ),
       ],
     ),
-  ],
-);
+  ];

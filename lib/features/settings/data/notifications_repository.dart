@@ -104,4 +104,8 @@ class NotificationsRepository {
     );
     return Notification.fromJson(data as Map<String, dynamic>);
   }
+
+  Future<void> markAllAsRead() async {
+    await _apiClient.post('/api/v1/notifications/read-all');
+  }
 }

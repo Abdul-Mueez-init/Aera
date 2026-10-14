@@ -99,6 +99,21 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
     }
   }
 
+  Future<void> _callCustomer(String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone.replaceAll(' ', ''));
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+        return;
+      }
+    } catch (_) {}
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open phone dialer for $phone')),
+      );
+    }
+  }
+
   Future<void> _generateInvoiceForJob({bool allowZeroAmount = false}) async {
     setState(() => _generatingInvoice = true);
     try {
@@ -409,7 +424,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
           if (jobAsync.hasValue && jobAsync.value!.customer.phone != null)
             IconButton(
               icon: const Icon(Icons.phone_outlined, color: AeraColors.accent),
-              onPressed: () {},
+              onPressed: () => _callCustomer(jobAsync.value!.customer.phone!),
             ),
         ],
       ),

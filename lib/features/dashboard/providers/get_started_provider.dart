@@ -34,17 +34,28 @@ final getStartedProvider = FutureProvider.autoDispose<GetStartedProgress>((
   final jobs = ref.watch(jobsRepositoryProvider);
   final members = ref.watch(membersRepositoryProvider);
 
-  final customerPage = customers.listCustomers(pageSize: 1);
-  final jobPage = jobs.listJobs(pageSize: 1);
-  final roster = members.listMembers();
+  bool hasCustomer = false;
+  bool hasJob = false;
+  bool hasTechnician = false;
 
-  final resolvedCustomers = await customerPage;
-  final resolvedJobs = await jobPage;
-  final resolvedRoster = await roster;
+  try {
+    final page = await customers.listCustomers(pageSize: 1);
+    hasCustomer = page.meta.total > 0;
+  } catch (_) {}
+
+  try {
+    final page = await jobs.listJobs(pageSize: 1);
+    hasJob = page.meta.total > 0;
+  } catch (_) {}
+
+  try {
+    final roster = await members.listMembers();
+    hasTechnician = roster.any((m) => m.role == 'TECHNICIAN');
+  } catch (_) {}
 
   return GetStartedProgress(
-    hasCustomer: resolvedCustomers.meta.total > 0,
-    hasJob: resolvedJobs.meta.total > 0,
-    hasTechnician: resolvedRoster.any((m) => m.role == 'TECHNICIAN'),
+    hasCustomer: hasCustomer,
+    hasJob: hasJob,
+    hasTechnician: hasTechnician,
   );
 });

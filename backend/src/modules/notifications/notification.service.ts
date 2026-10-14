@@ -77,3 +77,32 @@ export async function markNotificationRead(
     select: notificationSelect,
   });
 }
+
+export async function getUnreadNotificationCount(
+  companyId: string,
+  recipientUserId: string,
+) {
+  const count = await prisma.notification.count({
+    where: {
+      companyId,
+      recipientUserId,
+      readAt: null,
+    },
+  });
+  return { unreadCount: count };
+}
+
+export async function markAllNotificationsRead(
+  companyId: string,
+  recipientUserId: string,
+) {
+  const result = await prisma.notification.updateMany({
+    where: {
+      companyId,
+      recipientUserId,
+      readAt: null,
+    },
+    data: { readAt: new Date() },
+  });
+  return { updatedCount: result.count };
+}

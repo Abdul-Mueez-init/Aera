@@ -25,7 +25,7 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
-  final _cityController = TextEditingController(text: 'Lahore');
+  final _cityController = TextEditingController();
   final _notesController = TextEditingController();
   bool _saving = false;
 
@@ -69,7 +69,7 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
                   label: 'Primary',
                   line1: addressLine,
                   city: city,
-                  countryCode: 'PK',
+                  countryCode: 'US',
                 )
               : null,
         ),
@@ -185,13 +185,13 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
                   const SizedBox(height: 14),
                   AeraTextField(
                     label: 'Street & House / Suite Number',
-                    hintText: 'House 42-B, Block K, Gulberg III',
+                    hintText: '123 Main St, Suite 100',
                     controller: _addressController,
                   ),
                   const SizedBox(height: 14),
                   AeraTextField(
                     label: 'City / District',
-                    hintText: 'Lahore',
+                    hintText: 'City name',
                     controller: _cityController,
                   ),
                   const SizedBox(height: 14),

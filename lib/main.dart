@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// ignore: depend_on_referenced_packages
 import 'package:flutter_web_plugins/url_strategy.dart' show usePathUrlStrategy;
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'core/theme/aera_theme.dart';
@@ -37,7 +38,7 @@ class AeraApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final router = ref.read(routerProvider);
+    final router = ref.watch(routerProvider);
     return MaterialApp.router(
       title: 'Aera Field Operations',
       debugShowCheckedModeBanner: false,

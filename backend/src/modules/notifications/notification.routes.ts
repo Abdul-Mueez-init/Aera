@@ -2,7 +2,9 @@ import { Router, type Response } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../common/auth/auth.middleware.js";
 import {
+  getUnreadNotificationCount,
   listNotifications,
+  markAllNotificationsRead,
   markNotificationRead,
 } from "./notification.service.js";
 import {
@@ -39,6 +41,24 @@ function sendValidationError(response: Response, error: z.ZodError) {
 function routeId(value: string | string[]): string {
   return Array.isArray(value) ? value[0] : value;
 }
+
+router.get("/unread-count", requireAuth, async (request, response) => {
+  response.status(200).json({
+    data: await getUnreadNotificationCount(
+      request.auth!.companyId,
+      request.auth!.userId,
+    ),
+  });
+});
+
+router.post("/read-all", requireAuth, async (request, response) => {
+  response.status(200).json({
+    data: await markAllNotificationsRead(
+      request.auth!.companyId,
+      request.auth!.userId,
+    ),
+  });
+});
 
 router.get("/", requireAuth, async (request, response) => {
   const parsed = listSchema.safeParse(request.query);

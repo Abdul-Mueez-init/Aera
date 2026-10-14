@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/aera_colors.dart';
 import '../../../core/theme/aera_typography.dart';
@@ -15,7 +16,7 @@ class AiMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return message.isUser ? _userBubble() : _assistantBubble();
+    return message.isUser ? _userBubble() : _assistantBubble(context);
   }
 
   Widget _userBubble() {
@@ -65,7 +66,13 @@ class AiMessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _assistantBubble() {
+  Widget _assistantBubble(BuildContext context) {
+    final jobMatches = RegExp(r'\b(JOB-\d{6})\b', caseSensitive: false)
+        .allMatches(message.content)
+        .map((m) => m.group(0)!.toUpperCase())
+        .toSet()
+        .toList();
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -104,6 +111,32 @@ class AiMessageBubble extends StatelessWidget {
                       : message.content,
                   style: AeraTypography.bodySm.copyWith(color: AeraColors.ink),
                 ),
+                if (jobMatches.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: jobMatches.map((jobRef) {
+                      return ActionChip(
+                        avatar: const Icon(
+                          Icons.build_circle_outlined,
+                          size: 14,
+                          color: AeraColors.accent,
+                        ),
+                        label: Text(
+                          'View $jobRef',
+                          style: AeraTypography.label.copyWith(
+                            color: AeraColors.accent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        backgroundColor: AeraColors.accentSoft,
+                        side: BorderSide.none,
+                        onPressed: () => context.push('/jobs/$jobRef'),
+                      );
+                    }).toList(),
+                  ),
+                ],
                 if (message.toolCalls.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(

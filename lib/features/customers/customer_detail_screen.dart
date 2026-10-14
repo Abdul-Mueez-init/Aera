@@ -13,6 +13,7 @@ import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_status_chip.dart';
+import '../../core/widgets/aera_text_field.dart';
 import 'data/customers_repository.dart';
 import 'providers/customers_provider.dart';
 
@@ -197,6 +198,21 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
     }
   }
 
+  Future<void> _callCustomer(String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone.replaceAll(' ', ''));
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+        return;
+      }
+    } catch (_) {}
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open phone dialer for $phone')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final customerAsync = ref.watch(customerDetailProvider(widget.customerId));
@@ -219,7 +235,7 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
           if (customerAsync.hasValue && customerAsync.value!.phone != null)
             IconButton(
               icon: const Icon(Icons.phone_outlined, color: AeraColors.accent),
-              onPressed: () {},
+              onPressed: () => _callCustomer(customerAsync.value!.phone!),
             ),
         ],
       ),
@@ -391,21 +407,154 @@ class _ProfileHeader extends StatelessWidget {
   }
 }
 
-class _AddressesCard extends StatelessWidget {
+class _AddressesCard extends ConsumerWidget {
   const _AddressesCard({required this.customer});
 
   final Customer customer;
 
+  Future<void> _showAddAddressDialog(BuildContext context, WidgetRef ref) async {
+    final labelController = TextEditingController(text: 'Secondary');
+    final line1Controller = TextEditingController();
+    final cityController = TextEditingController();
+    final countryController = TextEditingController(text: 'US');
+
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AeraColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
+        title: Text(
+          'Add Service Address',
+          style: AeraTypography.h3.copyWith(fontSize: 17),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AeraTextField(
+                label: 'Label (e.g. Office, Rental)',
+                controller: labelController,
+              ),
+              const SizedBox(height: 12),
+              AeraTextField(
+                label: 'Street Address *',
+                hintText: '123 Main St',
+                controller: line1Controller,
+              ),
+              const SizedBox(height: 12),
+              AeraTextField(
+                label: 'City *',
+                hintText: 'Austin',
+                controller: cityController,
+              ),
+              const SizedBox(height: 12),
+              AeraTextField(
+                label: 'Country Code (2 letters)',
+                hintText: 'US',
+                controller: countryController,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: Text(
+              'Cancel',
+              style: AeraTypography.bodyMedium.copyWith(
+                color: AeraColors.inkSoft,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              if (line1Controller.text.trim().isEmpty ||
+                  cityController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Street and city are required')),
+                );
+                return;
+              }
+              Navigator.of(dialogCtx).pop(true);
+            },
+            child: Text(
+              'Add Address',
+              style: AeraTypography.bodyMedium.copyWith(
+                color: AeraColors.accent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (created != true) return;
+
+    try {
+      final repo = ref.read(customersRepositoryProvider);
+      await repo.addServiceAddress(
+        customer.id,
+        CreateAddressInput(
+          label: labelController.text.trim().isNotEmpty
+              ? labelController.text.trim()
+              : 'Secondary',
+          line1: line1Controller.text.trim(),
+          city: cityController.text.trim(),
+          countryCode: countryController.text.trim().isNotEmpty
+              ? countryController.text.trim().toUpperCase()
+              : 'US',
+        ),
+      );
+      ref.invalidate(customerDetailProvider(customer.id));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Address added successfully')),
+        );
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not add address')),
+        );
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return AeraCard(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Service Addresses (${customer.serviceAddresses.length})',
-            style: AeraTypography.h3.copyWith(fontSize: 15),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Service Addresses (${customer.serviceAddresses.length})',
+                style: AeraTypography.h3.copyWith(fontSize: 15),
+              ),
+              if (customer.status == 'ACTIVE')
+                TextButton.icon(
+                  onPressed: () => _showAddAddressDialog(context, ref),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text(
+                    'Add',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AeraColors.accent,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           if (customer.serviceAddresses.isEmpty)

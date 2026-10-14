@@ -300,6 +300,18 @@ class CustomersRepository {
     return customer;
   }
 
+  /// Adds a new service address to an existing customer.
+  Future<ServiceAddress> addServiceAddress(
+    String customerId,
+    CreateAddressInput input,
+  ) async {
+    final res = await _client.post(
+      '/api/v1/customers/$customerId/addresses',
+      body: input.toJson(),
+    );
+    return ServiceAddress.fromJson(res as Map<String, dynamic>);
+  }
+
   /// Updates the given customer. Fields left null/empty are left unchanged —
   /// the backend's PATCH schema has no way to explicitly clear
   /// email/phone/notes to blank; this mirrors that constraint on purpose

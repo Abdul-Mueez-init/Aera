@@ -25,17 +25,17 @@ final authNotifierProvider =
 });
 
 final currentUserProvider = Provider<AuthUser?>((ref) {
-  final session = ref.watch(authNotifierProvider).value;
+  final session = ref.watch(authNotifierProvider).valueOrNull;
   return session?.user;
 });
 
 final currentCompanyProvider = Provider<AuthCompany?>((ref) {
-  final session = ref.watch(authNotifierProvider).value;
+  final session = ref.watch(authNotifierProvider).valueOrNull;
   return session?.company;
 });
 
 final currentRoleProvider = Provider<String?>((ref) {
-  final session = ref.watch(authNotifierProvider).value;
+  final session = ref.watch(authNotifierProvider).valueOrNull;
   return session?.role;
 });
 
@@ -178,14 +178,14 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
     // Only a signed-in session can expire. During startup validation the
     // repository reports the expiry itself; after a sign-out there is nothing
     // left to expire.
-    if (!mounted || state.value == null) return;
+    if (!mounted || state.valueOrNull == null) return;
 
     await _repo.clearLocalSession();
     await _clearSentryUser();
 
     // The user may have signed out, or the notifier may have been disposed,
     // while the awaits above were running.
-    if (!mounted || state.value == null) return;
+    if (!mounted || state.valueOrNull == null) return;
     state = AsyncValue.error(
       const SessionExpiredException(),
       StackTrace.current,

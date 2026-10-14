@@ -7,6 +7,9 @@ import 'package:aera/features/auth/providers/auth_provider.dart';
 import 'package:aera/features/auth/splash_screen.dart';
 import 'package:aera/features/auth/welcome_screen.dart';
 import 'package:aera/features/dashboard/dashboard_screen.dart';
+import 'package:aera/features/dashboard/data/dashboard_repository.dart';
+import 'package:aera/features/dashboard/providers/dashboard_provider.dart';
+import 'package:aera/features/dashboard/providers/get_started_provider.dart';
 import 'package:aera/features/quotes/quote_approval_screen.dart';
 import 'package:aera/features/technician/technician_home_screen.dart';
 import 'package:aera/main.dart';
@@ -66,7 +69,21 @@ Future<ProviderContainer> _startApp(
   });
 
   final container = ProviderContainer(
-    overrides: [authNotifierProvider.overrideWith((ref) => AuthNotifier(repo, ref))],
+    overrides: [
+      authNotifierProvider.overrideWith((ref) => AuthNotifier(repo, ref)),
+      dashboardSummaryProvider.overrideWith((ref) => Future.value(const DashboardSummary(
+        date: '2026-10-14',
+        timezone: 'UTC',
+        jobsToday: 0,
+        jobsByStatus: [],
+        unassignedJobs: 0,
+        outstandingInvoices: OutstandingInvoices(count: 0, balanceDueByCurrency: []),
+        revenueThisMonth: RevenueThisMonth(periodStart: '2026-10-01', periodEnd: '2026-10-14', collectedByCurrency: []),
+      ))),
+      dashboardAlertsProvider.overrideWith((ref) => Future.value(const DashboardAlerts(date: '2026-10-14', timezone: 'UTC', alerts: []))),
+      dashboardTodayProvider(50).overrideWith((ref) => Future.value(const DashboardToday(date: '2026-10-14', jobs: []))),
+      getStartedProvider.overrideWith((ref) => Future.value(const GetStartedProgress(hasCustomer: true, hasJob: true, hasTechnician: true))),
+    ],
   );
   addTearDown(container.dispose);
 
@@ -78,10 +95,9 @@ Future<ProviderContainer> _startApp(
   await tester.pump();
   expect(find.byType(SplashScreen), findsOneWidget);
 
-  // Let the splash's minimum brand time pass, then let the router redirect.
-  await tester.pump(const Duration(milliseconds: 1300));
-  await tester.pump();
-  await tester.pumpAndSettle();
+  // Let the splash's minimum brand time (2s) pass, then let the router redirect.
+  await tester.pump(const Duration(milliseconds: 2100));
+  await tester.pump(const Duration(milliseconds: 200));
   return container;
 }
 

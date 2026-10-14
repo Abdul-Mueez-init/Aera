@@ -15,7 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// In-memory stand-in for the secure storage, so these tests never touch a
 /// platform plugin.
-class _MemoryStore implements SessionStore {
+class MemoryTestSessionStore implements SessionStore {
   String? value;
 
   @override
@@ -28,7 +28,7 @@ class _MemoryStore implements SessionStore {
   Future<void> delete() async => value = null;
 }
 
-late _MemoryStore store;
+late MemoryTestSessionStore store;
 
 const _user = {
   'id': 'user-1',
@@ -86,7 +86,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
-    store = _MemoryStore();
+    store = MemoryTestSessionStore();
   });
 
   group('AuthRepository.restoreSession', () {
@@ -357,7 +357,7 @@ void main() {
       final state = container.read(authNotifierProvider);
       expect(state.hasError, isTrue);
       expect(state.error, isA<SessionExpiredException>());
-      expect(state.value, isNull);
+      expect(state.valueOrNull, isNull);
       expect(await _readStoredSession(), isNull);
     });
 
@@ -382,7 +382,7 @@ void main() {
       final state = container.read(authNotifierProvider);
       expect(state.hasError, isTrue);
       expect(state.error, isA<SessionExpiredException>());
-      expect(state.value, isNull);
+      expect(state.valueOrNull, isNull);
       expect(await _readStoredSession(), isNull);
       expect(client.accessToken, isNull);
     });
