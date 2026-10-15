@@ -15,6 +15,15 @@ const String kWelcomePath = '/welcome';
 const String kLoginPath = '/login';
 const String kDashboardPath = '/dashboard';
 const String kTechnicianHomePath = '/technician-home';
+const String kOwnerOnboardingPath = '/onboarding/business-basics';
+
+const Set<String> _ownerOnboardingPaths = {
+  '/onboarding/business-basics',
+  '/onboarding/service-area',
+  '/onboarding/services',
+  '/onboarding/team-setup',
+  '/onboarding/complete',
+};
 
 /// True once the splash screen has been visible for its minimum brand time.
 ///
@@ -113,6 +122,7 @@ String? resolveRedirect({
   required String? role,
   required String path,
   bool holdSplash = false,
+  bool ownerOnboardingPending = false,
 }) {
   final p = _normalize(path);
 
@@ -133,6 +143,11 @@ String? resolveRedirect({
       if (p == kSplashPath) return entry;
       return isPublicPath(p) ? null : entry;
     case AuthGate.signedIn:
+      if (role == 'OWNER' &&
+          ownerOnboardingPending &&
+          !_ownerOnboardingPaths.contains(p)) {
+        return kOwnerOnboardingPath;
+      }
       if (p == kSplashPath || _authEntryPaths.contains(p)) {
         return roleHome(role);
       }

@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
+import '../auth/providers/auth_provider.dart';
 
-class OnboardingCompleteScreen extends StatelessWidget {
+class OnboardingCompleteScreen extends ConsumerWidget {
   const OnboardingCompleteScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       body: SafeArea(
@@ -181,7 +183,10 @@ class OnboardingCompleteScreen extends StatelessWidget {
             AeraButton(
               text: 'Launch Dispatch Console',
               icon: const Icon(Icons.dashboard_outlined, size: 18, color: Colors.white),
-              onPressed: () => context.go('/dashboard'),
+              onPressed: () {
+                ref.read(ownerOnboardingPendingProvider.notifier).state = false;
+                context.go('/dashboard');
+              },
             ),
             const SizedBox(height: 20),
           ],

@@ -36,6 +36,7 @@ import 'package:aera/features/quotes/quote_detail_screen.dart';
 import 'package:aera/features/settings/notifications_screen.dart';
 import 'package:aera/features/settings/profile_settings_screen.dart';
 import 'package:aera/features/settings/company_settings_screen.dart';
+import 'package:aera/features/settings/team_management_screen.dart';
 import 'package:aera/features/jobs/jobs_screen.dart';
 
 void main() {
@@ -281,6 +282,39 @@ void main() {
       appRouter.go('/more');
       await tester.pumpAndSettle();
       expect(find.byType(MoreScreen), findsOneWidget);
+    });
+
+    testWidgets('Team menu destination resolves to the team management page', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(routerConfig: appRouter),
+        ),
+      );
+
+      appRouter.go('/team');
+      await tester.pump();
+
+      expect(find.byType(TeamManagementScreen), findsOneWidget);
+      expect(find.text('No routes for location: /team'), findsNothing);
+    });
+
+    testWidgets('Root Home fallback resolves to Dashboard', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(routerConfig: appRouter),
+        ),
+      );
+
+      appRouter.go('/');
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DashboardScreen), findsOneWidget);
     });
 
     testWidgets('Auth screens - all auth routes are accessible', (

@@ -22,11 +22,13 @@ String? _redirect(
   String path, {
   String? role,
   bool holdSplash = false,
+  bool ownerOnboardingPending = false,
 }) => resolveRedirect(
   gate: gate,
   role: role,
   path: path,
   holdSplash: holdSplash,
+  ownerOnboardingPending: ownerOnboardingPending,
 );
 
 void main() {
@@ -186,6 +188,50 @@ void main() {
         }
       });
     }
+  });
+
+  group('new owner onboarding handoff', () {
+    test('new owner is sent into onboarding and cannot skip to Dashboard', () {
+      expect(
+        _redirect(
+          AuthGate.signedIn,
+          '/sign-up',
+          role: 'OWNER',
+          ownerOnboardingPending: true,
+        ),
+        '/onboarding/business-basics',
+      );
+      expect(
+        _redirect(
+          AuthGate.signedIn,
+          '/dashboard',
+          role: 'OWNER',
+          ownerOnboardingPending: true,
+        ),
+        '/onboarding/business-basics',
+      );
+    });
+
+    test('new owner may continue through onboarding steps', () {
+      for (final path in [
+        '/onboarding/business-basics',
+        '/onboarding/service-area',
+        '/onboarding/services',
+        '/onboarding/team-setup',
+        '/onboarding/complete',
+      ]) {
+        expect(
+          _redirect(
+            AuthGate.signedIn,
+            path,
+            role: 'OWNER',
+            ownerOnboardingPending: true,
+          ),
+          isNull,
+          reason: path,
+        );
+      }
+    });
   });
 
   group('signed in as technician', () {

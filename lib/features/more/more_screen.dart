@@ -150,7 +150,7 @@ class MoreScreen extends ConsumerWidget {
             context,
             icon: Icons.groups,
             title: 'Team',
-            subtitle: 'Invite and manage technicians and dispatchers',
+            subtitle: 'View team members and invite technicians or dispatchers',
             route: '/team',
           ),
           _navItem(

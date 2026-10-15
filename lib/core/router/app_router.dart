@@ -13,6 +13,7 @@ import '../../features/auth/login_screen.dart';
 import '../../features/auth/sign_up_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
 import '../../features/auth/reset_password_screen.dart';
+import '../../features/auth/accept_invitation_screen.dart';
 
 import '../../features/onboarding/business_basics_screen.dart';
 import '../../features/onboarding/service_area_screen.dart';
@@ -54,6 +55,7 @@ import '../../features/ai/ai_insight_detail_screen.dart';
 import '../../features/settings/notifications_screen.dart';
 import '../../features/settings/profile_settings_screen.dart';
 import '../../features/settings/company_settings_screen.dart';
+import '../../features/settings/team_management_screen.dart';
 import '../../features/more/more_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -73,6 +75,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   ref.listen(authNotifierProvider, (previous, next) => notifyRouter());
   ref.listen(splashGateProvider, (previous, next) => notifyRouter());
+  ref.listen(ownerOnboardingPendingProvider, (previous, next) => notifyRouter());
 
   final router = GoRouter(
     navigatorKey: _rootNavigatorKey,
@@ -87,6 +90,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         role: authState.valueOrNull?.role,
         path: state.uri.path,
         holdSplash: holdSplash,
+        ownerOnboardingPending: ref.read(ownerOnboardingPendingProvider),
       );
     },
     routes: _routes,
@@ -107,6 +111,7 @@ final GoRouter appRouter = GoRouter(
 );
 
 final List<RouteBase> _routes = [
+    GoRoute(path: '/', redirect: (context, state) => '/dashboard'),
     // Auth Routes
     GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
     GoRoute(
@@ -125,6 +130,12 @@ final List<RouteBase> _routes = [
     GoRoute(
       path: '/reset-password',
       builder: (context, state) => const ResetPasswordScreen(),
+    ),
+    GoRoute(
+      path: '/accept-invitation',
+      builder: (context, state) => AcceptInvitationScreen(
+        initialToken: state.uri.queryParameters['token'],
+      ),
     ),
 
     // Onboarding Flow
@@ -284,6 +295,10 @@ final List<RouteBase> _routes = [
     GoRoute(
       path: '/notifications',
       builder: (context, state) => const NotificationsScreen(),
+    ),
+    GoRoute(
+      path: '/team',
+      builder: (context, state) => const TeamManagementScreen(),
     ),
     GoRoute(
       path: '/profile-settings',
