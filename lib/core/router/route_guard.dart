@@ -25,6 +25,15 @@ const Set<String> _ownerOnboardingPaths = {
   '/onboarding/complete',
 };
 
+int? _ownerOnboardingStepForPath(String path) => switch (path) {
+  '/onboarding/business-basics' => 1,
+  '/onboarding/service-area' => 2,
+  '/onboarding/services' => 3,
+  '/onboarding/team-setup' => 4,
+  '/onboarding/complete' => 5,
+  _ => null,
+};
+
 /// True once the splash screen has been visible for its minimum brand time.
 ///
 /// The router keeps the user on `/splash` until this is true, so a fast
@@ -123,6 +132,7 @@ String? resolveRedirect({
   required String path,
   bool holdSplash = false,
   bool ownerOnboardingPending = false,
+  String ownerOnboardingPath = kOwnerOnboardingPath,
 }) {
   final p = _normalize(path);
 
@@ -138,15 +148,20 @@ String? resolveRedirect({
       return null; // handled above
     case AuthGate.signedOut:
     case AuthGate.sessionExpired:
-      final entry =
-          gate == AuthGate.sessionExpired ? kLoginPath : kWelcomePath;
+      final entry = gate == AuthGate.sessionExpired ? kLoginPath : kWelcomePath;
       if (p == kSplashPath) return entry;
       return isPublicPath(p) ? null : entry;
     case AuthGate.signedIn:
-      if (role == 'OWNER' &&
-          ownerOnboardingPending &&
-          !_ownerOnboardingPaths.contains(p)) {
-        return kOwnerOnboardingPath;
+      if (role == 'OWNER' && ownerOnboardingPending) {
+        final requestedStep = _ownerOnboardingStepForPath(p);
+        final requiredStep = _ownerOnboardingStepForPath(ownerOnboardingPath);
+        if (requestedStep == null ||
+            requiredStep == null ||
+            requestedStep > requiredStep) {
+          return _ownerOnboardingPaths.contains(ownerOnboardingPath)
+              ? ownerOnboardingPath
+              : kOwnerOnboardingPath;
+        }
       }
       if (p == kSplashPath || _authEntryPaths.contains(p)) {
         return roleHome(role);

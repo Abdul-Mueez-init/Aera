@@ -1,29 +1,322 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
+import '../auth/providers/auth_provider.dart';
+import 'data/onboarding_repository.dart';
 
-class ServiceAreaScreen extends StatefulWidget {
+class ServiceAreaScreen extends ConsumerStatefulWidget {
   const ServiceAreaScreen({super.key});
 
   @override
-  State<ServiceAreaScreen> createState() => _ServiceAreaScreenState();
+  ConsumerState<ServiceAreaScreen> createState() => _ServiceAreaScreenState();
 }
 
-class _ServiceAreaScreenState extends State<ServiceAreaScreen> {
-  double _radiusKm = 35.0;
-  final Set<String> _selectedZones = {
-    'Gulberg & Cantt',
-    'DHA Phases 1-8',
-    'Johar Town & Model Town',
-  };
+class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
+  final _addressController = TextEditingController();
+  GoogleMapController? _mapController;
+  double? _latitude;
+  double? _longitude;
+  String? _resolvedAddress;
+  int _radiusKm = 30;
+  List<ServiceZone> _zones = [];
+  final Set<String> _selectedZoneIds = {};
+  bool _loading = true;
+  bool _searching = false;
+  bool _loadingZones = false;
+  bool _saving = false;
+  bool _zonesLoaded = false;
+  bool _zonesStale = false;
+  int _zoneSearchGeneration = 0;
+  String? _error;
+
+  bool get _serviceAreaValid =>
+      _latitude != null &&
+      _longitude != null &&
+      _resolvedAddress != null &&
+      _addressController.text.trim() == _resolvedAddress &&
+      _radiusKm >= 10 &&
+      _radiusKm <= 50 &&
+      _zonesLoaded &&
+      !_zonesStale &&
+      _selectedZoneIds.isNotEmpty;
+
+  static const _googleMapsApiKey = String.fromEnvironment(
+    'GOOGLE_MAPS_API_KEY',
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _mapController?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final profile = await ref.read(onboardingRepositoryProvider).getProfile();
+      if (!mounted) return;
+      setState(() {
+        _latitude = profile.headquartersLatitude;
+        _longitude = profile.headquartersLongitude;
+        _radiusKm = (profile.serviceRadiusKm ?? 30).clamp(10, 50);
+        _addressController.text = profile.headquartersAddress ?? '';
+        _resolvedAddress = profile.headquartersAddress;
+        _zones = profile.serviceZones;
+        _selectedZoneIds.addAll(
+          profile.serviceZones.map((zone) => zone.placeId),
+        );
+        _zonesLoaded = profile.serviceZones.isNotEmpty;
+        _loading = false;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = _friendly(error);
+        });
+      }
+    }
+  }
+
+  String _friendly(Object error) {
+    if (error is ApiException) return error.message;
+    if (error is TimeoutException) {
+      return 'Location lookup timed out. Try again or search for an address.';
+    }
+    if (error is Exception) {
+      return error.toString().replaceFirst('Exception: ', '');
+    }
+    return 'Could not complete this request. Check your connection and retry.';
+  }
+
+  Future<void> _useCurrentLocation() async {
+    setState(() {
+      _searching = true;
+      _error = null;
+    });
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw Exception(
+          'Turn on location services, or search for your dispatch address.',
+        );
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception(
+          'Location permission is unavailable. Search for an address instead, or enable location permission in device settings.',
+        );
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+      if (!mounted) return;
+      _setLocation(position.latitude, position.longitude);
+      await _moveCamera();
+      await _resolvePinAndSearch(position.latitude, position.longitude);
+    } catch (error) {
+      if (mounted) setState(() => _error = _friendly(error));
+    } finally {
+      if (mounted) setState(() => _searching = false);
+    }
+  }
+
+  Future<void> _searchAddress() async {
+    final query = _addressController.text.trim();
+    if (query.length < 4) {
+      setState(() => _error = 'Enter a complete address or place name.');
+      return;
+    }
+    setState(() {
+      _searching = true;
+      _error = null;
+    });
+    try {
+      final location = await ref
+          .read(onboardingRepositoryProvider)
+          .searchAddress(query);
+      if (!mounted) return;
+      _setLocation(location.latitude, location.longitude);
+      _resolvedAddress = location.address;
+      _addressController.text = location.address;
+      await _moveCamera();
+      await _findZones();
+    } catch (error) {
+      if (mounted) setState(() => _error = _friendly(error));
+    } finally {
+      if (mounted) setState(() => _searching = false);
+    }
+  }
+
+  void _setLocation(double latitude, double longitude) {
+    _zoneSearchGeneration++;
+    setState(() {
+      _latitude = latitude;
+      _longitude = longitude;
+      _resolvedAddress = null;
+      _zonesStale = true;
+      _zonesLoaded = false;
+      _zones = [];
+      _selectedZoneIds.clear();
+    });
+  }
+
+  Future<void> _resolvePinAndSearch(double latitude, double longitude) async {
+    final generation = _zoneSearchGeneration;
+    _addressController.text = 'Resolving address…';
+    try {
+      final result = await ref
+          .read(onboardingRepositoryProvider)
+          .reverseGeocode(latitude: latitude, longitude: longitude);
+      if (!mounted || generation != _zoneSearchGeneration) return;
+      setState(() {
+        _resolvedAddress = result.address;
+        _addressController.text = result.address;
+      });
+      await _findZones();
+    } catch (error) {
+      if (mounted && generation == _zoneSearchGeneration) {
+        setState(() {
+          _addressController.text = '';
+          _error = _friendly(error);
+        });
+      }
+    }
+  }
+
+  Future<void> _moveCamera() async {
+    final lat = _latitude;
+    final lng = _longitude;
+    if (lat != null && lng != null) {
+      await _mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(LatLng(lat, lng), 11),
+      );
+    }
+  }
+
+  Future<void> _findZones() async {
+    if (_latitude == null || _longitude == null) {
+      setState(
+        () => _error =
+            'Choose a dispatch headquarters before searching for neighborhoods.',
+      );
+      return;
+    }
+    final generation = ++_zoneSearchGeneration;
+    setState(() {
+      _loadingZones = true;
+      _error = null;
+    });
+    try {
+      final zones = await ref
+          .read(onboardingRepositoryProvider)
+          .findZones(
+            latitude: _latitude!,
+            longitude: _longitude!,
+            radiusKm: _radiusKm,
+          );
+      if (!mounted || generation != _zoneSearchGeneration) return;
+      setState(() {
+        _zones = zones;
+        _selectedZoneIds.clear();
+        _zonesLoaded = true;
+        _zonesStale = false;
+      });
+      if (zones.isEmpty) {
+        setState(
+          () => _error =
+              'Google Places found no neighborhood areas within this radius. Increase the radius or move the map pin and search again.',
+        );
+      }
+    } catch (error) {
+      if (mounted && generation == _zoneSearchGeneration) {
+        setState(() => _error = _friendly(error));
+      }
+    } finally {
+      if (mounted && generation == _zoneSearchGeneration) {
+        setState(() => _loadingZones = false);
+      }
+    }
+  }
+
+  Future<void> _saveAndContinue() async {
+    if (_resolvedAddress == null ||
+        _addressController.text.trim() != _resolvedAddress) {
+      setState(
+        () => _error =
+            'Resolve the edited headquarters address with Search before saving.',
+      );
+      return;
+    }
+    if (_latitude == null || _longitude == null) {
+      setState(() => _error = 'Choose your dispatch headquarters on the map.');
+      return;
+    }
+    if (!_zonesLoaded || _zonesStale) {
+      setState(
+        () => _error =
+            'Search nearby neighborhoods again to verify them for this location and radius.',
+      );
+      return;
+    }
+    final selected = _zones
+        .where((zone) => _selectedZoneIds.contains(zone.placeId))
+        .toList();
+    if (selected.isEmpty) {
+      setState(() => _error = 'Select at least one verified service zone.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(onboardingRepositoryProvider)
+          .saveServiceArea(
+            latitude: _latitude!,
+            longitude: _longitude!,
+            radiusKm: _radiusKm,
+            zones: selected,
+          );
+      ref.invalidate(onboardingProfileProvider);
+      await ref.read(authNotifierProvider.notifier).refreshServerIdentity();
+      if (mounted) context.push('/onboarding/services');
+    } catch (error) {
+      if (mounted) setState(() => _error = _friendly(error));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final hasLocation = _latitude != null && _longitude != null;
+    final mapsKeyConfigured = _googleMapsApiKey.isNotEmpty;
+    final point = hasLocation ? LatLng(_latitude!, _longitude!) : null;
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       appBar: const AeraAppBar(
@@ -32,24 +325,22 @@ class _ServiceAreaScreenState extends State<ServiceAreaScreen> {
         showBrand: true,
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          children: [
-            // Stepper Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
               children: [
                 Row(
                   children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
+                      const Icon(
+                        Icons.circle,
+                        size: 8,
                         color: AeraColors.accent,
-                        shape: BoxShape.circle,
-                      ),
                     ),
-                    const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                     Text(
                       'STEP 02 / 04 • SERVICE TERRITORY',
                       style: AeraTypography.labelUpper.copyWith(
@@ -57,328 +348,320 @@ class _ServiceAreaScreenState extends State<ServiceAreaScreen> {
                         fontSize: 10,
                       ),
                     ),
+                      const Spacer(),
+                      const Text('2 of 4'),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AeraColors.surface,
-                    borderRadius: AeraRadii.borderFull,
-                    border: Border.all(color: AeraColors.line),
-                  ),
-                  child: Text(
-                    '50% Complete',
-                    style: AeraTypography.label.copyWith(fontSize: 11),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // 4 Progress Segments
-            Row(
-              children: [
-                _progressSegment(true),
-                const SizedBox(width: 6),
-                _progressSegment(true),
-                const SizedBox(width: 6),
-                _progressSegment(false),
-                const SizedBox(width: 6),
-                _progressSegment(false),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Headline
+                  const SizedBox(height: 14),
             Text(
               'Define your service territory',
               style: AeraTypography.display.copyWith(fontSize: 26),
             ),
             const SizedBox(height: 4),
             Text(
-              'Set your dispatch radius to automatically qualify job requests and optimize technician travel times.',
-              style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft),
-            ),
-            const SizedBox(height: 20),
-
-            // Territory Map Simulation Card
-            Container(
-              height: 200,
-              decoration: BoxDecoration(
-                color: const Color(0xFF2D3748),
-                borderRadius: AeraRadii.borderLg,
-                border: Border.all(color: AeraColors.line),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color.fromRGBO(0, 0, 0, 0.05),
-                    offset: Offset(0, 2),
-                    blurRadius: 8,
+                    'Choose a real dispatch location and verified Google neighborhood areas. No sample zones are preselected.',
+                    style: AeraTypography.bodySm.copyWith(
+                      color: AeraColors.inkSoft,
                   ),
-                ],
               ),
-              child: Stack(
-                alignment: Alignment.center,
+                  const SizedBox(height: 16),
+                  AeraCard(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Center Radar Rings
-                  Container(
-                    width: 170,
-                    height: 170,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AeraColors.accent.withValues(alpha: 0.18),
-                      border: Border.all(color: AeraColors.accent.withValues(alpha: 0.4), width: 1.5),
+                        Text(
+                          'Dispatch headquarters',
+                          style: AeraTypography.label.copyWith(
+                            fontWeight: FontWeight.w700,
                     ),
                   ),
-                  Container(
-                    width: 90,
-                    height: 90,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AeraColors.accent.withValues(alpha: 0.35),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _addressController,
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: (_) => _searchAddress(),
+                          decoration: InputDecoration(
+                            hintText: 'Search an address, city, or place',
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              onPressed: _searching ? null : _searchAddress,
+                              icon: const Icon(Icons.search),
                     ),
                   ),
-                  // Center Pin
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: const BoxDecoration(
-                      color: AeraColors.accent,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
                         ),
-                      ],
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: _searching ? null : _useCurrentLocation,
+                          icon: _searching
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.my_location),
+                          label: const Text('Use this device location'),
                     ),
-                    child: const Icon(Icons.store, color: Colors.white, size: 16),
-                  ),
-
-                  // Top Status Pill
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    right: 12,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.92),
-                            borderRadius: AeraRadii.borderFull,
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  color: AeraColors.success,
-                                  shape: BoxShape.circle,
+                        const SizedBox(height: 8),
+                        if (hasLocation && mapsKeyConfigured)
+                          SizedBox(
+                            height: 240,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: GoogleMap(
+                                initialCameraPosition: CameraPosition(
+                                  target: point!,
+                                  zoom: 11,
                                 ),
+                                onMapCreated: (controller) {
+                                  _mapController = controller;
+                                },
+                                onTap: (position) {
+                                  _setLocation(
+                                    position.latitude,
+                                    position.longitude,
+                                  );
+                                  _addressController.text =
+                                      'Resolving address…';
+                                  unawaited(
+                                    _resolvePinAndSearch(
+                                      position.latitude,
+                                      position.longitude,
+                  ),
+                                  );
+                                },
+                                markers: {
+                                  Marker(
+                                    markerId: const MarkerId('dispatch-hq'),
+                                    position: point,
+                                    infoWindow: const InfoWindow(
+                                      title: 'Dispatch headquarters',
+                                    ),
+                                  ),
+                                  ..._zones.map(
+                                    (zone) => Marker(
+                                      markerId: MarkerId(
+                                        'zone-${zone.placeId}',
+                                      ),
+                                      position: LatLng(
+                                        zone.latitude,
+                                        zone.longitude,
+                                      ),
+                                      icon:
+                                          BitmapDescriptor.defaultMarkerWithHue(
+                                            _selectedZoneIds.contains(
+                                                  zone.placeId,
+                                                )
+                                                ? BitmapDescriptor.hueAzure
+                                                : BitmapDescriptor.hueOrange,
+                                          ),
+                                      infoWindow: InfoWindow(
+                                        title: zone.name,
+                                        snippet:
+                                            'Tap to toggle dispatch coverage',
+                                      ),
+                                      onTap: () => setState(() {
+                                        if (_selectedZoneIds.contains(
+                                          zone.placeId,
+                                        )) {
+                                          _selectedZoneIds.remove(zone.placeId);
+                                        } else {
+                                          _selectedZoneIds.add(zone.placeId);
+                                        }
+                                      }),
+                          ),
+                                ),
+                                },
+                                circles: {
+                                  Circle(
+                                    circleId: const CircleId('dispatch-radius'),
+                                    center: point,
+                                    radius: _radiusKm * 1000.0,
+                                    fillColor: AeraColors.accent.withValues(
+                                      alpha: 0.12,
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Dispatch Engine Active',
-                                style: AeraTypography.label.copyWith(fontSize: 10),
+                                    strokeColor: AeraColors.accent,
+                                    strokeWidth: 2,
                               ),
-                            ],
+                                },
+                                myLocationButtonEnabled: false,
+                                mapToolbarEnabled: false,
+                                zoomControlsEnabled: true,
                           ),
                         ),
+                          )
+                        else if (!mapsKeyConfigured)
+                          Text(
+                            'Interactive map is not configured for this build. Configure the restricted GOOGLE_MAPS_API_KEY SDK key; address search still uses the API provider.',
+                            style: AeraTypography.bodySm.copyWith(
+                              color: AeraColors.danger,
+                            ),
+                          )
+                        else
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            height: 120,
+                            alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.92),
-                            borderRadius: BorderRadius.circular(6),
+                              color: AeraColors.surfaceSubtle,
+                              borderRadius: AeraRadii.borderMd,
                           ),
                           child: Text(
-                            'GPS Grid #042',
-                            style: AeraTypography.label.copyWith(fontSize: 10),
-                          ),
-                        ),
-                      ],
+                              'Search an address or use device location to place the headquarters pin.',
+                              style: AeraTypography.bodySm.copyWith(
+                                color: AeraColors.inkSoft,
                     ),
+                              textAlign: TextAlign.center,
                   ),
-
-                  // Bottom Radius Status
-                  Positioned(
-                    bottom: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.95),
-                        borderRadius: AeraRadii.borderFull,
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black12, blurRadius: 4),
-                        ],
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.radar, size: 14, color: AeraColors.accent),
-                          const SizedBox(width: 6),
+                        if (hasLocation) ...[
+                          const SizedBox(height: 8),
                           Text(
-                            'Serving within ${_radiusKm.toInt()} km radius • ~${(_radiusKm * 1.3).round()} min dispatch',
+                            'Pin: ${_latitude!.toStringAsFixed(5)}, ${_longitude!.toStringAsFixed(5)} — tap the map to adjust.',
                             style: AeraTypography.label.copyWith(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: AeraColors.ink,
+                              color: AeraColors.inkSoft,
                             ),
                           ),
                         ],
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-
-            // Operating Hub Card
+                  const SizedBox(height: 14),
             AeraCard(
-              padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AeraColors.surfaceSubtle,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.location_on, color: AeraColors.accent, size: 20),
-                      ),
-                      const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Dispatch Headquarters',
-                              style: AeraTypography.labelUpper.copyWith(
-                                fontSize: 10,
-                                color: AeraColors.inkSoft,
-                              ),
-                            ),
-                            Text(
-                              'Gulberg III, Main Boulevard, Lahore',
-                              style: AeraTypography.h3.copyWith(
-                                fontSize: 14,
+                              child: Text(
+                                'Maximum response radius',
+                                style: AeraTypography.label.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(color: AeraColors.line),
-                  const SizedBox(height: 16),
-
-                  // Radius Slider
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Maximum Response Radius',
-                        style: AeraTypography.label.copyWith(fontWeight: FontWeight.w600),
                       ),
                       Text(
-                        '${_radiusKm.toInt()} km',
-                        style: AeraTypography.bodyMedium.copyWith(
-                          fontWeight: FontWeight.w800,
+                              '$_radiusKm km',
+                              style: AeraTypography.h3.copyWith(
                           color: AeraColors.accent,
                         ),
                       ),
                     ],
                   ),
                   Slider(
-                    value: _radiusKm,
+                          value: _radiusKm.toDouble(),
                     min: 10,
-                    max: 80,
+                          max: 50,
                     divisions: 14,
                     activeColor: AeraColors.accent,
-                    inactiveColor: AeraColors.surfaceContainerHigh,
-                    onChanged: (val) => setState(() => _radiusKm = val),
+                          onChanged: (value) => setState(() {
+                            _zoneSearchGeneration++;
+                            _radiusKm = value.round();
+                            _zonesStale = true;
+                            _zonesLoaded = false;
+                            _zones = [];
+                            _selectedZoneIds.clear();
+                          }),
+                          onChangeEnd: (_) => unawaited(_findZones()),
                   ),
-                  const SizedBox(height: 8),
-
-                  // Coverage Zones
                   Text(
-                    'Active Neighborhood Zones',
-                    style: AeraTypography.label.copyWith(fontWeight: FontWeight.w600),
+                          'Google Places search results are real place records; your selection is saved as active dispatch coverage.',
+                          style: AeraTypography.bodySm.copyWith(
+                            color: AeraColors.inkSoft,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: _loadingZones || !hasLocation
+                              ? null
+                              : _findZones,
+                          icon: _loadingZones
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.travel_explore),
+                          label: Text(
+                            _loadingZones
+                                ? 'Searching Google Places…'
+                                : 'Find neighborhoods',
                   ),
+                        ),
+                        if (_zones.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _zoneChip('Gulberg & Cantt'),
-                      _zoneChip('DHA Phases 1-8'),
-                      _zoneChip('Johar Town & Model Town'),
-                      _zoneChip('Raiwind Industrial Zone'),
-                      _zoneChip('Bahria Town'),
-                    ],
+                          Text(
+                            'Select service zones',
+                            style: AeraTypography.label.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          ..._zones.map(
+                            (zone) => CheckboxListTile(
+                              value: _selectedZoneIds.contains(zone.placeId),
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(zone.name),
+                              subtitle: Text(
+                                '${zone.latitude.toStringAsFixed(4)}, ${zone.longitude.toStringAsFixed(4)}',
+                              ),
+                              onChanged: (selected) => setState(() {
+                                if (selected == true) {
+                                  _selectedZoneIds.add(zone.placeId);
+                                } else {
+                                  _selectedZoneIds.remove(zone.placeId);
+                                }
+                              }),
+                            ),
                   ),
                 ],
+                        if (_zonesLoaded && _selectedZoneIds.isEmpty)
+                          Text(
+                            'Select at least one verified service zone to continue.',
+                            style: AeraTypography.label.copyWith(
+                              color: AeraColors.danger,
               ),
             ),
-            const SizedBox(height: 24),
-
-            AeraButton(
-              text: 'Save & Continue to Services',
-              icon: const Icon(Icons.arrow_forward, size: 18, color: Colors.white),
-              onPressed: () => context.push('/onboarding/services'),
+                        if (_zonesStale && _zones.isNotEmpty)
+                          Text(
+                            'Location or radius changed. Search again before saving.',
+                            style: AeraTypography.label.copyWith(
+                              color: AeraColors.danger,
+                            ),
             ),
-            const SizedBox(height: 20),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _progressSegment(bool isCompleted) {
-    return Expanded(
-      child: Container(
-        height: 5,
-        decoration: BoxDecoration(
-          color: isCompleted ? AeraColors.accent : AeraColors.surfaceContainerHighest,
-          borderRadius: AeraRadii.borderFull,
+                  if (_error != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      _error!,
+                      style: AeraTypography.bodySm.copyWith(
+                        color: AeraColors.danger,
         ),
       ),
-    );
-  }
-
-  Widget _zoneChip(String zone) {
-    final isSelected = _selectedZones.contains(zone);
-
-    return FilterChip(
-      label: Text(zone),
-      selected: isSelected,
-      onSelected: (val) {
-        setState(() {
-          if (val) {
-            _selectedZones.add(zone);
-          } else {
-            _selectedZones.remove(zone);
-          }
-        });
-      },
-      selectedColor: AeraColors.accentSoft,
-      backgroundColor: AeraColors.surface,
-      labelStyle: AeraTypography.label.copyWith(
-        color: isSelected ? AeraColors.accent : AeraColors.ink,
-        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  ],
+                  const SizedBox(height: 20),
+                  AeraButton(
+                    text: _saving ? 'Saving…' : 'Save & Continue to Services',
+                    icon: const Icon(
+                      Icons.arrow_forward,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                    onPressed: !_serviceAreaValid || _saving
+                        ? null
+                        : _saveAndContinue,
+                  ),
+                  const SizedBox(height: 20),
+                ],
       ),
-      side: BorderSide(
-        color: isSelected ? AeraColors.accent : AeraColors.line,
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     );
   }
 }

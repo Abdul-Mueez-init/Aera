@@ -6,45 +6,99 @@ import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
-import '../auth/providers/auth_provider.dart';
+import 'data/onboarding_repository.dart';
 
 class OnboardingCompleteScreen extends ConsumerWidget {
   const OnboardingCompleteScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final profileAsync = ref.watch(onboardingProfileProvider);
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: profileAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.cloud_off,
+                    color: AeraColors.danger,
+                    size: 36,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Could not verify workspace setup.',
+                    style: AeraTypography.h3,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Connect to the API and retry before launching the workspace.',
+                    textAlign: TextAlign.center,
+                    style: AeraTypography.bodySm.copyWith(
+                      color: AeraColors.inkSoft,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () => ref.invalidate(onboardingProfileProvider),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          data: (profile) => _CompletionContent(profile: profile),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompletionContent extends ConsumerWidget {
+  const _CompletionContent({required this.profile});
+  final OnboardingProfile profile;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final complete = profile.onboardingCompletedAt != null;
+    final selectedZones = profile.serviceZones
+        .map((zone) => zone.name)
+        .join(', ');
+    final selectedServices = profile.services
+        .map((service) => service.name)
+        .join(', ');
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           children: [
-            // Top Operational Status Chip
             Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AeraColors.accentSoft,
+              color: complete
+                  ? AeraColors.successSoft
+                  : AeraColors.danger.withValues(alpha: 0.1),
                   borderRadius: AeraRadii.borderFull,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
-                        color: AeraColors.success,
-                        shape: BoxShape.circle,
-                      ),
+                Icon(
+                  complete ? Icons.check_circle : Icons.error_outline,
+                  size: 14,
+                  color: complete ? AeraColors.success : AeraColors.danger,
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'WORKSPACE READY • DISPATCH ONLINE',
+                  complete ? 'WORKSPACE SETUP VERIFIED' : 'SETUP INCOMPLETE',
                       style: AeraTypography.labelUpper.copyWith(
-                        color: AeraColors.accentDeep,
+                    color: complete ? AeraColors.success : AeraColors.danger,
                         fontSize: 10,
-                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -52,167 +106,152 @@ class OnboardingCompleteScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 20),
-
-            // Hero Celebration Card
             AeraCard(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               child: Column(
                 children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: AeraColors.accentSoft,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AeraColors.line),
-                    ),
-                    child: Center(
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: const BoxDecoration(
-                          color: AeraColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.check, color: Colors.white, size: 28),
-                      ),
-                    ),
+              Icon(
+                complete ? Icons.task_alt : Icons.pending_actions,
+                color: complete ? AeraColors.success : AeraColors.outline,
+                size: 56,
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Your Aera workspace is ready.',
+                complete
+                    ? 'Your Aera workspace is ready.'
+                    : 'A few setup items still need attention.',
                     textAlign: TextAlign.center,
                     style: AeraTypography.display.copyWith(fontSize: 24),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Northstar Climate Solutions is configured for real-time dispatch, field evidence, and instant customer billing.',
+                complete
+                    ? '${profile.name} is configured with the company details, service territory, and service catalog saved to your Aera workspace.'
+                    : 'The API has not marked this workspace complete. Return to onboarding and finish the required company profile, verified service zones, and service selections.',
                     textAlign: TextAlign.center,
                     style: AeraTypography.bodySm.copyWith(
                       color: AeraColors.inkSoft,
                       height: 1.4,
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AeraColors.surfaceSubtle,
-                      borderRadius: AeraRadii.borderFull,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.verified_user, size: 14, color: AeraColors.accent),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Deployment ID #AER-9402-LHE',
-                          style: AeraTypography.label.copyWith(fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-
-            // Configuration Manifest Card
             AeraCard(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Configuration Manifest',
+                'SAVED CONFIGURATION',
                         style: AeraTypography.labelUpper.copyWith(
                           fontSize: 10,
                           color: AeraColors.inkSoft,
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AeraColors.successSoft,
-                          borderRadius: BorderRadius.circular(4),
+              const SizedBox(height: 12),
+              _manifestRow(Icons.corporate_fare, 'Company', profile.name),
+              const SizedBox(height: 10),
+              _manifestRow(
+                Icons.phone_outlined,
+                'Dispatch phone',
+                profile.phone ?? 'Not set',
                         ),
+              const SizedBox(height: 10),
+              _manifestRow(
+                Icons.share_location,
+                'Headquarters',
+                profile.headquartersAddress ?? 'Not set',
+              ),
+              const SizedBox(height: 10),
+              _manifestRow(
+                Icons.radar,
+                'Service coverage',
+                profile.serviceRadiusKm == null
+                    ? 'Not set'
+                    : '${profile.serviceRadiusKm} km • ${profile.serviceZones.length} verified zones',
+              ),
+              if (profile.serviceZones.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.only(left: 44),
                         child: Text(
-                          'Synced',
+                    selectedZones,
                           style: AeraTypography.label.copyWith(
-                            color: AeraColors.success,
-                            fontSize: 10,
+                      color: AeraColors.inkSoft,
                           ),
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 12),
-
+                  const SizedBox(height: 10),
                   _manifestRow(
-                    Icons.corporate_fare,
-                    'Organization & Base',
-                    'Northstar Climate Solutions • Lahore Metro',
+                Icons.home_repair_service_outlined,
+                'Services',
+                '${profile.services.length} selected',
+              ),
+              if (profile.services.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.only(left: 44),
+                  child: Text(
+                    selectedServices,
+                    style: AeraTypography.label.copyWith(
+                      color: AeraColors.inkSoft,
+                    ),
+                  ),
+                ),
+              ],
+                  const SizedBox(height: 10),
+                  _manifestRow(
+                Icons.payments_outlined,
+                'Currency',
+                profile.defaultCurrency,
                   ),
                   const SizedBox(height: 10),
                   _manifestRow(
-                    Icons.share_location,
-                    'Service Perimeter',
-                    '35 km radius dispatch zone active',
-                  ),
-                  const SizedBox(height: 10),
-                  _manifestRow(
-                    Icons.hvac,
-                    'Catalog Configured',
-                    '8 active HVAC commercial & home tiers',
-                  ),
-                  const SizedBox(height: 10),
-                  _manifestRow(
-                    Icons.badge,
-                    'Field Crew Ready',
-                    '3 crew members configured & dispatched',
+                Icons.sync,
+                'Server status',
+                complete ? 'Persisted and verified' : 'Not complete',
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
-
-            // Launch Dashboard CTA
             AeraButton(
-              text: 'Launch Dispatch Console',
-              icon: const Icon(Icons.dashboard_outlined, size: 18, color: Colors.white),
-              onPressed: () {
-                ref.read(ownerOnboardingPendingProvider.notifier).state = false;
+          text: complete
+              ? 'Launch Dispatch Console'
+              : 'Complete required setup first',
+          icon: const Icon(
+            Icons.dashboard_outlined,
+            size: 18,
+            color: Colors.white,
+          ),
+          onPressed: complete
+              ? () {
                 context.go('/dashboard');
-              },
+                }
+              : null,
             ),
-            const SizedBox(height: 20),
-          ],
+        if (!complete) ...[
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton(
+              onPressed: () => context.go('/onboarding/business-basics'),
+              child: const Text('Return to onboarding'),
         ),
       ),
+        ],
+        const SizedBox(height: 20),
+      ],
     );
   }
 
   Widget _manifestRow(IconData icon, String title, String subtitle) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AeraColors.surfaceSubtle.withValues(alpha: 0.6),
-        borderRadius: AeraRadii.borderMd,
-      ),
-      child: Row(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: AeraColors.surface,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 18, color: AeraColors.accent),
-          ),
+        Icon(icon, size: 20, color: AeraColors.accent),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -220,22 +259,31 @@ class OnboardingCompleteScreen extends ConsumerWidget {
               children: [
                 Text(
                   title,
-                  style: AeraTypography.labelUpper.copyWith(fontSize: 10),
+                style: AeraTypography.labelUpper.copyWith(
+                  fontSize: 10,
+                  color: AeraColors.inkSoft,
+                ),
                 ),
                 Text(
                   subtitle,
                   style: AeraTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w600,
-                    fontSize: 12,
                     color: AeraColors.ink,
                   ),
                 ),
               ],
             ),
           ),
-          const Icon(Icons.check_circle, size: 16, color: AeraColors.success),
-        ],
+        Icon(
+          profile.onboardingCompletedAt != null
+              ? Icons.check_circle
+              : Icons.radio_button_unchecked,
+          size: 16,
+          color: profile.onboardingCompletedAt != null
+              ? AeraColors.success
+              : AeraColors.outline,
       ),
+      ],
     );
   }
 }

@@ -86,23 +86,31 @@ class AuthCompany {
   final String id;
   final String name;
   final String slug;
+  final bool onboardingComplete;
+  final int onboardingStep;
 
   const AuthCompany({
     required this.id,
     required this.name,
     required this.slug,
+    this.onboardingComplete = true,
+    this.onboardingStep = 1,
   });
 
   factory AuthCompany.fromJson(Map<String, dynamic> json) => AuthCompany(
     id: json['id'] as String,
     name: json['name'] as String? ?? '',
     slug: json['slug'] as String? ?? '',
+    onboardingComplete: json['onboardingComplete'] as bool? ?? true,
+    onboardingStep: (json['onboardingStep'] as num?)?.toInt() ?? 1,
   );
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'slug': slug,
+    'onboardingComplete': onboardingComplete,
+    'onboardingStep': onboardingStep,
   };
 }
 
@@ -148,10 +156,7 @@ class AuthRepository {
   Future<AuthSession> login(String email, String password) async {
     final res = await _client.post(
       '/api/v1/auth/login',
-      body: {
-        'email': email.trim(),
-        'password': password,
-      },
+      body: {'email': email.trim(), 'password': password},
     );
 
     final session = AuthSession.fromJson(res as Map<String, dynamic>);
@@ -277,6 +282,15 @@ class AuthRepository {
       // Best-effort remote logout
     }
     await clearLocalSession();
+  }
+
+  /// Re-fetches company/user identity from `/auth/me` after a persisted profile
+  /// transition, then writes the refreshed identity back to secure storage.
+  Future<AuthSession?> refreshServerIdentity() async {
+    final stored = await _loadStoredSession();
+    if (stored == null) return null;
+    final me = await _client.get('/api/v1/auth/me');
+    return _applyServerIdentity(stored, me);
   }
 
   /// Forgets the session on this device only (no server call).

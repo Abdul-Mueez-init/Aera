@@ -38,6 +38,8 @@ interface AuthResult {
     id: string;
     name: string;
     slug: string;
+    onboardingComplete: boolean;
+    onboardingStep: number;
   };
   role: "OWNER" | "DISPATCHER" | "TECHNICIAN";
 }
@@ -145,6 +147,8 @@ export async function register(input: RegisterInput): Promise<AuthResult> {
         id: result.company.id,
         name: result.company.name,
         slug: result.company.slug,
+        onboardingComplete: result.company.onboardingCompletedAt !== null,
+        onboardingStep: result.company.onboardingStep,
       },
     );
   } catch (error) {
@@ -206,6 +210,8 @@ export async function login(input: LoginInput): Promise<AuthResult> {
       id: membership.company.id,
       name: membership.company.name,
       slug: membership.company.slug,
+      onboardingComplete: membership.company.onboardingCompletedAt !== null,
+      onboardingStep: membership.company.onboardingStep,
     },
   );
 }
@@ -340,6 +346,8 @@ export async function rotateRefreshSession(
       id: session.company.id,
       name: session.company.name,
       slug: session.company.slug,
+      onboardingComplete: session.company.onboardingCompletedAt !== null,
+      onboardingStep: session.company.onboardingStep,
     },
     role: membership.role,
   };
@@ -398,6 +406,8 @@ export async function acceptInvitationAndLogin(
       id: membership.company.id,
       name: membership.company.name,
       slug: membership.company.slug,
+      onboardingComplete: membership.company.onboardingCompletedAt !== null,
+      onboardingStep: membership.company.onboardingStep,
     },
   );
 }
@@ -432,6 +442,8 @@ export async function getCurrentUser(context: AuthContext) {
       id: membership.company.id,
       name: membership.company.name,
       slug: membership.company.slug,
+      onboardingComplete: membership.company.onboardingCompletedAt !== null,
+      onboardingStep: membership.company.onboardingStep,
     },
     role: membership.role,
   };

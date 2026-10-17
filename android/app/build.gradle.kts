@@ -8,6 +8,8 @@ plugins {
 import java.util.Properties
 import java.io.FileInputStream
 
+val googleMapsApiKey = System.getenv("GOOGLE_MAPS_API_KEY") ?: ""
+
 val keystoreProps = Properties()
 val keyFile = rootProject.file("key.properties")
 if (keyFile.exists()) {
@@ -48,6 +50,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = googleMapsApiKey
     }
 
     flavorDimensions += "environment"

@@ -1,38 +1,302 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
+import '../auth/providers/auth_provider.dart';
+import 'data/onboarding_repository.dart';
 
-class ServicesScreen extends StatefulWidget {
+class ServicesScreen extends ConsumerStatefulWidget {
   const ServicesScreen({super.key});
-
   @override
-  State<ServicesScreen> createState() => _ServicesScreenState();
+  ConsumerState<ServicesScreen> createState() => _ServicesScreenState();
 }
 
-class _ServicesScreenState extends State<ServicesScreen> {
-  final Set<String> _selectedServices = {
+class _ServiceOption {
+  const _ServiceOption(
+    this.key,
+    this.name,
+    this.description,
+    this.iconKey,
+    this.icon,
+  );
+  final String key;
+  final String name;
+  final String description;
+  final String iconKey;
+  final IconData icon;
+}
+
+const _catalogue = <_ServiceOption>[
+  _ServiceOption(
+    'ac_repair',
     'AC Repair',
+    'Diagnostics and repair',
+    'air_conditioning',
+    Icons.ac_unit,
+  ),
+  _ServiceOption(
+    'ac_installation',
     'AC Installation',
+    'New systems and replacements',
+    'tools',
+    Icons.build_outlined,
+  ),
+  _ServiceOption(
+    'preventive_maintenance',
     'Preventive Maintenance',
+    'Inspection and tune-ups',
+    'maintenance',
+    Icons.settings_outlined,
+  ),
+  _ServiceOption(
+    'emergency_diagnostics',
     'Emergency Diagnostics',
+    'Urgent fault finding',
+    'thermometer',
+    Icons.warning_amber,
+  ),
+  _ServiceOption(
+    'duct_cleaning_sealing',
     'Duct Cleaning & Sealing',
+    'Indoor air and ductwork',
+    'airflow',
+    Icons.air,
+  ),
+  _ServiceOption(
+    'thermostat_controls',
+    'Thermostat & Controls',
+    'Smart controls and thermostats',
+    'thermostat',
+    Icons.thermostat,
+  ),
+  _ServiceOption(
+    'commercial_chillers',
+    'Commercial Chillers',
+    'Commercial cooling systems',
+    'cooling',
+    Icons.ac_unit,
+  ),
+  _ServiceOption(
+    'refrigerant_leak_repair',
+    'Refrigerant Leak Repair',
+    'Leak detection and repair',
+    'tools',
+    Icons.plumbing,
+  ),
+];
+
+class _ServicesScreenState extends ConsumerState<ServicesScreen> {
+  final Map<String, OnboardingService> _selected = {};
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  IconData _iconForKey(String key) => switch (key) {
+    'air_conditioning' => Icons.ac_unit,
+    'cooling' => Icons.ac_unit,
+    'heating' => Icons.local_fire_department,
+    'thermometer' => Icons.thermostat,
+    'airflow' => Icons.air,
+    'thermostat' => Icons.thermostat,
+    'maintenance' => Icons.settings_outlined,
+    _ => Icons.build_outlined,
   };
 
-  final List<_ServiceItem> _services = const [
-    _ServiceItem('AC Repair', 'High Demand', Icons.toys_outlined),
-    _ServiceItem('AC Installation', 'System Replacements', Icons.hvac),
-    _ServiceItem('Preventive Maintenance', 'Annual Tune-ups', Icons.published_with_changes),
-    _ServiceItem('Emergency Diagnostics', '24/7 Rapid Response', Icons.warning_amber),
-    _ServiceItem('Duct Cleaning & Sealing', 'Indoor Air Quality', Icons.air),
-    _ServiceItem('Thermostat & Controls', 'Smart Systems', Icons.thermostat),
-    _ServiceItem('Commercial Chillers', 'VRF & Industrial', Icons.severe_cold),
-    _ServiceItem('Refrigerant Leak Repair', 'Pressure & Gas Testing', Icons.plumbing),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final profile = await ref.read(onboardingRepositoryProvider).getProfile();
+      if (!mounted) return;
+      for (final service in profile.services) {
+        final key =
+            service.serviceKey ?? 'custom:${service.name.toLowerCase()}';
+        _selected[key] = service;
+      }
+      setState(() => _loading = false);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = error is ApiException
+              ? error.message
+              : 'Could not load saved services.';
+        });
+      }
+    }
+  }
+
+  Future<OnboardingService?> _customServiceDialog({
+    OnboardingService? existing,
+  }) async {
+    final controller = TextEditingController(text: existing?.name ?? '');
+    String iconKey = existing?.iconKey ?? 'tools';
+    final service = await showDialog<OnboardingService>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(
+            existing == null ? 'Add a custom service' : 'Edit service',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                autofocus: true,
+                maxLength: 80,
+                onChanged: (_) => setDialogState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Service name',
+                  hintText: 'e.g. Boiler commissioning',
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: iconKey,
+                decoration: const InputDecoration(labelText: 'Icon'),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'air_conditioning',
+                    child: Text('Air conditioning'),
+                  ),
+                  DropdownMenuItem(value: 'cooling', child: Text('Cooling')),
+                  DropdownMenuItem(value: 'heating', child: Text('Heating')),
+                  DropdownMenuItem(
+                    value: 'thermometer',
+                    child: Text('Thermometer'),
+                  ),
+                  DropdownMenuItem(value: 'airflow', child: Text('Airflow')),
+                  DropdownMenuItem(
+                    value: 'thermostat',
+                    child: Text('Thermostat'),
+                  ),
+                  DropdownMenuItem(value: 'tools', child: Text('Tools')),
+                  DropdownMenuItem(
+                    value: 'maintenance',
+                    child: Text('Maintenance'),
+                  ),
+                ],
+                onChanged: (value) =>
+                    setDialogState(() => iconKey = value ?? 'tools'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: controller.text.trim().isEmpty
+                  ? null
+                  : () {
+                      final name = controller.text.trim();
+                      Navigator.pop(
+                        dialogContext,
+                        OnboardingService(
+                          name: name,
+                          iconKey: iconKey,
+                          isCustom: true,
+                        ),
+                      );
+                    },
+              child: Text(existing == null ? 'Add' : 'Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    return service;
+  }
+
+  bool _duplicatesOtherService(String name, {String? excludeKey}) {
+    final normalized = name.trim().toLowerCase();
+    if (_catalogue.any((option) => option.name.toLowerCase() == normalized)) {
+      return true;
+    }
+    return _selected.entries.any(
+      (entry) =>
+          entry.key != excludeKey &&
+          entry.value.name.toLowerCase() == normalized,
+    );
+  }
+
+  Future<void> _addCustomService() async {
+    final service = await _customServiceDialog();
+    if (service == null || !mounted) return;
+    if (_duplicatesOtherService(service.name)) {
+      setState(
+        () => _error =
+            'A service with that name already exists in the catalog or your selection.',
+      );
+      return;
+    }
+    setState(() {
+      _error = null;
+      _selected['custom:${service.name.toLowerCase()}'] = service;
+    });
+  }
+
+  Future<void> _editCustomService(String key, OnboardingService current) async {
+    final service = await _customServiceDialog(existing: current);
+    if (service == null || !mounted) return;
+    if (_duplicatesOtherService(service.name, excludeKey: key)) {
+      setState(
+        () => _error =
+            'A service with that name already exists in the catalog or your selection.',
+      );
+      return;
+    }
+    setState(() {
+      _error = null;
+      _selected.remove(key);
+      _selected['custom:${service.name.toLowerCase()}'] = service;
+    });
+  }
+
+  Future<void> _saveAndContinue() async {
+    if (_selected.isEmpty) {
+      setState(
+        () => _error =
+            'Select at least one service your company actually performs.',
+      );
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(onboardingRepositoryProvider)
+          .saveServices(_selected.values.toList());
+      ref.invalidate(onboardingProfileProvider);
+      await ref.read(authNotifierProvider.notifier).refreshServerIdentity();
+      if (mounted) context.push('/onboarding/team-setup');
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _error = error is ApiException
+              ? error.message
+              : 'Could not save selected services.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,24 +308,22 @@ class _ServicesScreenState extends State<ServicesScreen> {
         showBrand: true,
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          children: [
-            // Progress Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
               children: [
                 Row(
                   children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
+                      const Icon(
+                        Icons.circle,
+                        size: 8,
                         color: AeraColors.accent,
-                        shape: BoxShape.circle,
                       ),
-                    ),
-                    const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                     Text(
                       'STEP 03 / 04 • SERVICE OFFERINGS',
                       style: AeraTypography.labelUpper.copyWith(
@@ -69,207 +331,165 @@ class _ServicesScreenState extends State<ServicesScreen> {
                         fontSize: 10,
                       ),
                     ),
+                      const Spacer(),
+                      Text('${_selected.length} selected'),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AeraColors.surface,
-                    borderRadius: AeraRadii.borderFull,
-                    border: Border.all(color: AeraColors.line),
-                  ),
-                  child: Text(
-                    'Setup 75%',
-                    style: AeraTypography.label.copyWith(fontSize: 11),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // 4 Progress Segments
-            Row(
-              children: [
-                _progressSegment(true),
-                const SizedBox(width: 6),
-                _progressSegment(true),
-                const SizedBox(width: 6),
-                _progressSegment(true),
-                const SizedBox(width: 6),
-                _progressSegment(false),
-              ],
-            ),
-            const SizedBox(height: 20),
-
+                  const SizedBox(height: 16),
             Text(
               'Select your active services',
               style: AeraTypography.display.copyWith(fontSize: 26),
             ),
             const SizedBox(height: 4),
             Text(
-              'Choose the heating and cooling services your crew performs. You can customize pricing and parts later.',
-              style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft),
-            ),
-            const SizedBox(height: 20),
-
-            // Quick toolbar
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      'POPULAR PRESETS',
-                      style: AeraTypography.labelUpper.copyWith(fontSize: 10),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AeraColors.accentSoft,
-                        borderRadius: AeraRadii.borderFull,
-                      ),
-                      child: Text(
-                        'Residential',
-                        style: AeraTypography.label.copyWith(
-                          color: AeraColors.accent,
-                          fontSize: 11,
+                    'Choose only services your crew performs. Add your own offerings when the catalog does not fit.',
+                    style: AeraTypography.bodySm.copyWith(
+                      color: AeraColors.inkSoft,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                TextButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      if (_selectedServices.length == _services.length) {
-                        _selectedServices.clear();
-                      } else {
-                        _selectedServices.addAll(_services.map((s) => s.title));
-                      }
-                    });
-                  },
-                  icon: const Icon(Icons.done_all, size: 16, color: AeraColors.accent),
-                  label: Text(
-                    _selectedServices.length == _services.length ? 'Clear all' : 'Select all (8)',
-                    style: AeraTypography.label.copyWith(
-                      color: AeraColors.accent,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Services Grid
-            ..._services.map((service) {
-              final isSelected = _selectedServices.contains(service.title);
-
+                  const SizedBox(height: 16),
+                  ..._catalogue.map((option) {
+                    final selected = _selected.containsKey(option.key);
               return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.only(bottom: 9),
                 child: AeraCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  backgroundColor: isSelected ? AeraColors.accentSoft.withValues(alpha: 0.6) : AeraColors.surface,
-                  borderColor: isSelected ? AeraColors.accent : AeraColors.line,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        backgroundColor: selected
+                            ? AeraColors.accentSoft.withValues(alpha: 0.6)
+                            : AeraColors.surface,
+                        borderColor: selected
+                            ? AeraColors.accent
+                            : AeraColors.line,
                   borderRadius: AeraRadii.borderMd,
-                  onTap: () {
-                    setState(() {
-                      if (isSelected) {
-                        _selectedServices.remove(service.title);
+                        onTap: () => setState(() {
+                          if (selected) {
+                            _selected.remove(option.key);
                       } else {
-                        _selectedServices.add(service.title);
+                            _selected[option.key] = OnboardingService(
+                              serviceKey: option.key,
+                              name: option.name,
+                              iconKey: option.iconKey,
+                              isCustom: false,
+                            );
                       }
-                    });
-                  },
+                        }),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
                         children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: AeraColors.surface,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AeraColors.line),
-                            ),
-                            child: Icon(service.icon, color: AeraColors.accent, size: 20),
-                          ),
+                            Icon(option.icon, color: AeraColors.accent),
                           const SizedBox(width: 12),
-                          Column(
+                            Expanded(
+                              child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                service.title,
+                                    option.name,
                                 style: AeraTypography.h3.copyWith(
                                   fontSize: 15,
-                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              const SizedBox(height: 2),
                               Text(
-                                service.subtitle,
+                                    option.description,
                                 style: AeraTypography.label.copyWith(
-                                  color: AeraColors.accent,
-                                  fontSize: 11,
+                                      color: AeraColors.inkSoft,
                                 ),
                               ),
                             ],
                           ),
+                            ),
+                            Checkbox(
+                              value: selected,
+                              onChanged: (value) => setState(() {
+                                if (value == true) {
+                                  _selected[option.key] = OnboardingService(
+                                    serviceKey: option.key,
+                                    name: option.name,
+                                    iconKey: option.iconKey,
+                                    isCustom: false,
+                                  );
+                                } else {
+                                  _selected.remove(option.key);
+                                }
+                              }),
+                            ),
                         ],
                       ),
-                      Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: isSelected ? AeraColors.accent : Colors.transparent,
-                          border: Border.all(
-                            color: isSelected ? AeraColors.accent : AeraColors.outline,
-                            width: 1.5,
                           ),
-                          shape: BoxShape.circle,
+                    );
+                  }),
+                  OutlinedButton.icon(
+                    onPressed: _addCustomService,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add a custom service'),
+                  ),
+                  ..._selected.entries
+                      .where((entry) => entry.value.isCustom)
+                      .map(
+                        (entry) => ListTile(
+                          leading: Icon(
+                            _iconForKey(entry.value.iconKey),
+                            color: AeraColors.accent,
                         ),
-                        child: isSelected
-                            ? const Icon(Icons.check, size: 14, color: Colors.white)
-                            : null,
+                          title: Text(entry.value.name),
+                          subtitle: const Text('Custom service'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Edit custom service',
+                                onPressed: () =>
+                                    _editCustomService(entry.key, entry.value),
+                                icon: const Icon(Icons.edit_outlined),
+                              ),
+                              IconButton(
+                                tooltip: 'Remove custom service',
+                                onPressed: () =>
+                                    setState(() => _selected.remove(entry.key)),
+                                icon: const Icon(Icons.delete_outline),
                       ),
                     ],
                   ),
                 ),
-              );
-            }),
-            const SizedBox(height: 20),
-
-            AeraButton(
-              text: 'Continue to Team Setup (${_selectedServices.length} Selected)',
-              icon: const Icon(Icons.arrow_forward, size: 18, color: Colors.white),
-              onPressed: () => context.push('/onboarding/team-setup'),
             ),
-            const SizedBox(height: 20),
+                  if (_error != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      _error!,
+                      style: AeraTypography.bodySm.copyWith(
+                        color: AeraColors.danger,
+                      ),
+                    ),
           ],
+                  if (_selected.isEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Select at least one service your company performs.',
+                      textAlign: TextAlign.center,
+                      style: AeraTypography.label.copyWith(
+                        color: AeraColors.inkSoft,
+        ),
+      ),
+                  ],
+                  const SizedBox(height: 18),
+                  AeraButton(
+                    text: _saving
+                        ? 'Saving…'
+                        : 'Continue to Team Setup (${_selected.length} selected)',
+                    icon: const Icon(
+                      Icons.arrow_forward,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                    onPressed: _saving || _selected.isEmpty
+                        ? null
+                        : _saveAndContinue,
+                  ),
+                  const SizedBox(height: 20),
+                ],
         ),
       ),
     );
   }
-
-  Widget _progressSegment(bool isCompleted) {
-    return Expanded(
-      child: Container(
-        height: 5,
-        decoration: BoxDecoration(
-          color: isCompleted ? AeraColors.accent : AeraColors.surfaceContainerHighest,
-          borderRadius: AeraRadii.borderFull,
-        ),
-      ),
-    );
-  }
-}
-
-class _ServiceItem {
-  const _ServiceItem(this.title, this.subtitle, this.icon);
-  final String title;
-  final String subtitle;
-  final IconData icon;
 }

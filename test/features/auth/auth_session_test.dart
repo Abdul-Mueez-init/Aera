@@ -85,12 +85,30 @@ Future<Map<String, dynamic>?> _readStoredSession() async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'AuthCompany preserves server onboarding completion and resume step',
+    () {
+      final company = AuthCompany.fromJson({
+        'id': 'company-1',
+        'name': 'Test HVAC Co',
+        'slug': 'test-hvac-co',
+        'onboardingComplete': false,
+        'onboardingStep': 3,
+      });
+
+      expect(company.onboardingComplete, isFalse);
+      expect(company.onboardingStep, 3);
+      expect(company.toJson()['onboardingStep'], 3);
+    },
+  );
+
   setUp(() {
     store = MemoryTestSessionStore();
   });
 
   group('AuthRepository.restoreSession', () {
-    test('returns null without any network call when nothing is saved',
+    test(
+      'returns null without any network call when nothing is saved',
         () async {
       var calls = 0;
       final mock = MockClient((request) async {
@@ -101,9 +119,11 @@ void main() {
 
       expect(await built.repo.restoreSession(), isNull);
       expect(calls, 0);
-    });
+      },
+    );
 
-    test('keeps the session and takes the current role from /auth/me',
+    test(
+      'keeps the session and takes the current role from /auth/me',
         () async {
       _seedSession(_storedSession(role: 'TECHNICIAN'));
       final mock = MockClient((request) async {
@@ -125,7 +145,8 @@ void main() {
       final stored = await _readStoredSession();
       expect(stored?['role'], 'DISPATCHER');
       expect(stored?['refreshToken'], 'old-refresh');
-    });
+      },
+    );
 
     test('offline keeps the saved session', () async {
       _seedSession();
@@ -155,7 +176,8 @@ void main() {
       expect(await _readStoredSession(), isNotNull);
     });
 
-    test('a rejected refresh clears the session and reports it expired',
+    test(
+      'a rejected refresh clears the session and reports it expired',
         () async {
       _seedSession();
       // Both /auth/me and /auth/refresh answer 401.
@@ -171,9 +193,11 @@ void main() {
 
       expect(await _readStoredSession(), isNull);
       expect(built.client.accessToken, isNull);
-    });
+      },
+    );
 
-    test('403 from /auth/me (suspended or removed member) is expired',
+    test(
+      '403 from /auth/me (suspended or removed member) is expired',
         () async {
       _seedSession();
       final mock = MockClient((request) async {
@@ -188,9 +212,11 @@ void main() {
 
       expect(await _readStoredSession(), isNull);
       expect(built.client.accessToken, isNull);
-    });
+      },
+    );
 
-    test('rotated tokens are stored and returned after a successful refresh',
+    test(
+      'rotated tokens are stored and returned after a successful refresh',
         () async {
       _seedSession();
       final mock = MockClient((request) async {
@@ -222,7 +248,8 @@ void main() {
       final stored = await _readStoredSession();
       expect(stored?['accessToken'], 'new-access');
       expect(stored?['refreshToken'], 'new-refresh');
-    });
+      },
+    );
   });
 
   group('AuthRepository.refreshAccessToken', () {
@@ -248,7 +275,8 @@ void main() {
       );
     });
 
-    test('never writes a session back after the user signed out mid-refresh',
+    test(
+      'never writes a session back after the user signed out mid-refresh',
         () async {
       _seedSession();
       final gate = Completer<void>();
@@ -272,11 +300,13 @@ void main() {
       expect(await refreshing, isNull);
       expect(await _readStoredSession(), isNull);
       expect(built.client.accessToken, isNull);
-    });
+      },
+    );
   });
 
   group('AuthRepository.logout', () {
-    test('revokes the refresh token on the server and clears local state',
+    test(
+      'revokes the refresh token on the server and clears local state',
         () async {
       _seedSession();
       String? revokedToken;
@@ -296,7 +326,8 @@ void main() {
       expect(revokedToken, 'old-refresh');
       expect(await _readStoredSession(), isNull);
       expect(built.client.accessToken, isNull);
-    });
+      },
+    );
 
     test('still clears local state when the server is unreachable', () async {
       _seedSession();
@@ -345,7 +376,8 @@ void main() {
       expect(state.value, isNull);
     });
 
-    test('a saved session the server rejects at startup is "expired"',
+    test(
+      'a saved session the server rejects at startup is "expired"',
         () async {
       _seedSession();
       final container = containerFor(
@@ -359,9 +391,11 @@ void main() {
       expect(state.error, isA<SessionExpiredException>());
       expect(state.valueOrNull, isNull);
       expect(await _readStoredSession(), isNull);
-    });
+      },
+    );
 
-    test('a signed-in session the server later rejects becomes "expired"',
+    test(
+      'a signed-in session the server later rejects becomes "expired"',
         () async {
       _seedSession();
       final container = containerFor(
@@ -385,9 +419,11 @@ void main() {
       expect(state.valueOrNull, isNull);
       expect(await _readStoredSession(), isNull);
       expect(client.accessToken, isNull);
-    });
+      },
+    );
 
-    test('a network failure while refreshing keeps the user signed in',
+    test(
+      'a network failure while refreshing keeps the user signed in',
         () async {
       _seedSession();
       final container = containerFor(
@@ -413,7 +449,8 @@ void main() {
       expect(state.value, isNotNull);
       expect(await _readStoredSession(), isNotNull);
       expect(client.accessToken, 'old-access');
-    });
+      },
+    );
 
     test('logout ends in a plain signed-out state (not "expired")', () async {
       _seedSession();
@@ -442,7 +479,8 @@ void main() {
   group('SecureSessionStore', () {
     const legacyJson = '{"accessToken":"legacy-access"}';
 
-    test('moves a session saved by the old version into secure storage',
+    test(
+      'moves a session saved by the old version into secure storage',
         () async {
       FlutterSecureStorage.setMockInitialValues({});
       SharedPreferences.setMockInitialValues({
@@ -461,7 +499,8 @@ void main() {
       );
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString(SecureSessionStore.legacyPrefsKey), isNull);
-    });
+      },
+    );
 
     test('secure storage wins over a leftover old copy', () async {
       FlutterSecureStorage.setMockInitialValues({

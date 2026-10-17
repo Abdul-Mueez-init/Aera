@@ -8,7 +8,9 @@ import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
+import '../auth/providers/auth_provider.dart';
 import '../settings/data/members_repository.dart';
+import 'data/onboarding_repository.dart';
 
 class TeamSetupScreen extends ConsumerStatefulWidget {
   const TeamSetupScreen({super.key});
@@ -61,7 +63,10 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: AeraColors.surface,
                     borderRadius: AeraRadii.borderFull,
@@ -113,12 +118,18 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline, color: AeraColors.danger, size: 20),
+                    const Icon(
+                      Icons.error_outline,
+                      color: AeraColors.danger,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         _errorMessage!,
-                        style: AeraTypography.bodySm.copyWith(color: AeraColors.danger),
+                        style: AeraTypography.bodySm.copyWith(
+                          color: AeraColors.danger,
+                        ),
                       ),
                     ),
                   ],
@@ -154,7 +165,8 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                   ],
                 ),
               ),
-            ..._members.map((member) => Padding(
+            ..._members.map(
+              (member) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: AeraCard(
                     padding: const EdgeInsets.all(16),
@@ -194,7 +206,9 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                                     ),
                                     Text(
                                       member.contact,
-                                      style: AeraTypography.bodySm.copyWith(fontSize: 12),
+                                    style: AeraTypography.bodySm.copyWith(
+                                      fontSize: 12,
+                                    ),
                                     ),
                                   ],
                                 ),
@@ -202,7 +216,11 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                             ),
                             if (!member.isInvited)
                               IconButton(
-                                icon: const Icon(Icons.close, size: 18, color: AeraColors.outline),
+                              icon: const Icon(
+                                Icons.close,
+                                size: 18,
+                                color: AeraColors.outline,
+                              ),
                                 onPressed: () {
                                   setState(() => _members.remove(member));
                                 },
@@ -216,7 +234,10 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                               decoration: BoxDecoration(
                                 color: AeraColors.accentSoft,
                                 borderRadius: AeraRadii.borderFull,
@@ -242,7 +263,10 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                               decoration: BoxDecoration(
                                 color: member.isInvited
                                     ? AeraColors.successSoft
@@ -263,7 +287,9 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    member.isInvited ? 'Invited' : 'Ready to invite',
+                                  member.isInvited
+                                      ? 'Invited'
+                                      : 'Ready to invite',
                                     style: AeraTypography.label.copyWith(
                                       color: member.isInvited
                                           ? AeraColors.success
@@ -290,7 +316,8 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                       ],
                     ),
                   ),
-                )),
+              ),
+            ),
 
             // Add member button
             OutlinedButton.icon(
@@ -326,13 +353,17 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
-                  : const Icon(Icons.check_circle_outline, size: 18, color: Colors.white),
+                  : const Icon(
+                      Icons.check_circle_outline,
+                      size: 18,
+                      color: Colors.white,
+                    ),
               onPressed: _isLoading ? null : _handleFinishSetup,
             ),
             const SizedBox(height: 12),
             Center(
               child: TextButton(
-                onPressed: _isLoading ? null : () => context.push('/onboarding/complete'),
+                onPressed: _isLoading ? null : _skipInvitationsAndComplete,
                 child: Text(
                   'Skip for now, I will invite crew later',
                   style: AeraTypography.bodySm.copyWith(
@@ -353,7 +384,9 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
       child: Container(
         height: 5,
         decoration: BoxDecoration(
-          color: isCompleted ? AeraColors.accent : AeraColors.surfaceContainerHighest,
+          color: isCompleted
+              ? AeraColors.accent
+              : AeraColors.surfaceContainerHighest,
           borderRadius: AeraRadii.borderFull,
         ),
       ),
@@ -391,14 +424,19 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
               const SizedBox(height: 12),
               const Text('Role'),
               const SizedBox(height: 8),
-              Row(
+              RadioGroup<String>(
+                groupValue: selectedRole,
+                onChanged: (value) {
+                  if (value != null) {
+                    setDialogState(() => selectedRole = value);
+                  }
+                },
+                child: Row(
                 children: [
                   Expanded(
                     child: RadioListTile<String>(
                       title: const Text('Technician'),
                       value: 'TECHNICIAN',
-                      groupValue: selectedRole,
-                      onChanged: (value) => setDialogState(() => selectedRole = value!),
                       contentPadding: EdgeInsets.zero,
                     ),
                   ),
@@ -406,12 +444,11 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                     child: RadioListTile<String>(
                       title: const Text('Dispatcher'),
                       value: 'DISPATCHER',
-                      groupValue: selectedRole,
-                      onChanged: (value) => setDialogState(() => selectedRole = value!),
                       contentPadding: EdgeInsets.zero,
                     ),
                   ),
                 ],
+              ),
               ),
             ],
           ),
@@ -430,12 +467,16 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                       ? '${nameParts[0][0]}${nameParts[1][0]}'
                       : name[0];
                   setState(() {
-                    _members.add(_TeamMember(
+                    _members.add(
+                      _TeamMember(
                       name: name,
                       contact: email,
                       initials: initials.toUpperCase(),
-                      role: selectedRole == 'TECHNICIAN' ? 'Field Technician' : 'Dispatcher',
-                    ));
+                        role: selectedRole == 'TECHNICIAN'
+                            ? 'Field Technician'
+                            : 'Dispatcher',
+                      ),
+                    );
                   });
                   Navigator.pop(context);
                 }
@@ -449,38 +490,34 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
   }
 
   Future<void> _handleFinishSetup() async {
-    if (_members.isEmpty) {
-      context.push('/onboarding/complete');
-      return;
-    }
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
-
+    int successCount = _members.where((member) => member.isInvited).length;
     try {
       final membersRepo = ref.read(membersRepositoryProvider);
-      int successCount = 0;
-
       for (int i = 0; i < _members.length; i++) {
         final member = _members[i];
         if (member.isInvited) continue;
 
         try {
-          final nameParts = member.name.split(' ');
-          final firstName = nameParts.first;
-          final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
-
+          final nameParts = member.name.trim().split(RegExp(r'\s+'));
+          if (nameParts.length < 2) {
+            throw const FormatException(
+              'Enter both a first and last name for each invite.',
+            );
+          }
           await membersRepo.inviteMember(
             InviteMemberInput(
               email: member.contact,
-              firstName: firstName,
-              lastName: lastName,
-              role: member.role.contains('Technician') ? 'TECHNICIAN' : 'DISPATCHER',
+              firstName: nameParts.first,
+              lastName: nameParts.sublist(1).join(' '),
+              role: member.role.contains('Technician')
+                  ? 'TECHNICIAN'
+                  : 'DISPATCHER',
             ),
           );
-
           setState(() {
             _members[i] = _TeamMember(
               name: member.name,
@@ -499,28 +536,59 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
               initials: member.initials,
               role: member.role,
               isInvited: false,
-              invitationError: 'Failed to send invitation',
+              invitationError: e is FormatException
+                  ? e.message
+                  : 'Failed to send invitation',
             );
           });
         }
       }
 
-      // Save invited count for completion screen
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(_invitedCountKey, successCount);
-
-      if (successCount > 0 && mounted) {
-        context.push('/onboarding/complete');
-      } else if (mounted) {
-        setState(() => _errorMessage = 'Failed to send invitations. Please try again.');
+      if (_members.isNotEmpty && successCount == 0) {
+        throw Exception(
+          'No invitations were sent. Fix the errors above or skip invitations to finish setup.',
+        );
       }
+      await _completeWorkspace();
     } catch (e) {
-      setState(() => _errorMessage = 'Failed to send invitations. Please try again.');
-    } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(
+          () => _errorMessage = e is Exception
+              ? e.toString().replaceFirst('Exception: ', '')
+              : 'Could not finish setup. Please try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _skipInvitationsAndComplete() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      await _completeWorkspace();
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => _errorMessage = e is Exception
+              ? e.toString().replaceFirst('Exception: ', '')
+              : 'Could not finish setup. Please try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
       }
     }
+
+  Future<void> _completeWorkspace() async {
+    await ref.read(onboardingRepositoryProvider).complete();
+    await ref.read(authNotifierProvider.notifier).refreshServerIdentity();
+    if (mounted) context.push('/onboarding/complete');
   }
 }
 

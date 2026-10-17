@@ -3,8 +3,11 @@ import { z } from "zod";
 import { requireAuth, requireRole } from "../../common/auth/auth.middleware.js";
 import { AppError } from "../../common/errors.js";
 import { prisma } from "../../db/prisma.js";
+import { createCompanyLogoReadUrl } from "../../common/storage/supabase-storage.adapter.js";
+import { onboardingRouter } from "./onboarding.routes.js";
 
 const router = Router();
+router.use("/current/onboarding", onboardingRouter);
 
 const createCompanySchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -129,6 +132,26 @@ router.get(
     response.status(200).json({ data: members });
   },
 );
+
+router.get("/current/logo", requireAuth, async (request, response) => {
+  const companyId = request.auth!.companyId;
+  const company = await prisma.company.findFirst({
+    where: {
+      id: companyId,
+      memberships: {
+        some: { userId: request.auth!.userId, status: "ACTIVE" },
+      },
+    },
+    select: { logoObjectKey: true },
+  });
+  if (!company) {
+    throw new AppError("TENANT_ACCESS_DENIED", "Company access denied", 403);
+  }
+  const logoUrl = company.logoObjectKey
+    ? await createCompanyLogoReadUrl(companyId, company.logoObjectKey)
+    : null;
+  response.status(200).json({ data: { logoUrl } });
+});
 
 router.post(
   "/current/invitations",

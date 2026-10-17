@@ -148,6 +148,15 @@ model Company {
   slug         String          @unique
   timezone     String          @default("UTC")
   defaultCurrency String       @default("USD") @db.Char(3)
+  phone                 String?
+  taxId                 String?
+  logoObjectKey         String?
+  headquartersAddress   String?
+  headquartersLatitude  Decimal?              @db.Decimal(10, 7)
+  headquartersLongitude Decimal?              @db.Decimal(10, 7)
+  serviceRadiusKm       Int?
+  onboardingStep        Int                   @default(1)
+  onboardingCompletedAt DateTime?
   memberships  CompanyMember[]
   refreshSessions RefreshSession[]
   customers      Customer[]
@@ -171,10 +180,46 @@ model Company {
   counters       CompanyCounter[]
   presignedUploads PresignedUpload[]
   paymentOperations PaymentOperation[]
+  services              CompanyService[]
+  serviceZones          CompanyServiceZone[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
   @@map("companies")
+}
+
+model CompanyService {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @db.Uuid
+  serviceKey     String?
+  name           String
+  normalizedName String
+  iconKey        String
+  isCustom       Boolean  @default(false)
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([companyId, normalizedName])
+  @@index([companyId, createdAt])
+  @@map("company_services")
+}
+
+model CompanyServiceZone {
+  id              String   @id @default(uuid()) @db.Uuid
+  companyId       String   @db.Uuid
+  providerPlaceId String
+  name            String
+  latitude        Decimal  @db.Decimal(10, 7)
+  longitude       Decimal  @db.Decimal(10, 7)
+  isActive        Boolean  @default(true)
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([companyId, providerPlaceId])
+  @@index([companyId, isActive])
+  @@map("company_service_zones")
 }
 
 model CompanyMember {

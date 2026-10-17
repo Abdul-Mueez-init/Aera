@@ -7,6 +7,7 @@ import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_metric_card.dart';
 import '../auth/providers/auth_provider.dart';
+import '../onboarding/data/onboarding_repository.dart';
 import 'data/dashboard_repository.dart';
 import 'providers/dashboard_provider.dart';
 import 'providers/get_started_provider.dart';
@@ -44,6 +45,7 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final company = ref.watch(currentCompanyProvider);
+    final companyLogoAsync = ref.watch(companyLogoUrlProvider);
     final summaryAsync = ref.watch(dashboardSummaryProvider);
     final alertsAsync = ref.watch(dashboardAlertsProvider);
     final todayAsync = ref.watch(dashboardTodayProvider(50));
@@ -69,7 +71,26 @@ class DashboardScreen extends ConsumerWidget {
                 color: AeraColors.accent,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.ac_unit, color: Colors.white, size: 18),
+              child: companyLogoAsync.maybeWhen(
+                data: (url) => url == null
+                    ? const Icon(Icons.ac_unit, color: Colors.white, size: 18)
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          url,
+                          width: 32,
+                          height: 32,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const Icon(
+                            Icons.ac_unit,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                orElse: () =>
+                    const Icon(Icons.ac_unit, color: Colors.white, size: 18),
+              ),
             ),
             const SizedBox(width: 10),
             Column(
@@ -201,12 +222,21 @@ class DashboardScreen extends ConsumerWidget {
                       )
                       .fold<int>(0, (sum, j) => sum + j.count);
 
-                  final outstandingBalance = summary
-                          .outstandingInvoices.balanceDueByCurrency.isNotEmpty
+                  final outstandingBalance =
+                      summary
+                          .outstandingInvoices
+                          .balanceDueByCurrency
+                          .isNotEmpty
                       ? _formatMoney(
-                          summary.outstandingInvoices.balanceDueByCurrency.first
+                          summary
+                              .outstandingInvoices
+                              .balanceDueByCurrency
+                              .first
                               .totalMinor,
-                          summary.outstandingInvoices.balanceDueByCurrency.first
+                          summary
+                              .outstandingInvoices
+                              .balanceDueByCurrency
+                              .first
                               .currency,
                         )
                       : '0';
@@ -219,8 +249,7 @@ class DashboardScreen extends ConsumerWidget {
                             child: AeraMetricCard(
                               label: "Today's Jobs",
                               value: summary.jobsToday.toString(),
-                              sublabel:
-                                  '${summary.unassignedJobs} unassigned',
+                              sublabel: '${summary.unassignedJobs} unassigned',
                               icon: Icons.assignment_outlined,
                               onTap: () => context.push('/jobs'),
                             ),
@@ -261,8 +290,7 @@ class DashboardScreen extends ConsumerWidget {
                           Expanded(
                             child: AeraMetricCard(
                               label: 'Outstanding',
-                              value:
-                                  '${summary.outstandingInvoices.count} inv',
+                              value: '${summary.outstandingInvoices.count} inv',
                               sublabel: outstandingBalance,
                               icon: Icons.payments_outlined,
                               onTap: () => context.push('/invoices'),
@@ -387,8 +415,9 @@ class DashboardScreen extends ConsumerWidget {
                                 const SizedBox(width: 8),
                                 Text(
                                   'Operational Alerts',
-                                  style:
-                                      AeraTypography.h3.copyWith(fontSize: 15),
+                                  style: AeraTypography.h3.copyWith(
+                                    fontSize: 15,
+                                  ),
                                 ),
                               ],
                             ),
@@ -453,8 +482,11 @@ class DashboardScreen extends ConsumerWidget {
                     onTap: () => context.push('/create-job'),
                     child: Row(
                       children: [
-                        const Icon(Icons.add,
-                            size: 16, color: AeraColors.accent),
+                        const Icon(
+                          Icons.add,
+                          size: 16,
+                          color: AeraColors.accent,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           'New Job',
@@ -587,8 +619,9 @@ class DashboardScreen extends ConsumerWidget {
                           style: TextStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
-                            color:
-                                isError ? AeraColors.danger : AeraColors.warning,
+                            color: isError
+                                ? AeraColors.danger
+                                : AeraColors.warning,
                           ),
                         ),
                       ),
@@ -628,9 +661,9 @@ class DashboardScreen extends ConsumerWidget {
 
   Widget _dispatchItem(BuildContext context, {required TodayJob job}) {
     final windowStr = _formatWindow(job.windowStart, job.windowEnd);
-    final isAtRisk = job.status == 'SCHEDULED' &&
-        DateTime.tryParse(job.windowStart)
-                ?.isBefore(DateTime.now().toUtc()) ==
+    final isAtRisk =
+        job.status == 'SCHEDULED' &&
+        DateTime.tryParse(job.windowStart)?.isBefore(DateTime.now().toUtc()) ==
             true;
 
     return AeraCard(
@@ -661,8 +694,7 @@ class DashboardScreen extends ConsumerWidget {
                 ],
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: isAtRisk
                       ? AeraColors.warningSoft

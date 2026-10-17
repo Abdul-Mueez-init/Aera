@@ -39,10 +39,6 @@ final currentRoleProvider = Provider<String?>((ref) {
   return session?.role;
 });
 
-/// True only for the live registration handoff; the router uses this to keep
-/// a newly created owner in onboarding instead of sending them to Dashboard.
-final ownerOnboardingPendingProvider = StateProvider<bool>((ref) => false);
-
 class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
   AuthNotifier(this._repo, this._ref) : super(const AsyncValue.data(null)) {
     restoreSession();
@@ -60,9 +56,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
       // Attach user context to Sentry for restored session
       if (AppConfig.isSentryEnabled && session != null) {
         await Sentry.configureScope((scope) {
-          scope.setUser(SentryUser(
-            id: session.user.id,
-          ));
+          scope.setUser(SentryUser(id: session.user.id));
           scope.setTag('company_id', session.company.id);
           scope.setTag('role', session.role);
         });
@@ -78,15 +72,12 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
     state = const AsyncValue.loading();
     try {
       final session = await _repo.login(email, password);
-      _ref.read(ownerOnboardingPendingProvider.notifier).state = false;
       state = AsyncValue.data(session);
 
       // Attach user context to Sentry for this session
       if (AppConfig.isSentryEnabled) {
         await Sentry.configureScope((scope) {
-          scope.setUser(SentryUser(
-            id: session.user.id,
-          ));
+          scope.setUser(SentryUser(id: session.user.id));
           scope.setTag('company_id', session.company.id);
           scope.setTag('role', session.role);
         });
@@ -117,7 +108,6 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
       );
       // Set this before publishing the session: the router may refresh as
       // soon as auth state changes and must already know this is first run.
-      _ref.read(ownerOnboardingPendingProvider.notifier).state = true;
       state = AsyncValue.data(session);
       return session;
     } catch (e, st) {
@@ -136,7 +126,6 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
         token: token,
         password: password,
       );
-      _ref.read(ownerOnboardingPendingProvider.notifier).state = false;
       state = AsyncValue.data(session);
 
       if (AppConfig.isSentryEnabled) {
@@ -157,7 +146,6 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
   Future<void> logout() async {
     await _repo.logout();
     await _clearSentryUser();
-    _ref.read(ownerOnboardingPendingProvider.notifier).state = false;
     state = const AsyncValue.data(null);
 
     // Invalidate key feature providers to prevent stale data on account switch
@@ -178,6 +166,11 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
     _ref.invalidate(companyDetailsProvider);
     _ref.invalidate(notificationsRepositoryProvider);
     _ref.invalidate(aiConversationsListProvider);
+  }
+
+  Future<void> refreshServerIdentity() async {
+    final session = await _repo.refreshServerIdentity();
+    if (mounted && session != null) state = AsyncValue.data(session);
   }
 
   /// Called by [ApiClient] when the server has definitively rejected the

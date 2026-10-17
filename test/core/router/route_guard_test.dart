@@ -23,12 +23,14 @@ String? _redirect(
   String? role,
   bool holdSplash = false,
   bool ownerOnboardingPending = false,
+  String ownerOnboardingPath = kOwnerOnboardingPath,
 }) => resolveRedirect(
   gate: gate,
   role: role,
   path: path,
   holdSplash: holdSplash,
   ownerOnboardingPending: ownerOnboardingPending,
+  ownerOnboardingPath: ownerOnboardingPath,
 );
 
 void main() {
@@ -154,7 +156,13 @@ void main() {
   group('signed in as owner or dispatcher', () {
     for (final role in ['OWNER', 'DISPATCHER']) {
       test('$role: entry screens go to the dashboard', () {
-        for (final path in ['/splash', '/welcome', '/login', '/sign-up', '/accept-invitation']) {
+        for (final path in [
+          '/splash',
+          '/welcome',
+          '/login',
+          '/sign-up',
+          '/accept-invitation',
+        ]) {
           expect(
             _redirect(AuthGate.signedIn, path, role: role),
             '/dashboard',
@@ -212,31 +220,65 @@ void main() {
       );
     });
 
-    test('new owner may continue through onboarding steps', () {
-      for (final path in [
+    test('new owner may open only the first available step', () {
+      expect(
+        _redirect(
+          AuthGate.signedIn,
         '/onboarding/business-basics',
+          role: 'OWNER',
+          ownerOnboardingPending: true,
+        ),
+        isNull,
+      );
+      expect(
+        _redirect(
+          AuthGate.signedIn,
         '/onboarding/service-area',
-        '/onboarding/services',
+          role: 'OWNER',
+          ownerOnboardingPending: true,
+        ),
+        '/onboarding/business-basics',
+      );
+    });
+
+    test('forward navigation cannot skip the server-persisted step', () {
+      expect(
+        _redirect(
+          AuthGate.signedIn,
         '/onboarding/team-setup',
-        '/onboarding/complete',
-      ]) {
+          role: 'OWNER',
+          ownerOnboardingPending: true,
+          ownerOnboardingPath: '/onboarding/service-area',
+        ),
+        '/onboarding/service-area',
+      );
+    });
+  });
+
+  group('persisted onboarding resume step', () {
+    test('incomplete owner resumes from the server-persisted step', () {
         expect(
           _redirect(
             AuthGate.signedIn,
-            path,
+          '/dashboard',
             role: 'OWNER',
             ownerOnboardingPending: true,
+          ownerOnboardingPath: '/onboarding/services',
           ),
-          isNull,
-          reason: path,
+        '/onboarding/services',
         );
-      }
     });
   });
 
   group('signed in as technician', () {
     test('entry screens go to Technician Home', () {
-      for (final path in ['/splash', '/welcome', '/login', '/sign-up', '/accept-invitation']) {
+      for (final path in [
+        '/splash',
+        '/welcome',
+        '/login',
+        '/sign-up',
+        '/accept-invitation',
+      ]) {
         expect(
           _redirect(AuthGate.signedIn, path, role: 'TECHNICIAN'),
           '/technician-home',

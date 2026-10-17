@@ -295,7 +295,7 @@ void main() {
       );
 
       appRouter.go('/team');
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.byType(TeamManagementScreen), findsOneWidget);
       expect(find.text('No routes for location: /team'), findsNothing);

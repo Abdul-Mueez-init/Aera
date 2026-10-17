@@ -75,7 +75,6 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   ref.listen(authNotifierProvider, (previous, next) => notifyRouter());
   ref.listen(splashGateProvider, (previous, next) => notifyRouter());
-  ref.listen(ownerOnboardingPendingProvider, (previous, next) => notifyRouter());
 
   final router = GoRouter(
     navigatorKey: _rootNavigatorKey,
@@ -84,13 +83,23 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: refresh,
     redirect: (context, state) {
       final authState = ref.read(authNotifierProvider);
+      final session = authState.valueOrNull;
+      final ownerOnboardingPath = switch (session?.company.onboardingStep) {
+        2 => '/onboarding/service-area',
+        3 => '/onboarding/services',
+        4 => '/onboarding/team-setup',
+        _ => kOwnerOnboardingPath,
+      };
       final holdSplash = !ref.read(splashGateProvider);
       return resolveRedirect(
         gate: authGateFor(authState),
         role: authState.valueOrNull?.role,
         path: state.uri.path,
         holdSplash: holdSplash,
-        ownerOnboardingPending: ref.read(ownerOnboardingPendingProvider),
+        ownerOnboardingPending:
+            session?.role == 'OWNER' &&
+            !(session?.company.onboardingComplete ?? true),
+        ownerOnboardingPath: ownerOnboardingPath,
       );
     },
     routes: _routes,
@@ -114,15 +123,9 @@ final List<RouteBase> _routes = [
     GoRoute(path: '/', redirect: (context, state) => '/dashboard'),
     // Auth Routes
     GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
-    GoRoute(
-      path: '/welcome',
-      builder: (context, state) => const WelcomeScreen(),
-    ),
+  GoRoute(path: '/welcome', builder: (context, state) => const WelcomeScreen()),
     GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-    GoRoute(
-      path: '/sign-up',
-      builder: (context, state) => const SignUpScreen(),
-    ),
+  GoRoute(path: '/sign-up', builder: (context, state) => const SignUpScreen()),
     GoRoute(
       path: '/forgot-password',
       builder: (context, state) => const ForgotPasswordScreen(),
