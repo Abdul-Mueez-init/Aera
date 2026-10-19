@@ -276,7 +276,7 @@ class _BusinessBasicsScreenState extends ConsumerState<BusinessBasicsScreen> {
                   const SizedBox(height: 16),
                         _field(
                           'Primary Phone (Dispatch Line) *',
-                          '+1 555 123 4567',
+                          'Your dispatch phone number',
                           _phoneController,
                           Icons.phone_outlined,
                     keyboardType: TextInputType.phone,
