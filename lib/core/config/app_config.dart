@@ -24,10 +24,13 @@ class AppConfig {
 
   // Fraction of requests traced for performance data (0 to 1). Errors are always
   // captured regardless of this value. Set from environment for production control.
-  static const double tracesSampleRate = double.fromEnvironment(
-    'SENTRY_TRACES_SAMPLE_RATE',
-    defaultValue: 1.0,
-  );
+  static double get tracesSampleRate {
+    final value = const String.fromEnvironment(
+      'SENTRY_TRACES_SAMPLE_RATE',
+      defaultValue: '1.0',
+    );
+    return double.tryParse(value) ?? 1.0;
+  }
 
   static bool get isSentryEnabled => sentryDsn.isNotEmpty;
 
