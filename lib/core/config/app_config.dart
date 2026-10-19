@@ -18,13 +18,16 @@ class AppConfig {
   // Optional: the git commit SHA or version of the deploy, so issues map to a release.
   // Format: aera-mobile@<version>+<build> or just the commit SHA. Set in CI/CD pipeline.
   static const String appRelease = String.fromEnvironment(
-    'APP_RELEASE',
-    defaultValue: '',
+    'SENTRY_RELEASE',
+    defaultValue: 'aera@1.0.0',
   );
 
   // Fraction of requests traced for performance data (0 to 1). Errors are always
-  // captured regardless of this value. Keep this low on free plans.
-  static const double tracesSampleRate = 0.1;
+  // captured regardless of this value. Set from environment for production control.
+  static const double tracesSampleRate = double.fromEnvironment(
+    'SENTRY_TRACES_SAMPLE_RATE',
+    defaultValue: 1.0,
+  );
 
   static bool get isSentryEnabled => sentryDsn.isNotEmpty;
 
