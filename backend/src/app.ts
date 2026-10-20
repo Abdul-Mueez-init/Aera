@@ -110,11 +110,6 @@ export function buildApp() {
   app.get("/api/v1/health", healthResponse);
   app.get("/api/v1/readiness", readinessResponse);
 
-  // Test endpoint for Sentry error reporting
-  app.get("/api/v1/debug-sentry", () => {
-    throw new Error("Test Sentry error - verify error reporting");
-  });
-
   app.use("/api/v1/auth", authRouter);
   app.use("/api/v1/companies", companyRouter);
   app.use("/api/v1/customers", customerRouter);
