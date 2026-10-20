@@ -254,9 +254,12 @@ flutter run --dart-define=ENVIRONMENT=staging --dart-define=API_BASE_URL=https:/
 cd backend
 pnpm install
 pnpm prisma:generate
-pnpm prisma migrate deploy
-pnpm start
+pnpm start   # runs `prisma migrate deploy` before starting the server
 ```
+
+> `pnpm start` applies any pending Prisma migrations before booting. Do not start
+> the server with `tsx` directly (e.g. from a process manager) or new migrations
+> will be skipped and queries against new columns will fail.
 
 ### Flutter, run on a USB-connected phone
 ```powershell
