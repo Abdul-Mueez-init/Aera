@@ -63,3 +63,14 @@ app.*.map.json
 android/key.properties
 *.jks
 *.keystore
+
+# Local environment files (real keys/DSNs stay on the developer machine)
+/.env
+/.env.*
+!/.env.example
+
+# Windows: stray file created when a shell redirects output to "nul"
+/nul
+
+# Local patch files
+/*.patch
