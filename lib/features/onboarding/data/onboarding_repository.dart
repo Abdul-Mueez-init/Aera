@@ -63,6 +63,8 @@ class ServiceZone {
   final double latitude;
   final double longitude;
 
+  bool get isCustom => placeId.startsWith('custom:');
+
   factory ServiceZone.fromJson(Map<String, dynamic> json) => ServiceZone(
     id: json['id'] as String?,
     placeId: (json['providerPlaceId'] ?? json['placeId']) as String,
@@ -252,6 +254,7 @@ class OnboardingRepository {
     required double longitude,
     required int radiusKm,
     required Iterable<ServiceZone> zones,
+    Iterable<String> customZoneNames = const [],
   }) async {
     final response = await _client.patch(
       '/api/v1/companies/current/onboarding/service-area',
@@ -260,6 +263,7 @@ class OnboardingRepository {
         'longitude': longitude,
         'radiusKm': radiusKm,
         'zonePlaceIds': zones.map((zone) => zone.placeId).toList(),
+        'customZones': customZoneNames.toList(),
       },
     );
     return OnboardingProfile.fromJson(response as Map<String, dynamic>);

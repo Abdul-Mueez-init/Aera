@@ -177,44 +177,44 @@ class _BusinessBasicsScreenState extends ConsumerState<BusinessBasicsScreen> {
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
                   vertical: 12,
-                    ),
-              children: [
+                ),
+                children: [
                   _stepHeader(),
-            const SizedBox(height: 20),
-            Text(
-              'Set up your HVAC business',
-              style: AeraTypography.display.copyWith(fontSize: 26),
-            ),
-            const SizedBox(height: 4),
-            Text(
+                  const SizedBox(height: 20),
+                  Text(
+                    'Set up your HVAC business',
+                    style: AeraTypography.display.copyWith(fontSize: 26),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
                     'These saved details appear on estimates, invoices, and dispatches.',
                     style: AeraTypography.bodySm.copyWith(
                       color: AeraColors.inkSoft,
                     ),
-            ),
-            const SizedBox(height: 20),
-            AeraCard(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                          'Company logo (optional)',
-                    style: AeraTypography.label.copyWith(
-                      color: AeraColors.inkSoft,
-                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Container(
+                  const SizedBox(height: 20),
+                  AeraCard(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Company logo (optional)',
+                          style: AeraTypography.label.copyWith(
+                            color: AeraColors.inkSoft,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AeraColors.canvas,
-                      borderRadius: AeraRadii.borderMd,
-                      border: Border.all(color: AeraColors.line),
-                    ),
-                    child: Row(
-                      children: [
+                          decoration: BoxDecoration(
+                            color: AeraColors.canvas,
+                            borderRadius: AeraRadii.borderMd,
+                            border: Border.all(color: AeraColors.line),
+                          ),
+                          child: Row(
+                            children: [
                               if (_logoUrl == null)
                                 const Icon(
                                   Icons.image_outlined,
@@ -226,28 +226,28 @@ class _BusinessBasicsScreenState extends ConsumerState<BusinessBasicsScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                   child: Image.network(
                                     _logoUrl!,
-                          width: 48,
-                          height: 48,
+                                    width: 48,
+                                    height: 48,
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, _, _) => const Icon(
                                       Icons.image_outlined,
                                       color: AeraColors.outline,
                                       size: 42,
-                          ),
-                        ),
                                     ),
+                                  ),
+                                ),
                               const SizedBox(width: 10),
                               Expanded(
-                                    child: Text(
+                                child: Text(
                                   _uploadingLogo
                                       ? 'Uploading and verifying…'
                                       : 'JPEG, PNG, or WebP • maximum 5 MB',
                                   style: AeraTypography.bodySm.copyWith(
                                     color: AeraColors.inkSoft,
+                                  ),
+                                ),
                               ),
-                          ),
-                        ),
-                        IconButton(
+                              IconButton(
                                 tooltip: 'Upload company logo',
                                 onPressed: _uploadingLogo ? null : _uploadLogo,
                                 icon: _uploadingLogo
@@ -262,52 +262,52 @@ class _BusinessBasicsScreenState extends ConsumerState<BusinessBasicsScreen> {
                                         Icons.upload_outlined,
                                         color: AeraColors.accent,
                                       ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
+                        const SizedBox(height: 18),
                         _field(
                           'Registered Business Name *',
                           'e.g. Acme Heating & Air',
                           _nameController,
                           Icons.domain,
-                  ),
-                  const SizedBox(height: 16),
+                        ),
+                        const SizedBox(height: 16),
                         _field(
                           'Primary Phone (Dispatch Line) *',
                           'Your dispatch phone number',
                           _phoneController,
                           Icons.phone_outlined,
-                    keyboardType: TextInputType.phone,
-                  ),
-                  const SizedBox(height: 16),
+                          keyboardType: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 16),
                         _field(
                           'Tax ID / Business License (optional)',
                           'Tax registration number',
                           _taxIdController,
                           Icons.verified_outlined,
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    'Operating Currency',
-                    style: AeraTypography.label.copyWith(
-                      color: AeraColors.inkSoft,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          'Operating Currency',
+                          style: AeraTypography.label.copyWith(
+                            color: AeraColors.inkSoft,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
-                    children: [
+                          children: [
                             _currencyChip('USD', 'USD'),
                             _currencyChip('EUR', 'EUR'),
                             _currencyChip('PKR', 'PKR'),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-            ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     Text(
@@ -317,8 +317,8 @@ class _BusinessBasicsScreenState extends ConsumerState<BusinessBasicsScreen> {
                       ),
                     ),
                   ],
-            const SizedBox(height: 24),
-            AeraButton(
+                  const SizedBox(height: 24),
+                  AeraButton(
                     text: _saving ? 'Saving…' : 'Save & Continue to Territory',
                     icon: const Icon(
                       Icons.arrow_forward,
@@ -346,10 +346,10 @@ class _BusinessBasicsScreenState extends ConsumerState<BusinessBasicsScreen> {
                         onPressed: _load,
                         child: const Text('Retry loading company details'),
                       ),
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
+                    ),
+                  const SizedBox(height: 20),
+                ],
+              ),
       ),
     );
   }
@@ -368,7 +368,7 @@ class _BusinessBasicsScreenState extends ConsumerState<BusinessBasicsScreen> {
       const Spacer(),
       Text('1 of 4', style: AeraTypography.label.copyWith(fontSize: 11)),
     ],
-    );
+  );
 
   Widget _field(
     String label,
@@ -385,8 +385,8 @@ class _BusinessBasicsScreenState extends ConsumerState<BusinessBasicsScreen> {
       hintText: hint,
       prefixIcon: Icon(icon, size: 20),
       border: const OutlineInputBorder(),
-      ),
-    );
+    ),
+  );
 
   Widget _currencyChip(String label, String value) => ChoiceChip(
     label: Text(label),

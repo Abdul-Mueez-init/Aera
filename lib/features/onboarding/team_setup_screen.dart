@@ -167,155 +167,155 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
               ),
             ..._members.map(
               (member) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: AeraCard(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: member.isInvited
-                                      ? AeraColors.successSoft
-                                      : AeraColors.surfaceContainerHigh,
-                                  child: Text(
-                                    member.initials,
-                                    style: AeraTypography.h3.copyWith(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: member.isInvited
-                                          ? AeraColors.success
-                                          : AeraColors.primary,
-                                    ),
+                padding: const EdgeInsets.only(bottom: 12),
+                child: AeraCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: member.isInvited
+                                    ? AeraColors.successSoft
+                                    : AeraColors.surfaceContainerHigh,
+                                child: Text(
+                                  member.initials,
+                                  style: AeraTypography.h3.copyWith(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: member.isInvited
+                                        ? AeraColors.success
+                                        : AeraColors.primary,
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      member.name,
-                                      style: AeraTypography.h3.copyWith(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                              ),
+                              const SizedBox(width: 12),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    member.name,
+                                    style: AeraTypography.h3.copyWith(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
                                     ),
-                                    Text(
-                                      member.contact,
+                                  ),
+                                  Text(
+                                    member.contact,
                                     style: AeraTypography.bodySm.copyWith(
                                       fontSize: 12,
                                     ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            if (!member.isInvited)
-                              IconButton(
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          if (!member.isInvited)
+                            IconButton(
                               icon: const Icon(
                                 Icons.close,
                                 size: 18,
                                 color: AeraColors.outline,
                               ),
-                                onPressed: () {
-                                  setState(() => _members.remove(member));
-                                },
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        const Divider(color: AeraColors.line),
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Container(
+                              onPressed: () {
+                                setState(() => _members.remove(member));
+                              },
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Divider(color: AeraColors.line),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 10,
                               vertical: 4,
                             ),
-                              decoration: BoxDecoration(
-                                color: AeraColors.accentSoft,
-                                borderRadius: AeraRadii.borderFull,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    member.role.contains('Technician')
-                                        ? Icons.build
-                                        : Icons.headset_mic,
-                                    size: 13,
-                                    color: AeraColors.accent,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    member.role,
-                                    style: AeraTypography.label.copyWith(
-                                      color: AeraColors.accent,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            decoration: BoxDecoration(
+                              color: AeraColors.accentSoft,
+                              borderRadius: AeraRadii.borderFull,
                             ),
-                            Container(
+                            child: Row(
+                              children: [
+                                Icon(
+                                  member.role.contains('Technician')
+                                      ? Icons.build
+                                      : Icons.headset_mic,
+                                  size: 13,
+                                  color: AeraColors.accent,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  member.role,
+                                  style: AeraTypography.label.copyWith(
+                                    color: AeraColors.accent,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
                               vertical: 3,
                             ),
-                              decoration: BoxDecoration(
-                                color: member.isInvited
-                                    ? AeraColors.successSoft
-                                    : AeraColors.surfaceSubtle,
-                                borderRadius: AeraRadii.borderFull,
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 5,
-                                    height: 5,
-                                    decoration: BoxDecoration(
-                                      color: member.isInvited
-                                          ? AeraColors.success
-                                          : AeraColors.outline,
-                                      shape: BoxShape.circle,
-                                    ),
+                            decoration: BoxDecoration(
+                              color: member.isInvited
+                                  ? AeraColors.successSoft
+                                  : AeraColors.surfaceSubtle,
+                              borderRadius: AeraRadii.borderFull,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 5,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    color: member.isInvited
+                                        ? AeraColors.success
+                                        : AeraColors.outline,
+                                    shape: BoxShape.circle,
                                   ),
-                                  const SizedBox(width: 6),
-                                  Text(
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
                                   member.isInvited
                                       ? 'Invited'
                                       : 'Ready to invite',
-                                    style: AeraTypography.label.copyWith(
-                                      color: member.isInvited
-                                          ? AeraColors.success
-                                          : AeraColors.inkSoft,
-                                      fontSize: 10,
-                                    ),
+                                  style: AeraTypography.label.copyWith(
+                                    color: member.isInvited
+                                        ? AeraColors.success
+                                        : AeraColors.inkSoft,
+                                    fontSize: 10,
                                   ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (member.invitationError != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              member.invitationError!,
-                              style: AeraTypography.bodySm.copyWith(
-                                color: AeraColors.danger,
-                                fontSize: 11,
-                              ),
+                                ),
+                              ],
                             ),
                           ),
-                      ],
-                    ),
+                        ],
+                      ),
+                      if (member.invitationError != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            member.invitationError!,
+                            style: AeraTypography.bodySm.copyWith(
+                              color: AeraColors.danger,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
+                ),
               ),
             ),
 
@@ -432,23 +432,23 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                   }
                 },
                 child: Row(
-                children: [
-                  Expanded(
-                    child: RadioListTile<String>(
-                      title: const Text('Technician'),
-                      value: 'TECHNICIAN',
-                      contentPadding: EdgeInsets.zero,
+                  children: [
+                    Expanded(
+                      child: RadioListTile<String>(
+                        title: const Text('Technician'),
+                        value: 'TECHNICIAN',
+                        contentPadding: EdgeInsets.zero,
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: RadioListTile<String>(
-                      title: const Text('Dispatcher'),
-                      value: 'DISPATCHER',
-                      contentPadding: EdgeInsets.zero,
+                    Expanded(
+                      child: RadioListTile<String>(
+                        title: const Text('Dispatcher'),
+                        value: 'DISPATCHER',
+                        contentPadding: EdgeInsets.zero,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -469,9 +469,9 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                   setState(() {
                     _members.add(
                       _TeamMember(
-                      name: name,
-                      contact: email,
-                      initials: initials.toUpperCase(),
+                        name: name,
+                        contact: email,
+                        initials: initials.toUpperCase(),
                         role: selectedRole == 'TECHNICIAN'
                             ? 'Field Technician'
                             : 'Dispatcher',
@@ -582,8 +582,8 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
-      }
     }
+  }
 
   Future<void> _completeWorkspace() async {
     await ref.read(onboardingRepositoryProvider).complete();

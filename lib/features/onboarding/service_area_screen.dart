@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -23,37 +25,51 @@ class ServiceAreaScreen extends ConsumerStatefulWidget {
 }
 
 class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
+  static const _googleMapsApiKey = String.fromEnvironment(
+    'GOOGLE_MAPS_API_KEY',
+  );
+  static const _maxCustomZones = 10;
+
   final _addressController = TextEditingController();
+  final _customZoneController = TextEditingController();
   GoogleMapController? _mapController;
+  Timer? _addressDebounce;
+
   double? _latitude;
   double? _longitude;
   String? _resolvedAddress;
   int _radiusKm = 30;
   List<ServiceZone> _zones = [];
   final Set<String> _selectedZoneIds = {};
+  final List<String> _customZones = [];
+
   bool _loading = true;
   bool _searching = false;
+  bool _resolvingAddress = false;
   bool _loadingZones = false;
   bool _saving = false;
   bool _zonesLoaded = false;
   bool _zonesStale = false;
   int _zoneSearchGeneration = 0;
   String? _error;
+  String? _zoneNotice;
+
+  bool get _addressMatches =>
+      _resolvedAddress != null &&
+      _addressController.text.trim() == _resolvedAddress;
+
+  bool get _hasVerifiedZones =>
+      _zonesLoaded && !_zonesStale && _selectedZoneIds.isNotEmpty;
 
   bool get _serviceAreaValid =>
       _latitude != null &&
       _longitude != null &&
-      _resolvedAddress != null &&
-      _addressController.text.trim() == _resolvedAddress &&
+      _addressMatches &&
       _radiusKm >= 10 &&
       _radiusKm <= 50 &&
-      _zonesLoaded &&
-      !_zonesStale &&
-      _selectedZoneIds.isNotEmpty;
-
-  static const _googleMapsApiKey = String.fromEnvironment(
-    'GOOGLE_MAPS_API_KEY',
-  );
+      !_searching &&
+      !_resolvingAddress &&
+      (_hasVerifiedZones || _customZones.isNotEmpty);
 
   @override
   void initState() {
@@ -63,7 +79,9 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
 
   @override
   void dispose() {
+    _addressDebounce?.cancel();
     _addressController.dispose();
+    _customZoneController.dispose();
     _mapController?.dispose();
     super.dispose();
   }
@@ -72,17 +90,23 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
     try {
       final profile = await ref.read(onboardingRepositoryProvider).getProfile();
       if (!mounted) return;
+      final discovered = profile.serviceZones
+          .where((zone) => !zone.isCustom)
+          .toList();
       setState(() {
         _latitude = profile.headquartersLatitude;
         _longitude = profile.headquartersLongitude;
         _radiusKm = (profile.serviceRadiusKm ?? 30).clamp(10, 50);
         _addressController.text = profile.headquartersAddress ?? '';
         _resolvedAddress = profile.headquartersAddress;
-        _zones = profile.serviceZones;
-        _selectedZoneIds.addAll(
-          profile.serviceZones.map((zone) => zone.placeId),
+        _zones = discovered;
+        _selectedZoneIds.addAll(discovered.map((zone) => zone.placeId));
+        _customZones.addAll(
+          profile.serviceZones
+              .where((zone) => zone.isCustom)
+              .map((zone) => zone.name),
         );
-        _zonesLoaded = profile.serviceZones.isNotEmpty;
+        _zonesLoaded = discovered.isNotEmpty;
         _loading = false;
       });
     } catch (error) {
@@ -106,7 +130,12 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
     return 'Could not complete this request. Check your connection and retry.';
   }
 
+  // ---------------------------------------------------------------------------
+  // Location: device GPS, typed address, map tap, marker drag
+  // ---------------------------------------------------------------------------
+
   Future<void> _useCurrentLocation() async {
+    FocusScope.of(context).unfocus();
     setState(() {
       _searching = true;
       _error = null;
@@ -114,7 +143,7 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
         throw Exception(
-          'Turn on location services, or search for your dispatch address.',
+          'Turn on location services, or type your dispatch address.',
         );
       }
       var permission = await Geolocator.checkPermission();
@@ -124,7 +153,7 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         throw Exception(
-          'Location permission is unavailable. Search for an address instead, or enable location permission in device settings.',
+          'Location permission is unavailable. Type an address instead, or enable location permission in device settings.',
         );
       }
       final position = await Geolocator.getCurrentPosition(
@@ -134,9 +163,7 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
         ),
       );
       if (!mounted) return;
-      _setLocation(position.latitude, position.longitude);
-      await _moveCamera();
-      await _resolvePinAndSearch(position.latitude, position.longitude);
+      await _placePin(position.latitude, position.longitude);
     } catch (error) {
       if (mounted) setState(() => _error = _friendly(error));
     } finally {
@@ -144,49 +171,25 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
     }
   }
 
-  Future<void> _searchAddress() async {
-    final query = _addressController.text.trim();
-    if (query.length < 4) {
-      setState(() => _error = 'Enter a complete address or place name.');
-      return;
-    }
-    setState(() {
-      _searching = true;
-      _error = null;
-    });
-    try {
-      final location = await ref
-          .read(onboardingRepositoryProvider)
-          .searchAddress(query);
-      if (!mounted) return;
-      _setLocation(location.latitude, location.longitude);
-      _resolvedAddress = location.address;
-      _addressController.text = location.address;
-      await _moveCamera();
-      await _findZones();
-    } catch (error) {
-      if (mounted) setState(() => _error = _friendly(error));
-    } finally {
-      if (mounted) setState(() => _searching = false);
-    }
-  }
-
-  void _setLocation(double latitude, double longitude) {
-    _zoneSearchGeneration++;
+  /// Pin placed by GPS, map tap or marker drag: move the camera, reverse-geocode
+  /// the pin into the address field, then load neighborhoods automatically.
+  Future<void> _placePin(double latitude, double longitude) async {
+    _addressDebounce?.cancel();
+    final generation = ++_zoneSearchGeneration;
     setState(() {
       _latitude = latitude;
       _longitude = longitude;
       _resolvedAddress = null;
+      _addressController.text = '';
+      _resolvingAddress = true;
       _zonesStale = true;
       _zonesLoaded = false;
       _zones = [];
       _selectedZoneIds.clear();
+      _zoneNotice = null;
+      _error = null;
     });
-  }
-
-  Future<void> _resolvePinAndSearch(double latitude, double longitude) async {
-    final generation = _zoneSearchGeneration;
-    _addressController.text = 'Resolving address…';
+    unawaited(_moveCamera());
     try {
       final result = await ref
           .read(onboardingRepositoryProvider)
@@ -195,15 +198,73 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
       setState(() {
         _resolvedAddress = result.address;
         _addressController.text = result.address;
+        _resolvingAddress = false;
       });
-      await _findZones();
     } catch (error) {
       if (mounted && generation == _zoneSearchGeneration) {
         setState(() {
-          _addressController.text = '';
-          _error = _friendly(error);
+          _resolvingAddress = false;
+          _error =
+              '${_friendly(error)} The pin is placed; type the address and press search to continue.';
         });
       }
+      return;
+    }
+    await _findZones();
+  }
+
+  void _onAddressChanged(String value) {
+    _addressDebounce?.cancel();
+    final text = value.trim();
+    if (text.length < 6 || text == _resolvedAddress) {
+      setState(() {});
+      return;
+    }
+    setState(() {});
+    _addressDebounce = Timer(const Duration(milliseconds: 1200), () {
+      if (!mounted || _searching) return;
+      if (_addressController.text.trim() != text) return;
+      unawaited(_searchAddress());
+    });
+  }
+
+  Future<void> _searchAddress() async {
+    _addressDebounce?.cancel();
+    final query = _addressController.text.trim();
+    if (query.length < 4) {
+      setState(() => _error = 'Enter a complete address or place name.');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    final generation = ++_zoneSearchGeneration;
+    setState(() {
+      _searching = true;
+      _error = null;
+      _zoneNotice = null;
+    });
+    try {
+      final location = await ref
+          .read(onboardingRepositoryProvider)
+          .searchAddress(query);
+      if (!mounted || generation != _zoneSearchGeneration) return;
+      setState(() {
+        _latitude = location.latitude;
+        _longitude = location.longitude;
+        _resolvedAddress = location.address;
+        _addressController.text = location.address;
+        _zonesStale = true;
+        _zonesLoaded = false;
+        _zones = [];
+        _selectedZoneIds.clear();
+      });
+      await _moveCamera();
+      await _findZones();
+    } catch (error) {
+      if (mounted && generation == _zoneSearchGeneration) {
+        setState(() => _error = _friendly(error));
+      }
+    } finally {
+      if (mounted) setState(() => _searching = false);
     }
   }
 
@@ -212,16 +273,19 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
     final lng = _longitude;
     if (lat != null && lng != null) {
       await _mapController?.animateCamera(
-        CameraUpdate.newLatLngZoom(LatLng(lat, lng), 11),
+        CameraUpdate.newLatLngZoom(LatLng(lat, lng), 12),
       );
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Neighborhoods: automatic discovery + custom areas
+  // ---------------------------------------------------------------------------
+
   Future<void> _findZones() async {
     if (_latitude == null || _longitude == null) {
       setState(
-        () => _error =
-            'Choose a dispatch headquarters before searching for neighborhoods.',
+        () => _error = 'Choose a dispatch headquarters before finding areas.',
       );
       return;
     }
@@ -229,6 +293,7 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
     setState(() {
       _loadingZones = true;
       _error = null;
+      _zoneNotice = null;
     });
     try {
       final zones = await ref
@@ -244,16 +309,17 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
         _selectedZoneIds.clear();
         _zonesLoaded = true;
         _zonesStale = false;
+        if (zones.isEmpty) {
+          _zoneNotice =
+              'No neighborhoods were found automatically within this radius. Add your areas manually below, or increase the radius.';
+        }
       });
-      if (zones.isEmpty) {
-        setState(
-          () => _error =
-              'Google Places found no neighborhood areas within this radius. Increase the radius or move the map pin and search again.',
-        );
-      }
     } catch (error) {
       if (mounted && generation == _zoneSearchGeneration) {
-        setState(() => _error = _friendly(error));
+        setState(() {
+          _error =
+              '${_friendly(error)} You can still add your areas manually below.';
+        });
       }
     } finally {
       if (mounted && generation == _zoneSearchGeneration) {
@@ -262,12 +328,49 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
     }
   }
 
+  void _addCustomZone() {
+    final name = _customZoneController.text
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (name.length < 2) {
+      setState(() => _error = 'Enter an area name of at least 2 characters.');
+      return;
+    }
+    if (name.length > 80) {
+      setState(() => _error = 'Area names can be at most 80 characters.');
+      return;
+    }
+    final lower = name.toLowerCase();
+    var exists = false;
+    for (final item in _customZones) {
+      if (item.toLowerCase() == lower) exists = true;
+    }
+    if (exists) {
+      setState(() => _error = '"$name" is already in your list.');
+      return;
+    }
+    if (_customZones.length >= _maxCustomZones) {
+      setState(
+        () => _error = 'You can add up to $_maxCustomZones custom areas.',
+      );
+      return;
+    }
+    setState(() {
+      _customZones.add(name);
+      _customZoneController.clear();
+      _error = null;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Save
+  // ---------------------------------------------------------------------------
+
   Future<void> _saveAndContinue() async {
-    if (_resolvedAddress == null ||
-        _addressController.text.trim() != _resolvedAddress) {
+    if (!_addressMatches) {
       setState(
         () => _error =
-            'Resolve the edited headquarters address with Search before saving.',
+            'Search the edited headquarters address before saving so the map pin matches it.',
       );
       return;
     }
@@ -275,18 +378,17 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
       setState(() => _error = 'Choose your dispatch headquarters on the map.');
       return;
     }
-    if (!_zonesLoaded || _zonesStale) {
+    final useDiscovered = _zonesLoaded && !_zonesStale;
+    final selected = useDiscovered
+        ? _zones
+              .where((zone) => _selectedZoneIds.contains(zone.placeId))
+              .toList()
+        : <ServiceZone>[];
+    if (selected.isEmpty && _customZones.isEmpty) {
       setState(
         () => _error =
-            'Search nearby neighborhoods again to verify them for this location and radius.',
+            'Select at least one neighborhood or add a custom area to continue.',
       );
-      return;
-    }
-    final selected = _zones
-        .where((zone) => _selectedZoneIds.contains(zone.placeId))
-        .toList();
-    if (selected.isEmpty) {
-      setState(() => _error = 'Select at least one verified service zone.');
       return;
     }
     setState(() {
@@ -301,6 +403,7 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
             longitude: _longitude!,
             radiusKm: _radiusKm,
             zones: selected,
+            customZoneNames: _customZones,
           );
       ref.invalidate(onboardingProfileProvider);
       await ref.read(authNotifierProvider.notifier).refreshServerIdentity();
@@ -312,11 +415,89 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------------
+
+  Widget _spinner() => const SizedBox(
+    width: 16,
+    height: 16,
+    child: CircularProgressIndicator(strokeWidth: 2),
+  );
+
+  Widget _buildMap(LatLng point) {
+    return SizedBox(
+      height: 260,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: GoogleMap(
+          initialCameraPosition: CameraPosition(target: point, zoom: 12),
+          onMapCreated: (controller) => _mapController = controller,
+          gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+            Factory<OneSequenceGestureRecognizer>(
+              () => EagerGestureRecognizer(),
+            ),
+          },
+          onTap: (position) =>
+              unawaited(_placePin(position.latitude, position.longitude)),
+          markers: {
+            Marker(
+              markerId: const MarkerId('dispatch-hq'),
+              position: point,
+              draggable: true,
+              onDragEnd: (position) =>
+                  unawaited(_placePin(position.latitude, position.longitude)),
+              infoWindow: const InfoWindow(title: 'Dispatch headquarters'),
+            ),
+            ..._zones.map(
+              (zone) => Marker(
+                markerId: MarkerId('zone-${zone.placeId}'),
+                position: LatLng(zone.latitude, zone.longitude),
+                icon: BitmapDescriptor.defaultMarkerWithHue(
+                  _selectedZoneIds.contains(zone.placeId)
+                      ? BitmapDescriptor.hueAzure
+                      : BitmapDescriptor.hueOrange,
+                ),
+                infoWindow: InfoWindow(
+                  title: zone.name,
+                  snippet: 'Tap to toggle dispatch coverage',
+                ),
+                onTap: () => setState(() {
+                  if (_selectedZoneIds.contains(zone.placeId)) {
+                    _selectedZoneIds.remove(zone.placeId);
+                  } else {
+                    _selectedZoneIds.add(zone.placeId);
+                  }
+                }),
+              ),
+            ),
+          },
+          circles: {
+            Circle(
+              circleId: const CircleId('dispatch-radius'),
+              center: point,
+              radius: _radiusKm * 1000.0,
+              fillColor: AeraColors.accent.withValues(alpha: 0.12),
+              strokeColor: AeraColors.accent,
+              strokeWidth: 2,
+            ),
+          },
+          myLocationButtonEnabled: false,
+          mapToolbarEnabled: false,
+          zoomControlsEnabled: true,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasLocation = _latitude != null && _longitude != null;
     final mapsKeyConfigured = _googleMapsApiKey.isNotEmpty;
     final point = hasLocation ? LatLng(_latitude!, _longitude!) : null;
+    final addressNeedsSearch =
+        _addressController.text.trim().length >= 4 && !_addressMatches;
+
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       appBar: const AeraAppBar(
@@ -332,166 +513,94 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
                   horizontal: 20,
                   vertical: 12,
                 ),
-              children: [
-                Row(
-                  children: [
+                children: [
+                  Row(
+                    children: [
                       const Icon(
                         Icons.circle,
                         size: 8,
                         color: AeraColors.accent,
-                    ),
-                      const SizedBox(width: 8),
-                    Text(
-                      'STEP 02 / 04 • SERVICE TERRITORY',
-                      style: AeraTypography.labelUpper.copyWith(
-                        color: AeraColors.accent,
-                        fontSize: 10,
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'STEP 02 / 04 • SERVICE TERRITORY',
+                        style: AeraTypography.labelUpper.copyWith(
+                          color: AeraColors.accent,
+                          fontSize: 10,
+                        ),
+                      ),
                       const Spacer(),
                       const Text('2 of 4'),
-                  ],
-                ),
+                    ],
+                  ),
                   const SizedBox(height: 14),
-            Text(
-              'Define your service territory',
-              style: AeraTypography.display.copyWith(fontSize: 26),
-            ),
-            const SizedBox(height: 4),
-            Text(
-                    'Choose a real dispatch location and verified Google neighborhood areas. No sample zones are preselected.',
+                  Text(
+                    'Define your service territory',
+                    style: AeraTypography.display.copyWith(fontSize: 26),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Use your device location or type an address. The map pin and address stay in sync, then pick nearby neighborhoods or add your own areas.',
                     style: AeraTypography.bodySm.copyWith(
                       color: AeraColors.inkSoft,
+                    ),
                   ),
-              ),
                   const SizedBox(height: 16),
                   AeraCard(
                     padding: const EdgeInsets.all(14),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                      children: [
                         Text(
                           'Dispatch headquarters',
                           style: AeraTypography.label.copyWith(
                             fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         TextField(
                           controller: _addressController,
                           textInputAction: TextInputAction.search,
+                          onChanged: _onAddressChanged,
                           onSubmitted: (_) => _searchAddress(),
                           decoration: InputDecoration(
-                            hintText: 'Search an address, city, or place',
+                            hintText: _resolvingAddress
+                                ? 'Resolving address…'
+                                : 'Type an address, city, or place',
                             border: const OutlineInputBorder(),
                             suffixIcon: IconButton(
-                              onPressed: _searching ? null : _searchAddress,
-                              icon: const Icon(Icons.search),
-                    ),
-                  ),
+                              onPressed: _searching || _resolvingAddress
+                                  ? null
+                                  : _searchAddress,
+                              icon: _searching || _resolvingAddress
+                                  ? _spinner()
+                                  : const Icon(Icons.search),
+                            ),
+                          ),
                         ),
+                        if (addressNeedsSearch && !_searching)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              'Finding this address on the map…',
+                              style: AeraTypography.label.copyWith(
+                                color: AeraColors.inkSoft,
+                              ),
+                            ),
+                          ),
                         const SizedBox(height: 8),
                         OutlinedButton.icon(
-                          onPressed: _searching ? null : _useCurrentLocation,
+                          onPressed: _searching || _resolvingAddress
+                              ? null
+                              : _useCurrentLocation,
                           icon: _searching
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
+                              ? _spinner()
                               : const Icon(Icons.my_location),
                           label: const Text('Use this device location'),
-                    ),
+                        ),
                         const SizedBox(height: 8),
                         if (hasLocation && mapsKeyConfigured)
-                          SizedBox(
-                            height: 240,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: GoogleMap(
-                                initialCameraPosition: CameraPosition(
-                                  target: point!,
-                                  zoom: 11,
-                                ),
-                                onMapCreated: (controller) {
-                                  _mapController = controller;
-                                },
-                                onTap: (position) {
-                                  _setLocation(
-                                    position.latitude,
-                                    position.longitude,
-                                  );
-                                  _addressController.text =
-                                      'Resolving address…';
-                                  unawaited(
-                                    _resolvePinAndSearch(
-                                      position.latitude,
-                                      position.longitude,
-                  ),
-                                  );
-                                },
-                                markers: {
-                                  Marker(
-                                    markerId: const MarkerId('dispatch-hq'),
-                                    position: point,
-                                    infoWindow: const InfoWindow(
-                                      title: 'Dispatch headquarters',
-                                    ),
-                                  ),
-                                  ..._zones.map(
-                                    (zone) => Marker(
-                                      markerId: MarkerId(
-                                        'zone-${zone.placeId}',
-                                      ),
-                                      position: LatLng(
-                                        zone.latitude,
-                                        zone.longitude,
-                                      ),
-                                      icon:
-                                          BitmapDescriptor.defaultMarkerWithHue(
-                                            _selectedZoneIds.contains(
-                                                  zone.placeId,
-                                                )
-                                                ? BitmapDescriptor.hueAzure
-                                                : BitmapDescriptor.hueOrange,
-                                          ),
-                                      infoWindow: InfoWindow(
-                                        title: zone.name,
-                                        snippet:
-                                            'Tap to toggle dispatch coverage',
-                                      ),
-                                      onTap: () => setState(() {
-                                        if (_selectedZoneIds.contains(
-                                          zone.placeId,
-                                        )) {
-                                          _selectedZoneIds.remove(zone.placeId);
-                                        } else {
-                                          _selectedZoneIds.add(zone.placeId);
-                                        }
-                                      }),
-                          ),
-                                ),
-                                },
-                                circles: {
-                                  Circle(
-                                    circleId: const CircleId('dispatch-radius'),
-                                    center: point,
-                                    radius: _radiusKm * 1000.0,
-                                    fillColor: AeraColors.accent.withValues(
-                                      alpha: 0.12,
-                              ),
-                                    strokeColor: AeraColors.accent,
-                                    strokeWidth: 2,
-                              ),
-                                },
-                                myLocationButtonEnabled: false,
-                                mapToolbarEnabled: false,
-                                zoomControlsEnabled: true,
-                          ),
-                        ),
-                          )
+                          _buildMap(point!)
                         else if (!mapsKeyConfigured)
                           Text(
                             'Interactive map is not configured for this build. Configure the restricted GOOGLE_MAPS_API_KEY SDK key; address search still uses the API provider.',
@@ -500,63 +609,66 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
                             ),
                           )
                         else
-                        Container(
+                          Container(
                             height: 120,
                             alignment: Alignment.center,
-                          decoration: BoxDecoration(
+                            decoration: BoxDecoration(
                               color: AeraColors.surfaceSubtle,
                               borderRadius: AeraRadii.borderMd,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                'Type an address or use device location to place the headquarters pin.',
+                                style: AeraTypography.bodySm.copyWith(
+                                  color: AeraColors.inkSoft,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
                           ),
-                          child: Text(
-                              'Search an address or use device location to place the headquarters pin.',
-                              style: AeraTypography.bodySm.copyWith(
-                                color: AeraColors.inkSoft,
-                    ),
-                              textAlign: TextAlign.center,
-                  ),
-                      ),
                         if (hasLocation) ...[
                           const SizedBox(height: 8),
                           Text(
-                            'Pin: ${_latitude!.toStringAsFixed(5)}, ${_longitude!.toStringAsFixed(5)} — tap the map to adjust.',
+                            'Pin: ${_latitude!.toStringAsFixed(5)}, ${_longitude!.toStringAsFixed(5)} — tap the map or drag the pin to adjust.',
                             style: AeraTypography.label.copyWith(
                               color: AeraColors.inkSoft,
                             ),
                           ),
                         ],
-                ],
-              ),
-            ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 14),
-            AeraCard(
+                  AeraCard(
                     padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
                               child: Text(
                                 'Maximum response radius',
                                 style: AeraTypography.label.copyWith(
-                                fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                      ),
-                      Text(
+                            Text(
                               '$_radiusKm km',
                               style: AeraTypography.h3.copyWith(
-                          color: AeraColors.accent,
+                                color: AeraColors.accent,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                  Slider(
+                        Slider(
                           value: _radiusKm.toDouble(),
-                    min: 10,
+                          min: 10,
                           max: 50,
-                    divisions: 14,
-                    activeColor: AeraColors.accent,
+                          divisions: 40,
+                          activeColor: AeraColors.accent,
                           onChanged: (value) => setState(() {
                             _zoneSearchGeneration++;
                             _radiusKm = value.round();
@@ -565,38 +677,39 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
                             _zones = [];
                             _selectedZoneIds.clear();
                           }),
-                          onChangeEnd: (_) => unawaited(_findZones()),
-                  ),
-                  Text(
-                          'Google Places search results are real place records; your selection is saved as active dispatch coverage.',
-                          style: AeraTypography.bodySm.copyWith(
-                            color: AeraColors.inkSoft,
-                          ),
+                          onChangeEnd: (_) {
+                            if (_latitude != null && _longitude != null) {
+                              unawaited(_findZones());
+                            }
+                          },
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 4),
                         OutlinedButton.icon(
                           onPressed: _loadingZones || !hasLocation
                               ? null
                               : _findZones,
                           icon: _loadingZones
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
+                              ? _spinner()
                               : const Icon(Icons.travel_explore),
                           label: Text(
                             _loadingZones
-                                ? 'Searching Google Places…'
+                                ? 'Finding neighborhoods…'
                                 : 'Find neighborhoods',
-                  ),
+                          ),
                         ),
-                        if (_zones.isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                        if (_zoneNotice != null) ...[
+                          const SizedBox(height: 8),
                           Text(
-                            'Select service zones',
+                            _zoneNotice!,
+                            style: AeraTypography.bodySm.copyWith(
+                              color: AeraColors.inkSoft,
+                            ),
+                          ),
+                        ],
+                        if (_zones.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Select nearby neighborhoods',
                             style: AeraTypography.label.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
@@ -606,10 +719,8 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
                             (zone) => CheckboxListTile(
                               value: _selectedZoneIds.contains(zone.placeId),
                               contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
                               title: Text(zone.name),
-                              subtitle: Text(
-                                '${zone.latitude.toStringAsFixed(4)}, ${zone.longitude.toStringAsFixed(4)}',
-                              ),
                               onChanged: (selected) => setState(() {
                                 if (selected == true) {
                                   _selectedZoneIds.add(zone.placeId);
@@ -618,33 +729,95 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
                                 }
                               }),
                             ),
-                  ),
-                ],
-                        if (_zonesLoaded && _selectedZoneIds.isEmpty)
-                          Text(
-                            'Select at least one verified service zone to continue.',
-                            style: AeraTypography.label.copyWith(
-                              color: AeraColors.danger,
-              ),
-            ),
-                        if (_zonesStale && _zones.isNotEmpty)
-                          Text(
-                            'Location or radius changed. Search again before saving.',
-                            style: AeraTypography.label.copyWith(
-                              color: AeraColors.danger,
+                          ),
+                        ],
+                        if (_zonesStale &&
+                            _zones.isEmpty &&
+                            hasLocation &&
+                            !_loadingZones)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Location or radius changed. Find neighborhoods again, or use custom areas.',
+                              style: AeraTypography.label.copyWith(
+                                color: AeraColors.inkSoft,
+                              ),
                             ),
-            ),
-          ],
-        ),
-      ),
+                          ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Custom areas',
+                          style: AeraTypography.label.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Add a neighborhood, district or landmark that is not listed above.',
+                          style: AeraTypography.bodySm.copyWith(
+                            color: AeraColors.inkSoft,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _customZoneController,
+                                textInputAction: TextInputAction.done,
+                                textCapitalization: TextCapitalization.words,
+                                maxLength: 80,
+                                onSubmitted: (_) => _addCustomZone(),
+                                decoration: const InputDecoration(
+                                  hintText: 'e.g. Clifton Block 5',
+                                  counterText: '',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton.filled(
+                              onPressed: _addCustomZone,
+                              icon: const Icon(Icons.add),
+                              tooltip: 'Add custom area',
+                            ),
+                          ],
+                        ),
+                        if (_customZones.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              for (final name in _customZones)
+                                InputChip(
+                                  label: Text(name),
+                                  onDeleted: () =>
+                                      setState(() => _customZones.remove(name)),
+                                ),
+                            ],
+                          ),
+                        ],
+                        if (!_hasVerifiedZones && _customZones.isEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Select at least one neighborhood or add a custom area to continue.',
+                            style: AeraTypography.label.copyWith(
+                              color: AeraColors.inkSoft,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                   if (_error != null) ...[
                     const SizedBox(height: 10),
                     Text(
                       _error!,
                       style: AeraTypography.bodySm.copyWith(
                         color: AeraColors.danger,
-        ),
-      ),
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 20),
                   AeraButton(
@@ -660,7 +833,7 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
                   ),
                   const SizedBox(height: 20),
                 ],
-      ),
+              ),
       ),
     );
   }

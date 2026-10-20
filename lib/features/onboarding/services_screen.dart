@@ -315,44 +315,44 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                   horizontal: 20,
                   vertical: 12,
                 ),
-              children: [
-                Row(
-                  children: [
+                children: [
+                  Row(
+                    children: [
                       const Icon(
                         Icons.circle,
                         size: 8,
                         color: AeraColors.accent,
                       ),
                       const SizedBox(width: 8),
-                    Text(
-                      'STEP 03 / 04 • SERVICE OFFERINGS',
-                      style: AeraTypography.labelUpper.copyWith(
-                        color: AeraColors.accent,
-                        fontSize: 10,
+                      Text(
+                        'STEP 03 / 04 • SERVICE OFFERINGS',
+                        style: AeraTypography.labelUpper.copyWith(
+                          color: AeraColors.accent,
+                          fontSize: 10,
+                        ),
                       ),
-                    ),
                       const Spacer(),
                       Text('${_selected.length} selected'),
-                  ],
-                ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
-            Text(
-              'Select your active services',
-              style: AeraTypography.display.copyWith(fontSize: 26),
-            ),
-            const SizedBox(height: 4),
-            Text(
+                  Text(
+                    'Select your active services',
+                    style: AeraTypography.display.copyWith(fontSize: 26),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
                     'Choose only services your crew performs. Add your own offerings when the catalog does not fit.',
                     style: AeraTypography.bodySm.copyWith(
                       color: AeraColors.inkSoft,
-                        ),
-                      ),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   ..._catalogue.map((option) {
                     final selected = _selected.containsKey(option.key);
-              return Padding(
+                    return Padding(
                       padding: const EdgeInsets.only(bottom: 9),
-                child: AeraCard(
+                      child: AeraCard(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 12,
@@ -363,41 +363,41 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                         borderColor: selected
                             ? AeraColors.accent
                             : AeraColors.line,
-                  borderRadius: AeraRadii.borderMd,
+                        borderRadius: AeraRadii.borderMd,
                         onTap: () => setState(() {
                           if (selected) {
                             _selected.remove(option.key);
-                      } else {
+                          } else {
                             _selected[option.key] = OnboardingService(
                               serviceKey: option.key,
                               name: option.name,
                               iconKey: option.iconKey,
                               isCustom: false,
                             );
-                      }
+                          }
                         }),
-                  child: Row(
-                        children: [
+                        child: Row(
+                          children: [
                             Icon(option.icon, color: AeraColors.accent),
-                          const SizedBox(width: 12),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
                                     option.name,
-                                style: AeraTypography.h3.copyWith(
-                                  fontSize: 15,
-                                ),
-                              ),
-                              Text(
+                                    style: AeraTypography.h3.copyWith(
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  Text(
                                     option.description,
-                                style: AeraTypography.label.copyWith(
+                                    style: AeraTypography.label.copyWith(
                                       color: AeraColors.inkSoft,
-                                ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
                             ),
                             Checkbox(
                               value: selected,
@@ -414,9 +414,9 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                                 }
                               }),
                             ),
-                        ],
+                          ],
+                        ),
                       ),
-                          ),
                     );
                   }),
                   OutlinedButton.icon(
@@ -431,7 +431,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                           leading: Icon(
                             _iconForKey(entry.value.iconKey),
                             color: AeraColors.accent,
-                        ),
+                          ),
                           title: Text(entry.value.name),
                           subtitle: const Text('Custom service'),
                           trailing: Row(
@@ -448,11 +448,11 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                                 onPressed: () =>
                                     setState(() => _selected.remove(entry.key)),
                                 icon: const Icon(Icons.delete_outline),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
-                ),
-            ),
                   if (_error != null) ...[
                     const SizedBox(height: 10),
                     Text(
@@ -461,7 +461,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                         color: AeraColors.danger,
                       ),
                     ),
-          ],
+                  ],
                   if (_selected.isEmpty) ...[
                     const SizedBox(height: 8),
                     Text(
@@ -469,8 +469,8 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                       textAlign: TextAlign.center,
                       style: AeraTypography.label.copyWith(
                         color: AeraColors.inkSoft,
-        ),
-      ),
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 18),
                   AeraButton(
@@ -488,7 +488,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                   ),
                   const SizedBox(height: 20),
                 ],
-        ),
+              ),
       ),
     );
   }

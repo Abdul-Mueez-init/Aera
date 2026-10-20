@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from "../../common/auth/auth.middleware.js";
 import { AppError } from "../../common/errors.js";
 import rateLimit from "express-rate-limit";
 import { env } from "../../config/env.js";
+import { logger } from "../../common/logger.js";
 import { prisma } from "../../db/prisma.js";
 import {
   createCompanyLogoReadUrl,
@@ -94,10 +95,18 @@ const coordinatesSchema = z.object({
 });
 const radiusSchema = z.coerce.number().int().min(10).max(50);
 
-const areaSchema = coordinatesSchema.extend({
-  radiusKm: radiusSchema,
-  zonePlaceIds: z.array(z.string().trim().min(1).max(300)).min(1).max(20),
-});
+const areaSchema = coordinatesSchema
+  .extend({
+    radiusKm: radiusSchema,
+    zonePlaceIds: z
+      .array(z.string().trim().min(1).max(300))
+      .max(20)
+      .default([]),
+    customZones: z.array(z.string().trim().min(2).max(80)).max(10).default([]),
+  })
+  .refine((value) => value.zonePlaceIds.length + value.customZones.length > 0, {
+    message: "Select or add at least one service area",
+  });
 
 const serviceSchema = z.object({
   services: z
@@ -202,150 +211,219 @@ export function parseGoogleNeighborhoodPlace(candidate: unknown) {
   };
 }
 
-async function googlePlacesSearch(
-  latitude: number,
-  longitude: number,
-  radiusKm: number,
-) {
+type GoogleGeocodeResult = {
+  place_id?: string;
+  formatted_address?: string;
+  types?: string[];
+  address_components?: Array<{ long_name?: string; types?: string[] }>;
+  geometry?: { location?: { lat?: number; lng?: number } };
+};
+
+// Single entry point for Google Geocoding. Only the Geocoding API (enabled on
+// the server key) is needed for address lookup AND neighborhood discovery.
+async function googleGeocode(
+  params: Record<string, string>,
+): Promise<GoogleGeocodeResult[]> {
   if (!env.GOOGLE_MAPS_PLACES_API_KEY) {
     throw new AppError(
       "MAPS_PROVIDER_NOT_CONFIGURED",
-      "Google Places is not configured. Set GOOGLE_MAPS_PLACES_API_KEY on the API before loading service zones.",
+      "Google Maps is not configured. Set GOOGLE_MAPS_PLACES_API_KEY on the API.",
       503,
     );
   }
-
+  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+  for (const [name, value] of Object.entries(params)) {
+    url.searchParams.set(name, value);
+  }
+  url.searchParams.set("key", env.GOOGLE_MAPS_PLACES_API_KEY);
   let response: Response;
   try {
-    response = await fetch(
-      "https://places.googleapis.com/v1/places:searchNearby",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Goog-Api-Key": env.GOOGLE_MAPS_PLACES_API_KEY,
-          "X-Goog-FieldMask":
-            "places.id,places.displayName,places.location,places.types",
-        },
-        body: JSON.stringify({
-          maxResultCount: 20,
-          rankPreference: "DISTANCE",
-          locationRestriction: {
-            circle: {
-              center: { latitude, longitude },
-              radius: radiusKm * 1000,
-            },
-          },
-        }),
-        signal: AbortSignal.timeout(8000),
-      },
-    );
+    response = await fetch(url, { signal: AbortSignal.timeout(8000) });
   } catch {
     throw new AppError(
       "MAPS_PROVIDER_UNAVAILABLE",
-      "Google Places could not be reached. Check your connection and retry.",
+      "Google Geocoding could not be reached. Retry when online.",
       502,
     );
   }
   if (!response.ok) {
+    logger.error({ status: response.status }, "Google Geocoding HTTP error");
     throw new AppError(
       "MAPS_PROVIDER_UNAVAILABLE",
-      "Google Places could not load service zones. Check API enablement, key restrictions, and billing.",
+      "Google Geocoding is temporarily unavailable.",
       502,
     );
   }
-  const payload: unknown = await response.json();
-  if (!payload || typeof payload !== "object" || !("places" in payload))
-    return [];
-  const places = (payload as { places?: unknown }).places;
-  if (!Array.isArray(places)) return [];
-  return places.flatMap((place: unknown) => {
-    const neighborhood = parseGoogleNeighborhoodPlace(place);
-    return neighborhood ? [neighborhood] : [];
-  });
+  const data = (await response.json()) as {
+    status?: string;
+    error_message?: string;
+    results?: GoogleGeocodeResult[];
+  };
+  if (data.status === "OK") return data.results ?? [];
+  if (data.status === "ZERO_RESULTS") return [];
+  // Never log the URL: it contains the API key.
+  logger.error(
+    { googleStatus: data.status, googleMessage: data.error_message },
+    "Google Geocoding request rejected",
+  );
+  throw new AppError(
+    "MAPS_PROVIDER_UNAVAILABLE",
+    data.status === "REQUEST_DENIED"
+      ? "Google rejected the server maps key. Enable the Geocoding API for this key, enable billing, and remove Android-app restrictions from the server key."
+      : "Google Geocoding could not complete this request.",
+    502,
+  );
+}
+
+function distanceKm(
+  aLat: number,
+  aLng: number,
+  bLat: number,
+  bLng: number,
+): number {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+function offsetPoint(
+  latitude: number,
+  longitude: number,
+  distanceKmValue: number,
+  bearingDeg: number,
+) {
+  const bearing = (bearingDeg * Math.PI) / 180;
+  const dLat = (distanceKmValue * Math.cos(bearing)) / 111.32;
+  const cosLat = Math.max(0.05, Math.cos((latitude * Math.PI) / 180));
+  const dLng = (distanceKmValue * Math.sin(bearing)) / (111.32 * cosLat);
+  return {
+    latitude: Math.max(-90, Math.min(90, latitude + dLat)),
+    longitude: Math.max(-180, Math.min(180, longitude + dLng)),
+  };
+}
+
+const NEIGHBORHOOD_TYPES = [
+  "neighborhood",
+  "sublocality",
+  "sublocality_level_1",
+];
+
+// Finds real neighborhood-level areas around a point by reverse-geocoding a
+// small grid (centre + two rings) inside the radius and de-duplicating by
+// Google place_id. Uses only the Geocoding API.
+async function discoverNeighborhoods(
+  latitude: number,
+  longitude: number,
+  radiusKm: number,
+) {
+  const points = [{ latitude, longitude }];
+  for (let i = 0; i < 6; i++) {
+    points.push(offsetPoint(latitude, longitude, radiusKm * 0.5, i * 60));
+    points.push(offsetPoint(latitude, longitude, radiusKm * 0.9, i * 60 + 30));
+  }
+  const settled = await Promise.allSettled(
+    points.map((point) =>
+      googleGeocode({
+        latlng: `${point.latitude},${point.longitude}`,
+        result_type: "neighborhood|sublocality|locality",
+      }),
+    ),
+  );
+  const fulfilled = settled.filter(
+    (item): item is PromiseFulfilledResult<GoogleGeocodeResult[]> =>
+      item.status === "fulfilled",
+  );
+  if (fulfilled.length === 0) {
+    const firstFailure = settled.find((item) => item.status === "rejected");
+    throw (firstFailure as PromiseRejectedResult).reason;
+  }
+  const byId = new Map<
+    string,
+    {
+      placeId: string;
+      name: string;
+      latitude: number;
+      longitude: number;
+      rank: number;
+      distance: number;
+    }
+  >();
+  for (const { value } of fulfilled) {
+    for (const result of value) {
+      const location = result.geometry?.location;
+      const types = result.types ?? [];
+      if (
+        !result.place_id ||
+        typeof location?.lat !== "number" ||
+        typeof location.lng !== "number"
+      ) {
+        continue;
+      }
+      const isNeighborhood = types.some((type) =>
+        NEIGHBORHOOD_TYPES.includes(type),
+      );
+      if (!isNeighborhood && !types.includes("locality")) continue;
+      const component =
+        result.address_components?.find((item) =>
+          (item.types ?? []).some((type) => types.includes(type)),
+        ) ?? result.address_components?.[0];
+      const name = (
+        component?.long_name ?? result.formatted_address?.split(",")[0]
+      )?.trim();
+      if (!name) continue;
+      const distance = distanceKm(
+        latitude,
+        longitude,
+        location.lat,
+        location.lng,
+      );
+      if (distance > radiusKm) continue;
+      if (!byId.has(result.place_id)) {
+        byId.set(result.place_id, {
+          placeId: result.place_id,
+          name,
+          latitude: location.lat,
+          longitude: location.lng,
+          rank: isNeighborhood ? 0 : 1,
+          distance,
+        });
+      }
+    }
+  }
+  return [...byId.values()]
+    .sort((a, b) => a.rank - b.rank || a.distance - b.distance)
+    .slice(0, 20)
+    .map(({ placeId, name, latitude: lat, longitude: lng }) => ({
+      placeId,
+      name,
+      latitude: lat,
+      longitude: lng,
+    }));
 }
 
 async function reverseGeocode(
   latitude: number,
   longitude: number,
 ): Promise<string> {
-  if (!env.GOOGLE_MAPS_PLACES_API_KEY) {
-    throw new AppError(
-      "MAPS_PROVIDER_NOT_CONFIGURED",
-      "Google Maps is not configured. Set GOOGLE_MAPS_PLACES_API_KEY on the API.",
-      503,
-    );
-  }
-  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-  url.searchParams.set("latlng", `${latitude},${longitude}`);
-  url.searchParams.set("key", env.GOOGLE_MAPS_PLACES_API_KEY);
-  let response: Response;
-  try {
-    response = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  } catch {
-    throw new AppError(
-      "MAPS_PROVIDER_UNAVAILABLE",
-      "Google Geocoding could not be reached. Retry when online.",
-      502,
-    );
-  }
-  if (!response.ok) {
-    throw new AppError(
-      "MAPS_PROVIDER_UNAVAILABLE",
-      "Google Geocoding could not resolve this location.",
-      502,
-    );
-  }
-  const data = (await response.json()) as {
-    status?: string;
-    results?: Array<{ formatted_address?: string }>;
-  };
-  const address =
-    data.status === "OK" ? data.results?.[0]?.formatted_address : null;
-  if (!address)
+  const results = await googleGeocode({ latlng: `${latitude},${longitude}` });
+  const address = results[0]?.formatted_address;
+  if (!address) {
     throw new AppError(
       "LOCATION_NOT_RESOLVED",
       "The selected coordinates did not resolve to a real address.",
       422,
     );
+  }
   return address;
 }
 
 async function forwardGeocode(address: string) {
-  if (!env.GOOGLE_MAPS_PLACES_API_KEY) {
-    throw new AppError(
-      "MAPS_PROVIDER_NOT_CONFIGURED",
-      "Google Maps is not configured. Set GOOGLE_MAPS_PLACES_API_KEY on the API.",
-      503,
-    );
-  }
-  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-  url.searchParams.set("address", address);
-  url.searchParams.set("key", env.GOOGLE_MAPS_PLACES_API_KEY);
-  let response: Response;
-  try {
-    response = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  } catch {
-    throw new AppError(
-      "MAPS_PROVIDER_UNAVAILABLE",
-      "Google Geocoding could not be reached. Retry when online.",
-      502,
-    );
-  }
-  if (!response.ok)
-    throw new AppError(
-      "MAPS_PROVIDER_UNAVAILABLE",
-      "Google Geocoding could not search this address.",
-      502,
-    );
-  const data = (await response.json()) as {
-    status?: string;
-    results?: Array<{
-      formatted_address?: string;
-      geometry?: { location?: { lat?: number; lng?: number } };
-    }>;
-  };
-  const first = data.status === "OK" ? data.results?.[0] : null;
+  const results = await googleGeocode({ address });
+  const first = results[0];
   const location = first?.geometry?.location;
   if (
     !first?.formatted_address ||
@@ -363,6 +441,36 @@ async function forwardGeocode(address: string) {
     latitude: location.lat,
     longitude: location.lng,
   };
+}
+
+// A manually typed area is a label the owner controls. Try to pin it near the
+// headquarters; if Google cannot, fall back to the headquarters coordinates.
+async function locateCustomArea(
+  name: string,
+  latitude: number,
+  longitude: number,
+  radiusKm: number,
+) {
+  try {
+    const sw = offsetPoint(latitude, longitude, radiusKm * 1.5, 225);
+    const ne = offsetPoint(latitude, longitude, radiusKm * 1.5, 45);
+    const results = await googleGeocode({
+      address: name,
+      bounds: `${sw.latitude},${sw.longitude}|${ne.latitude},${ne.longitude}`,
+    });
+    const location = results[0]?.geometry?.location;
+    if (
+      typeof location?.lat === "number" &&
+      typeof location.lng === "number" &&
+      distanceKm(latitude, longitude, location.lat, location.lng) <=
+        radiusKm * 1.5
+    ) {
+      return { latitude: location.lat, longitude: location.lng };
+    }
+  } catch {
+    // Fall through to the headquarters coordinates.
+  }
+  return { latitude, longitude };
 }
 
 router.get("/", async (request, response) => {
@@ -454,7 +562,7 @@ router.get("/zones", mapsProviderRateLimiter, async (request, response) => {
     .extend({ radiusKm: radiusSchema })
     .safeParse(request.query);
   if (!parsed.success) failValidation(parsed.error);
-  const zones = await googlePlacesSearch(
+  const zones = await discoverNeighborhoods(
     parsed.data.latitude,
     parsed.data.longitude,
     parsed.data.radiusKm,
@@ -497,15 +605,6 @@ router.patch(
   async (request, response) => {
     const parsed = areaSchema.safeParse(request.body);
     if (!parsed.success) failValidation(parsed.error);
-    const [resolvedAddress, nearbyPlaces] = await Promise.all([
-      reverseGeocode(parsed.data.latitude, parsed.data.longitude),
-      googlePlacesSearch(
-        parsed.data.latitude,
-        parsed.data.longitude,
-        parsed.data.radiusKm,
-      ),
-    ]);
-    const byId = new Map(nearbyPlaces.map((zone) => [zone.placeId, zone]));
     const uniqueIds = [...new Set(parsed.data.zonePlaceIds)];
     if (uniqueIds.length !== parsed.data.zonePlaceIds.length) {
       throw new AppError(
@@ -514,28 +613,62 @@ router.patch(
         422,
       );
     }
-    const selected = uniqueIds.map((id) => byId.get(id));
-    if (selected.some((zone) => !zone)) {
+    const [resolvedAddress, nearbyPlaces] = await Promise.all([
+      reverseGeocode(parsed.data.latitude, parsed.data.longitude),
+      uniqueIds.length > 0
+        ? discoverNeighborhoods(
+            parsed.data.latitude,
+            parsed.data.longitude,
+            parsed.data.radiusKm,
+          )
+        : Promise.resolve([]),
+    ]);
+    const byId = new Map(nearbyPlaces.map((zone) => [zone.placeId, zone]));
+    const verified = uniqueIds.map((id) => byId.get(id));
+    if (verified.some((zone) => !zone)) {
       throw new AppError(
         "SERVICE_ZONE_INVALID",
         "One or more selected zones are no longer available at this location and radius. Reload zones and select again.",
         422,
       );
     }
+    const customByKey = new Map<string, string>();
+    for (const rawName of parsed.data.customZones) {
+      const name = rawName.replace(/\s+/g, " ").trim();
+      const key = name
+        .toLocaleLowerCase("en-US")
+        .replace(/\s/g, "-")
+        .slice(0, 60);
+      if (!customByKey.has(key)) customByKey.set(key, name);
+    }
+    const customZones = await Promise.all(
+      [...customByKey.entries()].map(async ([key, name]) => ({
+        placeId: `custom:${key}`,
+        name,
+        ...(await locateCustomArea(
+          name,
+          parsed.data.latitude,
+          parsed.data.longitude,
+          parsed.data.radiusKm,
+        )),
+      })),
+    );
+    const selected = [
+      ...verified.flatMap((zone) => (zone ? [zone] : [])),
+      ...customZones,
+    ];
     const companyId = companyIdFromRequest(request);
     await prisma.$transaction(async (tx) => {
       await tx.companyServiceZone.deleteMany({ where: { companyId } });
       await tx.companyServiceZone.createMany({
-        data: selected
-          .filter((zone) => zone != null)
-          .map((zone) => ({
-            companyId,
-            providerPlaceId: zone!.placeId,
-            name: zone!.name,
-            latitude: zone!.latitude,
-            longitude: zone!.longitude,
-            isActive: true,
-          })),
+        data: selected.map((zone) => ({
+          companyId,
+          providerPlaceId: zone.placeId,
+          name: zone.name,
+          latitude: zone.latitude,
+          longitude: zone.longitude,
+          isActive: true,
+        })),
       });
       await tx.company.update({
         where: { id: companyId },
