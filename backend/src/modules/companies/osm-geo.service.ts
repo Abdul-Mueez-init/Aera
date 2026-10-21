@@ -7,7 +7,15 @@ import { env } from "../../config/env.js";
 // a full redesign.
 const THROTTLE_DELAY_MS = 1100;
 const CACHE_TTL_GEOCODE_MS = 24 * 60 * 60 * 1000; // 24 hours
-const CACHE_TTL_NEIGHBORHOOD_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_NEIGHBORHOOD_MS = 24 * 60 * 60 * 1000; // 24 hours
+const OVERPASS_TIMEOUT_MS = 22000;
+// Public Overpass instances are frequently overloaded; query several at once
+// and use the first one that answers.
+const OVERPASS_FALLBACK_URLS = [
+  "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass-api.de/api/interpreter",
+];
 const MAX_CACHE_ENTRIES = 500;
 
 type CacheEntry<T> = { value: T; expiresAt: number };
@@ -47,6 +55,7 @@ const hostQueue = new Map<string, { lastRequestAt: number }>();
 async function throttledFetch(
   url: URL,
   options?: RequestInit,
+  timeoutMs = 20000,
 ): Promise<Response> {
   const hostname = url.hostname;
   const now = Date.now();
@@ -69,10 +78,18 @@ async function throttledFetch(
     return await fetch(url, {
       ...options,
       headers,
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
-    logger.error({ error, hostname }, "OSM fetch failed");
+    logger.error(
+      {
+        err: error,
+        errName: error instanceof Error ? error.name : undefined,
+        errMessage: error instanceof Error ? error.message : undefined,
+        hostname,
+      },
+      "OSM fetch failed",
+    );
     throw new AppError(
       "MAPS_PROVIDER_UNAVAILABLE",
       "Map service is temporarily unavailable. Please try again.",
@@ -341,28 +358,56 @@ export function parseOverpassElements(
     }));
 }
 
+async function runOverpassQueryOn(
+  endpoint: string,
+  query: string,
+): Promise<{ elements: unknown[] }> {
+  const url = new URL(endpoint);
+  const params = new URLSearchParams();
+  params.set("data", query);
+  const response = await throttledFetch(
+    url,
+    {
+      method: "POST",
+      body: params,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    },
+    OVERPASS_TIMEOUT_MS,
+  );
+
+  if (!response.ok) {
+    logger.error(
+      { status: response.status, hostname: url.hostname },
+      "Overpass API HTTP error",
+    );
+    throw new Error(`Overpass HTTP ${response.status}`);
+  }
+
+  const body = (await response.json()) as { elements?: unknown[] };
+  if (!Array.isArray(body.elements)) {
+    throw new Error("Overpass response missing elements");
+  }
+  return { elements: body.elements };
+}
+
 async function runOverpassQuery(
   query: string,
 ): Promise<{ elements: unknown[] }> {
-  const url = new URL(env.OVERPASS_BASE_URL);
-  const params = new URLSearchParams();
-  params.set("data", query);
-  const response = await throttledFetch(url, {
-    method: "POST",
-    body: params,
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-  });
-
-  if (!response.ok) {
-    logger.error({ status: response.status }, "Overpass API HTTP error");
+  const endpoints = [
+    env.OVERPASS_BASE_URL,
+    ...OVERPASS_FALLBACK_URLS.filter((u) => u !== env.OVERPASS_BASE_URL),
+  ];
+  try {
+    return await Promise.any(
+      endpoints.map((endpoint) => runOverpassQueryOn(endpoint, query)),
+    );
+  } catch {
     throw new AppError(
       "MAPS_PROVIDER_UNAVAILABLE",
       "Neighborhood discovery is temporarily unavailable.",
       502,
     );
   }
-
-  return (await response.json()) as { elements: unknown[] };
 }
 
 export async function discoverNeighborhoods(
