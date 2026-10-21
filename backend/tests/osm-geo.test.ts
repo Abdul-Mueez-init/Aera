@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
   parseOverpassElements,
+  discoverNeighborhoods,
   reverseGeocode,
   forwardGeocode,
   locateCustomArea,
@@ -273,4 +274,46 @@ describe("locateCustomArea", () => {
       longitude: -71.05,
     });
   });
+});
+
+describe("discoverNeighborhoods fallback", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("falls back to Nominatim when every Overpass mirror fails", async () => {
+    const mockFetch = global.fetch as ReturnType<typeof vi.fn>;
+    const suburbs = ["Model Town", "Johar Town", "Garden Town"];
+    let reverseCalls = 0;
+    mockFetch.mockImplementation(async (url: URL) => {
+      if (url.pathname.endsWith("/reverse")) {
+        const name = suburbs[reverseCalls % suburbs.length];
+        reverseCalls += 1;
+        return {
+          ok: true,
+          json: async () => ({
+            lat: url.searchParams.get("lat"),
+            lon: url.searchParams.get("lon"),
+            osm_type: "relation",
+            osm_id: 1000 + reverseCalls,
+            address: { suburb: name },
+          }),
+        };
+      }
+      throw new Error("Overpass down");
+    });
+
+    const result = await discoverNeighborhoods(31.4453, 74.2529, 30);
+
+    expect(result.map((r) => r.name).sort()).toEqual([
+      "Garden Town",
+      "Johar Town",
+      "Model Town",
+    ]);
+    expect(result[0].placeId.startsWith("osm:relation:")).toBe(true);
+  }, 40000);
 });

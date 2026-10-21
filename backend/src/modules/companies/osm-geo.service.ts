@@ -8,7 +8,12 @@ import { env } from "../../config/env.js";
 const THROTTLE_DELAY_MS = 1100;
 const CACHE_TTL_GEOCODE_MS = 24 * 60 * 60 * 1000; // 24 hours
 const CACHE_TTL_NEIGHBORHOOD_MS = 24 * 60 * 60 * 1000; // 24 hours
-const OVERPASS_TIMEOUT_MS = 22000;
+const OVERPASS_TIMEOUT_MS = 7000;
+// After every Overpass mirror fails, skip Overpass for a while and go straight
+// to the Nominatim fallback so users are not stuck waiting on a dead service.
+const OVERPASS_COOLDOWN_MS = 5 * 60 * 1000;
+const NOMINATIM_DISCOVERY_BUDGET_MS = 12000;
+let overpassDownUntil = 0;
 // Public Overpass instances are frequently overloaded; query several at once
 // and use the first one that answers.
 const OVERPASS_FALLBACK_URLS = [
@@ -24,20 +29,20 @@ const geocodeCache = new Map<string, CacheEntry<unknown>>();
 const neighborhoodCache = new Map<string, CacheEntry<unknown>>();
 
 function setCache<T>(
-  cache: Map<string, CacheEntry<T>>,
+  cache: Map<string, CacheEntry<unknown>>,
   key: string,
   value: T,
   ttlMs: number,
 ): void {
   if (cache.size >= MAX_CACHE_ENTRIES) {
     const oldestKey = cache.keys().next().value;
-    cache.delete(oldestKey);
+    if (oldestKey !== undefined) cache.delete(oldestKey);
   }
   cache.set(key, { value, expiresAt: Date.now() + ttlMs });
 }
 
 function getCache<T>(
-  cache: Map<string, CacheEntry<T>>,
+  cache: Map<string, CacheEntry<unknown>>,
   key: string,
 ): T | undefined {
   const entry = cache.get(key);
@@ -46,7 +51,7 @@ function getCache<T>(
     cache.delete(key);
     return undefined;
   }
-  return entry.value;
+  return entry.value as T;
 }
 
 // Per-host serial queue to guarantee >= THROTTLE_DELAY_MS between requests
@@ -410,28 +415,21 @@ async function runOverpassQuery(
   }
 }
 
-export async function discoverNeighborhoods(
+type Neighborhood = {
+  placeId: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+};
+
+async function discoverViaOverpass(
   lat: number,
   lng: number,
   radiusKm: number,
-): Promise<
-  Array<{ placeId: string; name: string; latitude: number; longitude: number }>
-> {
-  const cacheKey = `neighborhoods:${lat.toFixed(4)},${lng.toFixed(4)},${radiusKm}`;
-  const cached = getCache<
-    Array<{
-      placeId: string;
-      name: string;
-      latitude: number;
-      longitude: number;
-    }>
-  >(neighborhoodCache, cacheKey);
-  if (cached) return cached;
-
+): Promise<Neighborhood[]> {
   const radiusM = Math.round(radiusKm * 1000);
-  const placeTypes = "(suburb|neighbourhood|quarter|city_district)";
-
-  const query = `
+  const buildQuery = (placeTypes: string): string =>
+    `
 [out:json][timeout:20];
 (
   node["place"~"^${placeTypes}$"]["name"](around:${radiusM},${lat},${lng});
@@ -441,24 +439,154 @@ export async function discoverNeighborhoods(
 out center tags 100;
 `.trim();
 
-  let elements = (await runOverpassQuery(query)).elements;
+  let elements = (
+    await runOverpassQuery(
+      buildQuery("(suburb|neighbourhood|quarter|city_district)"),
+    )
+  ).elements;
   let result = parseOverpassElements(elements, { lat, lng }, radiusKm);
 
   // Fallback to town/village if no results
   if (result.length === 0) {
-    const fallbackPlaceTypes = "(town|village|hamlet|locality)";
-    const fallbackQuery = `
-[out:json][timeout:20];
-(
-  node["place"~"^${fallbackPlaceTypes}$"]["name"](around:${radiusM},${lat},${lng});
-  way["place"~"^${fallbackPlaceTypes}$"]["name"](around:${radiusM},${lat},${lng});
-  relation["place"~"^${fallbackPlaceTypes}$"]["name"](around:${radiusM},${lat},${lng});
-);
-out center tags 100;
-`.trim();
-
-    elements = (await runOverpassQuery(fallbackQuery)).elements;
+    elements = (
+      await runOverpassQuery(buildQuery("(town|village|hamlet|locality)"))
+    ).elements;
     result = parseOverpassElements(elements, { lat, lng }, radiusKm);
+  }
+  return result;
+}
+
+// Fallback when Overpass is unavailable: reverse-geocode a ring of points
+// around the headquarters with Nominatim and collect the distinct suburb /
+// neighbourhood names it returns. Slower and less complete than Overpass, but
+// it only depends on the Nominatim service that already handles addresses.
+async function discoverViaNominatim(
+  lat: number,
+  lng: number,
+  radiusKm: number,
+): Promise<Neighborhood[]> {
+  const ringKm = Math.max(radiusKm * 0.6, 1);
+  const points = [
+    { latitude: lat, longitude: lng },
+    ...[0, 60, 120, 180, 240, 300].map((bearing) =>
+      offsetPoint(lat, lng, ringKm, bearing),
+    ),
+  ];
+
+  const deadline = Date.now() + NOMINATIM_DISCOVERY_BUDGET_MS;
+  const byName = new Map<string, Neighborhood & { distance: number }>();
+  let succeeded = 0;
+
+  for (const point of points) {
+    if (Date.now() >= deadline) break;
+    try {
+      const url = new URL(`${env.NOMINATIM_BASE_URL}/reverse`);
+      url.searchParams.set("format", "jsonv2");
+      url.searchParams.set("lat", point.latitude.toString());
+      url.searchParams.set("lon", point.longitude.toString());
+      url.searchParams.set("zoom", "14");
+      url.searchParams.set("addressdetails", "1");
+      url.searchParams.set("accept-language", "en");
+
+      const response = await throttledFetch(url, undefined, 8000);
+      if (!response.ok) continue;
+      succeeded += 1;
+
+      const data = (await response.json()) as {
+        error?: string;
+        lat?: string;
+        lon?: string;
+        osm_type?: string;
+        osm_id?: number;
+        address?: {
+          suburb?: string;
+          neighbourhood?: string;
+          quarter?: string;
+          city_district?: string;
+        };
+      };
+      if (data.error || !data.address) continue;
+
+      const name = (
+        data.address.suburb ??
+        data.address.neighbourhood ??
+        data.address.quarter ??
+        data.address.city_district
+      )?.trim();
+      if (!name) continue;
+
+      const latitude = Number(data.lat);
+      const longitude = Number(data.lon);
+      const hasCoords =
+        Number.isFinite(latitude) && Number.isFinite(longitude);
+      const itemLat = hasCoords ? latitude : point.latitude;
+      const itemLng = hasCoords ? longitude : point.longitude;
+      const distance = distanceKm(lat, lng, itemLat, itemLng);
+      if (distance > radiusKm) continue;
+
+      const key = name.toLowerCase();
+      const existing = byName.get(key);
+      if (!existing || distance < existing.distance) {
+        byName.set(key, {
+          placeId:
+            data.osm_type && typeof data.osm_id === "number"
+              ? `osm:${data.osm_type}:${data.osm_id}`
+              : `osm:name:${key}`,
+          name,
+          latitude: itemLat,
+          longitude: itemLng,
+          distance,
+        });
+      }
+    } catch {
+      // throttledFetch already logged the failure; try the next point.
+    }
+  }
+
+  if (succeeded === 0) {
+    throw new AppError(
+      "MAPS_PROVIDER_UNAVAILABLE",
+      "Neighborhood discovery is temporarily unavailable.",
+      502,
+    );
+  }
+
+  return [...byName.values()]
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 20)
+    .map(({ placeId, name, latitude, longitude }) => ({
+      placeId,
+      name,
+      latitude,
+      longitude,
+    }));
+}
+
+export async function discoverNeighborhoods(
+  lat: number,
+  lng: number,
+  radiusKm: number,
+): Promise<Neighborhood[]> {
+  const cacheKey = `neighborhoods:${lat.toFixed(4)},${lng.toFixed(4)},${radiusKm}`;
+  const cached = getCache<Neighborhood[]>(neighborhoodCache, cacheKey);
+  if (cached) return cached;
+
+  let result: Neighborhood[] | undefined;
+
+  if (Date.now() >= overpassDownUntil) {
+    try {
+      result = await discoverViaOverpass(lat, lng, radiusKm);
+    } catch {
+      overpassDownUntil = Date.now() + OVERPASS_COOLDOWN_MS;
+      logger.warn(
+        { cooldownMs: OVERPASS_COOLDOWN_MS },
+        "Overpass unavailable; using Nominatim neighborhood fallback",
+      );
+    }
+  }
+
+  if (!result) {
+    result = await discoverViaNominatim(lat, lng, radiusKm);
   }
 
   setCache(neighborhoodCache, cacheKey, result, CACHE_TTL_NEIGHBORHOOD_MS);
