@@ -66,7 +66,10 @@ abstract final class AeraTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AeraColors.surface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: AeraRadii.borderMd,
           borderSide: const BorderSide(color: AeraColors.line, width: 1),

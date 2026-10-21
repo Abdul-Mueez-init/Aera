@@ -97,9 +97,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
 
     return Scaffold(
       backgroundColor: AeraColors.canvas,
-      appBar: AppBar(
-        title: const Text('Profile & Preferences'),
-      ),
+      appBar: AppBar(title: const Text('Profile & Preferences')),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         children: [
@@ -116,10 +114,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                       height: 56,
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [
-                            AeraColors.accent,
-                            AeraColors.accentSoft,
-                          ],
+                          colors: [AeraColors.accent, AeraColors.accentSoft],
                         ),
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -184,10 +179,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                 const SizedBox(height: 14),
                 const Divider(color: AeraColors.line, height: 1),
                 const SizedBox(height: 10),
-                _contactRow(
-                  Icons.alternate_email,
-                  user.email,
-                ),
+                _contactRow(Icons.alternate_email, user.email),
               ],
             ),
           ),

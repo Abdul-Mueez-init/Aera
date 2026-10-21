@@ -83,10 +83,7 @@ class AeraStatusChip extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: AeraRadii.borderFull,
-      ),
+      decoration: BoxDecoration(color: bg, borderRadius: AeraRadii.borderFull),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,

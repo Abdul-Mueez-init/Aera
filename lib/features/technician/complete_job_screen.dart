@@ -47,11 +47,9 @@ class _CompleteJobScreenState extends ConsumerState<CompleteJobScreen> {
     });
 
     try {
-      await ref.read(jobsRepositoryProvider).completeJob(
-        widget.jobId,
-        summary,
-        autoInvoice: _autoInvoice,
-      );
+      await ref
+          .read(jobsRepositoryProvider)
+          .completeJob(widget.jobId, summary, autoInvoice: _autoInvoice);
       ref.invalidate(jobDetailProvider(widget.jobId));
       ref.invalidate(jobsListProvider);
       ref.invalidate(technicianTodayProvider);
@@ -147,18 +145,26 @@ class _CompleteJobScreenState extends ConsumerState<CompleteJobScreen> {
                 ),
                 child: CheckboxListTile(
                   value: _autoInvoice,
-                  onChanged: (val) => setState(() => _autoInvoice = val ?? false),
+                  onChanged: (val) =>
+                      setState(() => _autoInvoice = val ?? false),
                   title: Text(
                     'Generate invoice draft immediately',
-                    style: AeraTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                    style: AeraTypography.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   subtitle: Text(
                     'Creates a draft invoice from approved quote or logged parts',
-                    style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft),
+                    style: AeraTypography.bodySm.copyWith(
+                      color: AeraColors.inkSoft,
+                    ),
                   ),
                   activeColor: AeraColors.accent,
                   controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                 ),
               ),
               if (_error != null) ...[

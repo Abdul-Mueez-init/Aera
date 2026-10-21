@@ -107,9 +107,9 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
       final token = await ref
           .read(customersRepositoryProvider)
           .createPortalAccess(customerId);
-      
+
       final link = LinkBuilder.customerPortal(token);
-      
+
       // Show dialog with share options
       if (mounted) {
         await showDialog<void>(
@@ -163,9 +163,14 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
               TextButton.icon(
                 onPressed: () async {
                   final message = 'Your customer portal link: $link';
-                  final whatsappUrl = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(message)}');
+                  final whatsappUrl = Uri.parse(
+                    'https://wa.me/?text=${Uri.encodeComponent(message)}',
+                  );
                   if (await canLaunchUrl(whatsappUrl)) {
-                    await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
+                    await launchUrl(
+                      whatsappUrl,
+                      mode: LaunchMode.externalApplication,
+                    );
                   }
                 },
                 icon: const Icon(Icons.message, size: 18),
@@ -181,16 +186,14 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not build the customer link'),
-          ),
+          const SnackBar(content: Text('Could not build the customer link')),
         );
       }
     } finally {
@@ -293,7 +296,9 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
               ),
               const SizedBox(height: 10),
               AeraButton(
-                text: _generatingPortalLink ? 'Generating Link...' : 'Customer Portal Link',
+                text: _generatingPortalLink
+                    ? 'Generating Link...'
+                    : 'Customer Portal Link',
                 variant: AeraButtonVariant.secondary,
                 icon: const Icon(Icons.link, size: 18),
                 isLoading: _generatingPortalLink,
@@ -412,7 +417,10 @@ class _AddressesCard extends ConsumerWidget {
 
   final Customer customer;
 
-  Future<void> _showAddAddressDialog(BuildContext context, WidgetRef ref) async {
+  Future<void> _showAddAddressDialog(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final labelController = TextEditingController(text: 'Secondary');
     final line1Controller = TextEditingController();
     final cityController = TextEditingController();
@@ -514,15 +522,15 @@ class _AddressesCard extends ConsumerWidget {
       }
     } on ApiException catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not add address')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not add address')));
       }
     }
   }

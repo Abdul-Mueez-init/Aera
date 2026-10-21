@@ -82,11 +82,9 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
       setState(() => _isSaving = false);
       setState(() => _isEditing = false);
       ref.invalidate(companyDetailsProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Company settings updated'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Company settings updated')));
     } catch (error) {
       if (!mounted) return;
       setState(() => _isSaving = false);
@@ -94,10 +92,7 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
           ? error.message
           : 'Could not update company settings';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AeraColors.danger,
-          content: Text(message),
-        ),
+        SnackBar(backgroundColor: AeraColors.danger, content: Text(message)),
       );
     }
   }
@@ -117,29 +112,30 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
                 IconButton(
                   icon: const Icon(Icons.edit_outlined),
                   onPressed: companyAsync.maybeWhen(
-                    data: (company) => () => _startEditing(company),
+                    data: (company) =>
+                        () => _startEditing(company),
                     orElse: () => null,
                   ),
                 ),
               ]
             : canEdit && _isEditing
-                ? [
-                    TextButton(
-                      onPressed: _isSaving ? null : _cancelEditing,
-                      child: const Text('Cancel'),
-                    ),
-                    TextButton(
-                      onPressed: _isSaving ? null : _saveChanges,
-                      child: _isSaving
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Save'),
-                    ),
-                  ]
-                : null,
+            ? [
+                TextButton(
+                  onPressed: _isSaving ? null : _cancelEditing,
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: _isSaving ? null : _saveChanges,
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Save'),
+                ),
+              ]
+            : null,
       ),
       body: companyAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -241,8 +237,11 @@ class _CompanyDetails extends StatelessWidget {
                   : _detailRow('Timezone', company.timezone),
               const Divider(color: AeraColors.line, height: 1),
               isEditing && canEdit
-                  ? _editableRow('Currency', currencyController,
-                      uppercase: true)
+                  ? _editableRow(
+                      'Currency',
+                      currencyController,
+                      uppercase: true,
+                    )
                   : _detailRow('Currency', company.defaultCurrency),
             ],
           ),
@@ -290,8 +289,11 @@ class _CompanyDetails extends StatelessWidget {
     );
   }
 
-  Widget _editableRow(String label, TextEditingController controller,
-      {bool uppercase = false}) {
+  Widget _editableRow(
+    String label,
+    TextEditingController controller, {
+    bool uppercase = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -307,8 +309,9 @@ class _CompanyDetails extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
-              textCapitalization:
-                  uppercase ? TextCapitalization.characters : TextCapitalization.none,
+              textCapitalization: uppercase
+                  ? TextCapitalization.characters
+                  : TextCapitalization.none,
               style: AeraTypography.bodySm.copyWith(
                 fontWeight: FontWeight.w600,
               ),

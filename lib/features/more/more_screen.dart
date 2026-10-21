@@ -18,9 +18,7 @@ class MoreScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AeraColors.canvas,
-      appBar: AppBar(
-        title: const Text('Operations Hub'),
-      ),
+      appBar: AppBar(title: const Text('Operations Hub')),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         children: [

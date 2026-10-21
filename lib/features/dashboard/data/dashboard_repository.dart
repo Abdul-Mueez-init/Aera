@@ -25,35 +25,36 @@ class DashboardSummary {
   final OutstandingInvoices outstandingInvoices;
   final RevenueThisMonth revenueThisMonth;
 
-  factory DashboardSummary.fromJson(Map<String, dynamic> json) => DashboardSummary(
+  factory DashboardSummary.fromJson(Map<String, dynamic> json) =>
+      DashboardSummary(
         date: json['date'] as String? ?? '',
         timezone: json['timezone'] as String? ?? 'UTC',
         jobsToday: json['jobsToday'] as int? ?? 0,
-        jobsByStatus: (json['jobsByStatus'] as List<dynamic>?)
+        jobsByStatus:
+            (json['jobsByStatus'] as List<dynamic>?)
                 ?.map((j) => JobStatusCount.fromJson(j as Map<String, dynamic>))
                 .toList() ??
             [],
         unassignedJobs: json['unassignedJobs'] as int? ?? 0,
         outstandingInvoices: OutstandingInvoices.fromJson(
-            json['outstandingInvoices'] as Map<String, dynamic>? ?? {}),
+          json['outstandingInvoices'] as Map<String, dynamic>? ?? {},
+        ),
         revenueThisMonth: RevenueThisMonth.fromJson(
-            json['revenueThisMonth'] as Map<String, dynamic>? ?? {}),
+          json['revenueThisMonth'] as Map<String, dynamic>? ?? {},
+        ),
       );
 }
 
 class JobStatusCount {
-  const JobStatusCount({
-    required this.status,
-    required this.count,
-  });
+  const JobStatusCount({required this.status, required this.count});
 
   final String status;
   final int count;
 
   factory JobStatusCount.fromJson(Map<String, dynamic> json) => JobStatusCount(
-        status: json['status'] as String? ?? '',
-        count: json['count'] as int? ?? 0,
-      );
+    status: json['status'] as String? ?? '',
+    count: json['count'] as int? ?? 0,
+  );
 }
 
 class OutstandingInvoices {
@@ -70,9 +71,9 @@ class OutstandingInvoices {
         count: json['count'] as int? ?? 0,
         balanceDueByCurrency:
             (json['balanceDueByCurrency'] as List<dynamic>?)
-                    ?.map((c) => CurrencyAmount.fromJson(c as Map<String, dynamic>))
-                    .toList() ??
-                [],
+                ?.map((c) => CurrencyAmount.fromJson(c as Map<String, dynamic>))
+                .toList() ??
+            [],
       );
 }
 
@@ -87,48 +88,44 @@ class RevenueThisMonth {
   final String periodEnd;
   final List<CurrencyAmount> collectedByCurrency;
 
-  factory RevenueThisMonth.fromJson(Map<String, dynamic> json) => RevenueThisMonth(
+  factory RevenueThisMonth.fromJson(Map<String, dynamic> json) =>
+      RevenueThisMonth(
         periodStart: json['periodStart'] as String? ?? '',
         periodEnd: json['periodEnd'] as String? ?? '',
         collectedByCurrency:
             (json['collectedByCurrency'] as List<dynamic>?)
-                    ?.map((c) => CurrencyAmount.fromJson(c as Map<String, dynamic>))
-                    .toList() ??
-                [],
+                ?.map((c) => CurrencyAmount.fromJson(c as Map<String, dynamic>))
+                .toList() ??
+            [],
       );
 }
 
 class CurrencyAmount {
-  const CurrencyAmount({
-    required this.currency,
-    required this.totalMinor,
-  });
+  const CurrencyAmount({required this.currency, required this.totalMinor});
 
   final String currency;
   final String totalMinor;
 
   factory CurrencyAmount.fromJson(Map<String, dynamic> json) => CurrencyAmount(
-        currency: json['currency'] as String? ?? '',
-        totalMinor: json['totalMinor'] as String? ?? '0',
-      );
+    currency: json['currency'] as String? ?? '',
+    totalMinor: json['totalMinor'] as String? ?? '0',
+  );
 }
 
 class DashboardToday {
-  const DashboardToday({
-    required this.date,
-    required this.jobs,
-  });
+  const DashboardToday({required this.date, required this.jobs});
 
   final String date;
   final List<TodayJob> jobs;
 
   factory DashboardToday.fromJson(Map<String, dynamic> json) => DashboardToday(
-        date: json['date'] as String? ?? '',
-        jobs: (json['jobs'] as List<dynamic>?)
-                ?.map((j) => TodayJob.fromJson(j as Map<String, dynamic>))
-                .toList() ??
-            [],
-      );
+    date: json['date'] as String? ?? '',
+    jobs:
+        (json['jobs'] as List<dynamic>?)
+            ?.map((j) => TodayJob.fromJson(j as Map<String, dynamic>))
+            .toList() ??
+        [],
+  );
 }
 
 class TodayJob {
@@ -155,16 +152,16 @@ class TodayJob {
   final String windowEnd;
 
   factory TodayJob.fromJson(Map<String, dynamic> json) => TodayJob(
-        id: json['id'] as String? ?? '',
-        jobNumber: json['jobNumber'] as String? ?? '',
-        customerName: json['customerName'] as String? ?? '',
-        serviceType: json['serviceType'] as String? ?? '',
-        addressLine: json['addressLine'] as String? ?? '',
-        technicianName: json['technicianName'] as String?,
-        status: json['status'] as String? ?? '',
-        windowStart: json['windowStart'] as String? ?? '',
-        windowEnd: json['windowEnd'] as String? ?? '',
-      );
+    id: json['id'] as String? ?? '',
+    jobNumber: json['jobNumber'] as String? ?? '',
+    customerName: json['customerName'] as String? ?? '',
+    serviceType: json['serviceType'] as String? ?? '',
+    addressLine: json['addressLine'] as String? ?? '',
+    technicianName: json['technicianName'] as String?,
+    status: json['status'] as String? ?? '',
+    windowStart: json['windowStart'] as String? ?? '',
+    windowEnd: json['windowEnd'] as String? ?? '',
+  );
 }
 
 class DashboardAlerts {
@@ -178,10 +175,12 @@ class DashboardAlerts {
   final String timezone;
   final List<Alert> alerts;
 
-  factory DashboardAlerts.fromJson(Map<String, dynamic> json) => DashboardAlerts(
+  factory DashboardAlerts.fromJson(Map<String, dynamic> json) =>
+      DashboardAlerts(
         date: json['date'] as String? ?? '',
         timezone: json['timezone'] as String? ?? 'UTC',
-        alerts: (json['alerts'] as List<dynamic>?)
+        alerts:
+            (json['alerts'] as List<dynamic>?)
                 ?.map((a) => Alert.fromJson(a as Map<String, dynamic>))
                 .toList() ??
             [],
@@ -212,16 +211,16 @@ class Alert {
   final String severity;
 
   factory Alert.fromJson(Map<String, dynamic> json) => Alert(
-        type: json['type'] as String? ?? '',
-        jobId: json['jobId'] as String?,
-        jobNumber: json['jobNumber'] as String?,
-        invoiceId: json['invoiceId'] as String?,
-        invoiceNumber: json['invoiceNumber'] as String?,
-        customerName: json['customerName'] as String?,
-        technicianName: json['technicianName'] as String?,
-        message: json['message'] as String? ?? '',
-        severity: json['severity'] as String? ?? 'warning',
-      );
+    type: json['type'] as String? ?? '',
+    jobId: json['jobId'] as String?,
+    jobNumber: json['jobNumber'] as String?,
+    invoiceId: json['invoiceId'] as String?,
+    invoiceNumber: json['invoiceNumber'] as String?,
+    customerName: json['customerName'] as String?,
+    technicianName: json['technicianName'] as String?,
+    message: json['message'] as String? ?? '',
+    severity: json['severity'] as String? ?? 'warning',
+  );
 }
 
 class DashboardRepository {

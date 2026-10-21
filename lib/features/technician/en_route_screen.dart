@@ -7,6 +7,7 @@ import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
+import '../../core/utils/map_links.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
@@ -66,19 +67,14 @@ class _EnRouteScreenState extends ConsumerState<EnRouteScreen> {
     if (job == null) return;
 
     final address = job.serviceAddress;
-    final query = '${address.line1}, ${address.city} ${address.region} ${address.postalCode}';
-    final encodedQuery = Uri.encodeComponent(query);
-    final mapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=$encodedQuery';
+    final query =
+        '${address.line1}, ${address.city} ${address.region} ${address.postalCode}';
 
-    final uri = Uri.parse(mapsUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open maps')),
-        );
-      }
+    final opened = await openMapsForAddress(query, directions: true);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open maps')));
     }
   }
 
@@ -93,9 +89,9 @@ class _EnRouteScreenState extends ConsumerState<EnRouteScreen> {
       await launchUrl(uri);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not make call')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not make call')));
       }
     }
   }
@@ -122,7 +118,10 @@ class _EnRouteScreenState extends ConsumerState<EnRouteScreen> {
             children: [
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   children: [
                     // Navigation header card
                     AeraCard(
@@ -157,7 +156,9 @@ class _EnRouteScreenState extends ConsumerState<EnRouteScreen> {
                                     ),
                                     Text(
                                       job.customer.fullName,
-                                      style: AeraTypography.h3.copyWith(fontSize: 16),
+                                      style: AeraTypography.h3.copyWith(
+                                        fontSize: 16,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -271,7 +272,9 @@ class _EnRouteScreenState extends ConsumerState<EnRouteScreen> {
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              DateFormat('EEEE, MMM d').format(job.scheduledStart!),
+                              DateFormat(
+                                'EEEE, MMM d',
+                              ).format(job.scheduledStart!),
                               style: AeraTypography.bodyMedium,
                             ),
                             const SizedBox(height: 4),
@@ -331,46 +334,52 @@ class _EnRouteScreenState extends ConsumerState<EnRouteScreen> {
                               ],
                             ),
                             const SizedBox(height: 12),
-                            ...job.notes.take(3).map(
-                              (note) => Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: AeraColors.surfaceContainerLow,
-                                    borderRadius: AeraRadii.borderMd,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            ...job.notes
+                                .take(3)
+                                .map(
+                                  (note) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: AeraColors.surfaceContainerLow,
+                                        borderRadius: AeraRadii.borderMd,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            note.authorName ?? 'Unknown',
-                                            style: AeraTypography.label,
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                note.authorName ?? 'Unknown',
+                                                style: AeraTypography.label,
+                                              ),
+                                              Text(
+                                                DateFormat(
+                                                  'h:mm a',
+                                                ).format(note.createdAt),
+                                                style: AeraTypography.label
+                                                    .copyWith(
+                                                      fontSize: 10,
+                                                      color: AeraColors.inkSoft,
+                                                    ),
+                                              ),
+                                            ],
                                           ),
+                                          const SizedBox(height: 4),
                                           Text(
-                                            DateFormat('h:mm a').format(note.createdAt),
-                                            style: AeraTypography.label.copyWith(
-                                              fontSize: 10,
-                                              color: AeraColors.inkSoft,
-                                            ),
+                                            note.body,
+                                            style: AeraTypography.bodySm
+                                                .copyWith(fontSize: 12),
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        note.body,
-                                        style: AeraTypography.bodySm.copyWith(
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
                           ],
                         ),
                       ),

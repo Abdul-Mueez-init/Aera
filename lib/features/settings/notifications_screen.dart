@@ -23,9 +23,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(notificationsListProvider.notifier).loadNotifications(
-            unreadOnly: _unreadOnly,
-          );
+      ref
+          .read(notificationsListProvider.notifier)
+          .loadNotifications(unreadOnly: _unreadOnly);
     });
   }
 
@@ -186,14 +186,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     color: !_unreadOnly
                         ? AeraColors.surface
                         : AeraColors.inkSoft,
-                    fontWeight:
-                        !_unreadOnly ? FontWeight.w600 : FontWeight.w500,
+                    fontWeight: !_unreadOnly
+                        ? FontWeight.w600
+                        : FontWeight.w500,
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                     side: BorderSide(
-                      color:
-                          !_unreadOnly ? AeraColors.accent : AeraColors.line,
+                      color: !_unreadOnly ? AeraColors.accent : AeraColors.line,
                     ),
                   ),
                   showCheckmark: false,
@@ -232,9 +232,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           const Divider(height: 1, color: AeraColors.line),
 
           // Content Area
-          Expanded(
-            child: _buildContent(state),
-          ),
+          Expanded(child: _buildContent(state)),
         ],
       ),
     );
@@ -252,13 +250,18 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  color: AeraColors.danger, size: 36),
+              const Icon(
+                Icons.error_outline,
+                color: AeraColors.danger,
+                size: 36,
+              ),
               const SizedBox(height: 12),
               Text(
                 state.error!,
                 textAlign: TextAlign.center,
-                style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft),
+                style: AeraTypography.bodySm.copyWith(
+                  color: AeraColors.inkSoft,
+                ),
               ),
               const SizedBox(height: 16),
               OutlinedButton.icon(

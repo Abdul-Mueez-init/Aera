@@ -1,45 +1,77 @@
-# Aera onboarding: Google Maps setup
+# Aera onboarding: OpenStreetMap setup
 
-The onboarding area step uses Google Maps for the interactive map and Google Places API (New) + Geocoding API for server-validated nearby neighborhoods and canonical address resolution. No key is committed. Google lists `neighborhood` as a response-only place type rather than a Nearby Search filter; the API requests real place types and the server keeps only actual results whose returned types include `neighborhood`. Empty results remain an honest provider outcome; no synthetic areas are added. See [Nearby Search (New)](https://developers.google.com/maps/documentation/places/web-service/nearby-search) and [Place types](https://developers.google.com/maps/documentation/places/web-service/place-types).
+The onboarding area step uses OpenStreetMap (OSM) for the interactive map and OSM services for server-validated nearby neighborhoods and canonical address resolution. No API keys are required. This eliminates Google Maps Platform billing and dependencies.
 
 ## Required configuration
 
-1. Create or select a Google Cloud project and enable **Maps SDK for Android**, **Maps SDK for iOS**, **Maps JavaScript API**, **Places API (New)**, and **Geocoding API**.
-2. Configure billing and usage quotas/alerts. Google Maps Platform is usage-priced; each map load, place search, and geocoding request can incur charges under Google's then-current SKU pricing. Set quotas and budget alerts before production use.
-3. Create **separate restricted keys**:
-   - **Server key**: set `GOOGLE_MAPS_PLACES_API_KEY` in the API host's secret manager. Restrict it to Places API (New) and Geocoding API, and to the API host's static egress IPs where available. It is never sent to the Flutter app.
-   - **Android SDK key**: set `GOOGLE_MAPS_API_KEY` in the build environment. Restrict to Maps SDK for Android and the released package name plus signing-certificate SHA fingerprints. Android Gradle injects it into the manifest.
-   - **iOS SDK key**: set the Xcode build setting `GOOGLE_MAPS_API_KEY` for each build configuration and restrict to Maps SDK for iOS and the production bundle identifier. `Info.plist` passes the setting to AppDelegate.
-   - **Web browser key**: replace `YOUR_GOOGLE_MAPS_BROWSER_KEY` in `web/index.html` at deploy time (or in the deployment template) with a key restricted by HTTP referrer and Maps JavaScript API.
-4. Keep keys out of Git, crash reports, request logs, and client source control. Client SDK keys are visible in distributed apps and must rely on application/referrer restrictions and quotas, not secrecy.
-5. Run onboarding after the migration `20261016050000_add_company_onboarding_profile` has been deployed. New registrations remain incomplete until the API validates all required records. Existing companies are marked complete by the migration to avoid blocking current accounts.
+### Backend environment variables (all optional with defaults)
 
-## Flutter build configuration
+The backend uses three optional environment variables (documented in `backend/.env.example`):
 
-Step 02 starts with a visible **30 km** radius default (the user can change it from 10–50 km, matching Nearby Search's 50,000 m maximum circle). The map is centered only after a real saved, searched, or GPS location is selected. The map displays returned Google neighborhood locations as selectable center markers; Google Places does not supply authoritative service-boundary polygons in this integration.
+- `OSM_USER_AGENT`: Identifies the client to OSM services (required by usage policy). Default: `"AeraFieldService/1.0 (+https://quantixlabs.live)"`
+- `NOMINATIM_BASE_URL`: Nominatim geocoding service base URL. Default: `"https://nominatim.openstreetmap.org"`
+- `OVERPASS_BASE_URL`: Overpass API base URL for neighborhood discovery. Default: `"https://overpass-api.de/api/interpreter"`
 
-- Android: expose the restricted SDK key as `GOOGLE_MAPS_API_KEY` to Gradle, and pass the same client key as a Dart define so Flutter knows the interactive map is configured:
+### Flutter build configuration
 
-  ```powershell
-  $env:GOOGLE_MAPS_API_KEY = "YOUR_RESTRICTED_ANDROID_KEY"
-  flutter build apk --dart-define="GOOGLE_MAPS_API_KEY=$env:GOOGLE_MAPS_API_KEY"
-  ```
-
-- iOS: set `GOOGLE_MAPS_API_KEY` in the Xcode build configuration, and pass the restricted iOS key as a Dart define:
+- Android/iOS/Web: No Maps SDK key is required. The map renders OSM raster tiles by default.
+- Optional: Set `MAP_TILE_URL` as a Dart define to use a custom tile provider (recommended for production scale):
 
   ```bash
-  export GOOGLE_MAPS_API_KEY="YOUR_RESTRICTED_IOS_KEY"
-  flutter build ios --dart-define="GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY"
+  flutter run --dart-define=MAP_TILE_URL=https://your-tile-provider.com/{z}/{x}/{y}.png
   ```
 
-- Web: substitute `YOUR_GOOGLE_MAPS_BROWSER_KEY` in `web/index.html` at deployment, then build with the same restricted browser key as a Dart define:
+The default tile URL is `https://tile.openstreetmap.org/{z}/{x}/{y}.png`. This is suitable for development and light use, but not for production scale.
 
-  ```bash
-  flutter build web --dart-define="GOOGLE_MAPS_API_KEY=YOUR_RESTRICTED_BROWSER_KEY"
-  ```
+## Usage policies and rate limiting
 
-The Flutter `image_picker`, Google Maps, and Geolocator dependencies are declared in `pubspec.yaml`/`pubspec.lock`. `GOOGLE_MAPS_PLACES_API_KEY` is a separate server-only secret; do not reuse a browser/mobile key for backend Places/Geocoding requests.
+The backend implements the following per OSM service policies:
 
-## Fallback behavior
+### Nominatim (geocoding)
+- **Rate limit**: Max 1 request/second (backend enforces ≥1.1s between requests)
+- **No autocomplete/search-as-you-type**: Search only on explicit submit (Flutter enforces this)
+- **Caching**: Results cached for 24 hours (in-memory, single-process)
+- **Attribution**: Required in UI (Flutter displays "OpenStreetMap contributors" with copyright link)
 
-Without `GOOGLE_MAPS_PLACES_API_KEY`, nearby-zone lookup and saving the service area return an explicit `MAPS_PROVIDER_NOT_CONFIGURED` error. The API does not create example neighborhoods or accept a client-supplied label as a verified zone. A missing client SDK key leaves the map unavailable and should be treated as a deployment configuration failure, not silently bypassed.
+### Overpass API (neighborhood discovery)
+- **Rate limit**: Fair use (backend enforces ≥1.1s between requests)
+- **Query timeout**: 20 seconds
+- **Result size**: Limited to 100 elements per query
+- **Caching**: Results cached for 10 minutes (in-memory, single-process)
+- **Place types**: Searches for `suburb`, `neighbourhood`, `quarter`, `city_district` with fallback to `town`, `village`, `hamlet`, `locality`
+
+### OSM tile server
+- **Rate limit**: Fine for development and light use
+- **Production**: Use a hosted tile provider (e.g., Mapbox, CartoDB, or self-hosted) for production scale
+- **Attribution**: Required in UI (Flutter displays attribution widget)
+
+The backend uses:
+- Per-host serial queue (≥1.1s between consecutive requests to the same host)
+- In-memory caching with TTL (geocode: 24h, neighborhoods: 10min)
+- `AbortSignal.timeout` (20s) for all requests
+- User-Agent header on every request
+
+## Architecture notes
+
+- **Single-process only**: The in-memory throttle/cache works for one systemd service instance. Do not add Redis for multi-process scaling without a full redesign.
+- **No API keys**: OSM services are free and public; no keys are stored or committed.
+- **Fallback behavior**: Network failures return `MAPS_PROVIDER_UNAVAILABLE` (502). Invalid coordinates return `LOCATION_NOT_RESOLVED` (422). Empty neighborhood results return an empty list (the app instructs users to add custom areas).
+
+## Legacy Google Maps data
+
+Existing companies with Google place IDs (place IDs not starting with `osm:` or `custom:`) are treated as custom areas on load in Flutter. This prevents save failures for already-onboarded companies. Old Google IDs are not migrated; users can re-select neighborhoods when they next edit their service area.
+
+## Production recommendations
+
+1. **Tile provider**: Switch from the public OSM tile server to a hosted provider (Mapbox, CartoDB, MapTiler, or self-hosted tiles) for production scale and reliability.
+2. **Self-hosted Nominatim/Overpass**: For high traffic, consider self-hosting Nominatim and Overpass with proper infrastructure and rate limiting.
+3. **Monitoring**: Monitor OSM service response times and errors. The backend logs failures without exposing request bodies.
+4. **Attribution**: Keep the OpenStreetMap attribution visible in the UI as required by the OSM license.
+
+## Out of scope (remain unchanged)
+
+The following Google services are **not** part of this migration and remain in the project:
+- Google Gemini AI (`GEMINI_*` env vars, `backend/src/modules/ai/gateway/gemini.client.ts`)
+- Firebase Cloud Messaging (`FIREBASE_*` env vars, `fcm-push.adapter.ts`)
+- Google Fonts Flutter package (`google_fonts` in `pubspec.yaml`)
+- Google Maven repositories in Android Gradle files

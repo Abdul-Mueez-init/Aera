@@ -45,7 +45,8 @@ dependencies:
   # No image-capture package existed in the project before this — flagging
   # per rules.md §11 rather than adding it silently.
   image_picker: ^1.1.2
-  google_maps_flutter: ^2.12.3
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.1
   geolocator: ^14.0.2
   # New in Phase E1: maps integration and phone calls for technician workflow
   url_launcher: ^6.3.1

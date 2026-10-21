@@ -120,276 +120,276 @@ final GoRouter appRouter = GoRouter(
 );
 
 final List<RouteBase> _routes = [
-    GoRoute(path: '/', redirect: (context, state) => '/dashboard'),
-    // Auth Routes
-    GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
+  GoRoute(path: '/', redirect: (context, state) => '/dashboard'),
+  // Auth Routes
+  GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
   GoRoute(path: '/welcome', builder: (context, state) => const WelcomeScreen()),
-    GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+  GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
   GoRoute(path: '/sign-up', builder: (context, state) => const SignUpScreen()),
-    GoRoute(
-      path: '/forgot-password',
-      builder: (context, state) => const ForgotPasswordScreen(),
+  GoRoute(
+    path: '/forgot-password',
+    builder: (context, state) => const ForgotPasswordScreen(),
+  ),
+  GoRoute(
+    path: '/reset-password',
+    builder: (context, state) => const ResetPasswordScreen(),
+  ),
+  GoRoute(
+    path: '/accept-invitation',
+    builder: (context, state) => AcceptInvitationScreen(
+      initialToken: state.uri.queryParameters['token'],
     ),
-    GoRoute(
-      path: '/reset-password',
-      builder: (context, state) => const ResetPasswordScreen(),
-    ),
-    GoRoute(
-      path: '/accept-invitation',
-      builder: (context, state) => AcceptInvitationScreen(
-        initialToken: state.uri.queryParameters['token'],
+  ),
+
+  // Onboarding Flow
+  GoRoute(
+    path: '/onboarding/business-basics',
+    builder: (context, state) => const BusinessBasicsScreen(),
+  ),
+  GoRoute(
+    path: '/onboarding/service-area',
+    builder: (context, state) => const ServiceAreaScreen(),
+  ),
+  GoRoute(
+    path: '/onboarding/services',
+    builder: (context, state) => const ServicesScreen(),
+  ),
+  GoRoute(
+    path: '/onboarding/team-setup',
+    builder: (context, state) => const TeamSetupScreen(),
+  ),
+  GoRoute(
+    path: '/onboarding/complete',
+    builder: (context, state) => const OnboardingCompleteScreen(),
+  ),
+
+  // Creation Flows
+  GoRoute(
+    path: '/create-customer',
+    builder: (context, state) => const CreateCustomerScreen(),
+  ),
+  GoRoute(
+    path: '/create-job',
+    builder: (context, state) => const CreateJobScreen(),
+  ),
+  GoRoute(
+    path: '/schedule-job/:jobId',
+    builder: (context, state) {
+      final jobId = state.pathParameters['jobId'] ?? '';
+      return ScheduleJobScreen(jobId: jobId);
+    },
+  ),
+  GoRoute(
+    path: '/create-quote',
+    builder: (context, state) => const CreateQuoteScreen(),
+  ),
+  GoRoute(
+    path: '/create-invoice',
+    builder: (context, state) {
+      final jobId =
+          state.uri.queryParameters['jobId'] ??
+          (state.extra is String ? state.extra as String : null);
+      return CreateInvoiceScreen(initialJobId: jobId);
+    },
+  ),
+
+  // Commercial & Portals
+  GoRoute(path: '/quotes', builder: (context, state) => const QuotesScreen()),
+  GoRoute(
+    path: '/quotes/:quoteId',
+    builder: (context, state) {
+      final quoteId = state.pathParameters['quoteId'] ?? 'QT-1048';
+      return QuoteDetailScreen(quoteId: quoteId);
+    },
+  ),
+  GoRoute(
+    path: '/invoices',
+    builder: (context, state) => const InvoicesScreen(),
+  ),
+  GoRoute(
+    path: '/invoices/:invoiceId',
+    builder: (context, state) {
+      final invoiceId = state.pathParameters['invoiceId'] ?? '';
+      return InvoiceDetailScreen(invoiceId: invoiceId);
+    },
+  ),
+  GoRoute(
+    path: '/portal/:token',
+    builder: (context, state) {
+      final token = state.pathParameters['token'] ?? '';
+      return CustomerHomeScreen(token: token);
+    },
+  ),
+  GoRoute(
+    path: '/quote-approval/:shareToken',
+    builder: (context, state) {
+      final shareToken = state.pathParameters['shareToken'] ?? '';
+      return QuoteApprovalScreen(shareToken: shareToken);
+    },
+  ),
+  GoRoute(
+    path: '/invoice-payment/:token/:invoiceId',
+    builder: (context, state) {
+      final token = state.pathParameters['token'] ?? '';
+      final invoiceId = state.pathParameters['invoiceId'] ?? '';
+      return InvoicePaymentScreen(token: token, invoiceId: invoiceId);
+    },
+  ),
+
+  // Field & AI & Settings
+  GoRoute(
+    path: '/technician-tracking/:token/:jobId',
+    builder: (context, state) {
+      final token = state.pathParameters['token'] ?? '';
+      final jobId = state.pathParameters['jobId'] ?? '';
+      return TechnicianTrackingScreen(token: token, jobId: jobId);
+    },
+  ),
+  GoRoute(
+    path: '/technician-home',
+    builder: (context, state) => const TechnicianHomeScreen(),
+  ),
+  GoRoute(
+    path: '/technician/jobs/:jobId/brief',
+    builder: (context, state) {
+      final jobId = state.pathParameters['jobId'] ?? '';
+      return JobBriefScreen(jobId: jobId);
+    },
+  ),
+  GoRoute(
+    path: '/technician/jobs/:jobId/en-route',
+    builder: (context, state) {
+      final jobId = state.pathParameters['jobId'] ?? '';
+      return EnRouteScreen(jobId: jobId);
+    },
+  ),
+  GoRoute(
+    path: '/technician/jobs/:jobId/work',
+    builder: (context, state) {
+      final jobId = state.pathParameters['jobId'] ?? '';
+      return WorkInProgressScreen(jobId: jobId);
+    },
+  ),
+  GoRoute(
+    path: '/technician/jobs/:jobId/evidence',
+    builder: (context, state) {
+      final jobId = state.pathParameters['jobId'] ?? '';
+      return JobEvidenceScreen(jobId: jobId);
+    },
+  ),
+  GoRoute(
+    path: '/technician/jobs/:jobId/complete',
+    builder: (context, state) {
+      final jobId = state.pathParameters['jobId'] ?? '';
+      return CompleteJobScreen(jobId: jobId);
+    },
+  ),
+  GoRoute(
+    path: '/ai-assistant',
+    builder: (context, state) => const AiOperationsAssistantScreen(),
+  ),
+  GoRoute(
+    path: '/ai-insight/:insightId',
+    builder: (context, state) {
+      final insightId = state.pathParameters['insightId'] ?? '';
+      return AiInsightDetailScreen(insightId: insightId);
+    },
+  ),
+  GoRoute(
+    path: '/notifications',
+    builder: (context, state) => const NotificationsScreen(),
+  ),
+  GoRoute(
+    path: '/team',
+    builder: (context, state) => const TeamManagementScreen(),
+  ),
+  GoRoute(
+    path: '/profile-settings',
+    builder: (context, state) => const ProfileSettingsScreen(),
+  ),
+  GoRoute(
+    path: '/company-settings',
+    builder: (context, state) => const CompanySettingsScreen(),
+  ),
+
+  // Sub-routes for Jobs & Customers Details
+  GoRoute(
+    path: '/jobs/:jobId',
+    builder: (context, state) {
+      final jobId = state.pathParameters['jobId'] ?? '';
+      return JobDetailScreen(jobId: jobId);
+    },
+  ),
+  GoRoute(
+    path: '/customers/:customerId',
+    builder: (context, state) {
+      final customerId = state.pathParameters['customerId'] ?? '';
+      return CustomerDetailScreen(customerId: customerId);
+    },
+  ),
+  GoRoute(
+    path: '/customers/:customerId/edit',
+    builder: (context, state) {
+      final customerId = state.pathParameters['customerId'] ?? '';
+      return EditCustomerScreen(customerId: customerId);
+    },
+  ),
+
+  // Main App Shell with Bottom Navigation
+  StatefulShellRoute.indexedStack(
+    builder: (context, state, navigationShell) {
+      return AppScaffold(navigationShell: navigationShell);
+    },
+    branches: [
+      // Tab 0: Home / Dashboard
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/dashboard',
+            builder: (context, state) => const DashboardScreen(),
+          ),
+        ],
       ),
-    ),
 
-    // Onboarding Flow
-    GoRoute(
-      path: '/onboarding/business-basics',
-      builder: (context, state) => const BusinessBasicsScreen(),
-    ),
-    GoRoute(
-      path: '/onboarding/service-area',
-      builder: (context, state) => const ServiceAreaScreen(),
-    ),
-    GoRoute(
-      path: '/onboarding/services',
-      builder: (context, state) => const ServicesScreen(),
-    ),
-    GoRoute(
-      path: '/onboarding/team-setup',
-      builder: (context, state) => const TeamSetupScreen(),
-    ),
-    GoRoute(
-      path: '/onboarding/complete',
-      builder: (context, state) => const OnboardingCompleteScreen(),
-    ),
+      // Tab 1: Jobs
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/jobs',
+            builder: (context, state) => const JobsScreen(),
+          ),
+        ],
+      ),
 
-    // Creation Flows
-    GoRoute(
-      path: '/create-customer',
-      builder: (context, state) => const CreateCustomerScreen(),
-    ),
-    GoRoute(
-      path: '/create-job',
-      builder: (context, state) => const CreateJobScreen(),
-    ),
-    GoRoute(
-      path: '/schedule-job/:jobId',
-      builder: (context, state) {
-        final jobId = state.pathParameters['jobId'] ?? '';
-        return ScheduleJobScreen(jobId: jobId);
-      },
-    ),
-    GoRoute(
-      path: '/create-quote',
-      builder: (context, state) => const CreateQuoteScreen(),
-    ),
-    GoRoute(
-      path: '/create-invoice',
-      builder: (context, state) {
-        final jobId =
-            state.uri.queryParameters['jobId'] ??
-            (state.extra is String ? state.extra as String : null);
-        return CreateInvoiceScreen(initialJobId: jobId);
-      },
-    ),
+      // Tab 2: Schedule / Calendar
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/calendar',
+            builder: (context, state) => const CalendarScreen(),
+          ),
+        ],
+      ),
 
-    // Commercial & Portals
-    GoRoute(path: '/quotes', builder: (context, state) => const QuotesScreen()),
-    GoRoute(
-      path: '/quotes/:quoteId',
-      builder: (context, state) {
-        final quoteId = state.pathParameters['quoteId'] ?? 'QT-1048';
-        return QuoteDetailScreen(quoteId: quoteId);
-      },
-    ),
-    GoRoute(
-      path: '/invoices',
-      builder: (context, state) => const InvoicesScreen(),
-    ),
-    GoRoute(
-      path: '/invoices/:invoiceId',
-      builder: (context, state) {
-        final invoiceId = state.pathParameters['invoiceId'] ?? '';
-        return InvoiceDetailScreen(invoiceId: invoiceId);
-      },
-    ),
-    GoRoute(
-      path: '/portal/:token',
-      builder: (context, state) {
-        final token = state.pathParameters['token'] ?? '';
-        return CustomerHomeScreen(token: token);
-      },
-    ),
-    GoRoute(
-      path: '/quote-approval/:shareToken',
-      builder: (context, state) {
-        final shareToken = state.pathParameters['shareToken'] ?? '';
-        return QuoteApprovalScreen(shareToken: shareToken);
-      },
-    ),
-    GoRoute(
-      path: '/invoice-payment/:token/:invoiceId',
-      builder: (context, state) {
-        final token = state.pathParameters['token'] ?? '';
-        final invoiceId = state.pathParameters['invoiceId'] ?? '';
-        return InvoicePaymentScreen(token: token, invoiceId: invoiceId);
-      },
-    ),
+      // Tab 3: Customers
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/customers',
+            builder: (context, state) => const CustomersScreen(),
+          ),
+        ],
+      ),
 
-    // Field & AI & Settings
-    GoRoute(
-      path: '/technician-tracking/:token/:jobId',
-      builder: (context, state) {
-        final token = state.pathParameters['token'] ?? '';
-        final jobId = state.pathParameters['jobId'] ?? '';
-        return TechnicianTrackingScreen(token: token, jobId: jobId);
-      },
-    ),
-    GoRoute(
-      path: '/technician-home',
-      builder: (context, state) => const TechnicianHomeScreen(),
-    ),
-    GoRoute(
-      path: '/technician/jobs/:jobId/brief',
-      builder: (context, state) {
-        final jobId = state.pathParameters['jobId'] ?? '';
-        return JobBriefScreen(jobId: jobId);
-      },
-    ),
-    GoRoute(
-      path: '/technician/jobs/:jobId/en-route',
-      builder: (context, state) {
-        final jobId = state.pathParameters['jobId'] ?? '';
-        return EnRouteScreen(jobId: jobId);
-      },
-    ),
-    GoRoute(
-      path: '/technician/jobs/:jobId/work',
-      builder: (context, state) {
-        final jobId = state.pathParameters['jobId'] ?? '';
-        return WorkInProgressScreen(jobId: jobId);
-      },
-    ),
-    GoRoute(
-      path: '/technician/jobs/:jobId/evidence',
-      builder: (context, state) {
-        final jobId = state.pathParameters['jobId'] ?? '';
-        return JobEvidenceScreen(jobId: jobId);
-      },
-    ),
-    GoRoute(
-      path: '/technician/jobs/:jobId/complete',
-      builder: (context, state) {
-        final jobId = state.pathParameters['jobId'] ?? '';
-        return CompleteJobScreen(jobId: jobId);
-      },
-    ),
-    GoRoute(
-      path: '/ai-assistant',
-      builder: (context, state) => const AiOperationsAssistantScreen(),
-    ),
-    GoRoute(
-      path: '/ai-insight/:insightId',
-      builder: (context, state) {
-        final insightId = state.pathParameters['insightId'] ?? '';
-        return AiInsightDetailScreen(insightId: insightId);
-      },
-    ),
-    GoRoute(
-      path: '/notifications',
-      builder: (context, state) => const NotificationsScreen(),
-    ),
-    GoRoute(
-      path: '/team',
-      builder: (context, state) => const TeamManagementScreen(),
-    ),
-    GoRoute(
-      path: '/profile-settings',
-      builder: (context, state) => const ProfileSettingsScreen(),
-    ),
-    GoRoute(
-      path: '/company-settings',
-      builder: (context, state) => const CompanySettingsScreen(),
-    ),
-
-    // Sub-routes for Jobs & Customers Details
-    GoRoute(
-      path: '/jobs/:jobId',
-      builder: (context, state) {
-        final jobId = state.pathParameters['jobId'] ?? '';
-        return JobDetailScreen(jobId: jobId);
-      },
-    ),
-    GoRoute(
-      path: '/customers/:customerId',
-      builder: (context, state) {
-        final customerId = state.pathParameters['customerId'] ?? '';
-        return CustomerDetailScreen(customerId: customerId);
-      },
-    ),
-    GoRoute(
-      path: '/customers/:customerId/edit',
-      builder: (context, state) {
-        final customerId = state.pathParameters['customerId'] ?? '';
-        return EditCustomerScreen(customerId: customerId);
-      },
-    ),
-
-    // Main App Shell with Bottom Navigation
-    StatefulShellRoute.indexedStack(
-      builder: (context, state, navigationShell) {
-        return AppScaffold(navigationShell: navigationShell);
-      },
-      branches: [
-        // Tab 0: Home / Dashboard
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/dashboard',
-              builder: (context, state) => const DashboardScreen(),
-            ),
-          ],
-        ),
-
-        // Tab 1: Jobs
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/jobs',
-              builder: (context, state) => const JobsScreen(),
-            ),
-          ],
-        ),
-
-        // Tab 2: Schedule / Calendar
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/calendar',
-              builder: (context, state) => const CalendarScreen(),
-            ),
-          ],
-        ),
-
-        // Tab 3: Customers
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/customers',
-              builder: (context, state) => const CustomersScreen(),
-            ),
-          ],
-        ),
-
-        // Tab 4: More
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/more',
-              builder: (context, state) => const MoreScreen(),
-            ),
-          ],
-        ),
-      ],
-    ),
-  ];
+      // Tab 4: More
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/more',
+            builder: (context, state) => const MoreScreen(),
+          ),
+        ],
+      ),
+    ],
+  ),
+];

@@ -36,10 +36,7 @@ class AppConfig {
 
   static String get apiBaseUrl {
     // For web builds, use const fromEnvironment at build time
-    const envBaseUrl = String.fromEnvironment(
-      'API_BASE_URL',
-      defaultValue: '',
-    );
+    const envBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: '');
 
     if (envBaseUrl.isNotEmpty) {
       // Production/staging must use HTTPS
@@ -82,7 +79,9 @@ class AppConfig {
 
   static String get validatedCustomerWebBaseUrl {
     if (customerWebBaseUrl.isEmpty && (isProduction || isStaging)) {
-      throw StateError('CUSTOMER_WEB_BASE_URL must be set for $environment web builds');
+      throw StateError(
+        'CUSTOMER_WEB_BASE_URL must be set for $environment web builds',
+      );
     }
     return customerWebBaseUrl;
   }

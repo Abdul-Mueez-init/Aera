@@ -23,24 +23,31 @@ Future<void> main() async {
   );
 
   // Initialize Sentry if DSN is provided
-  final sentryDsn = const String.fromEnvironment('SENTRY_DSN', defaultValue: '');
+  final sentryDsn = const String.fromEnvironment(
+    'SENTRY_DSN',
+    defaultValue: '',
+  );
   if (sentryDsn.isNotEmpty) {
-    await SentryFlutter.init(
-      (options) {
-        options.dsn = sentryDsn;
-        options.environment = const String.fromEnvironment('ENVIRONMENT', defaultValue: 'development');
-        options.release = const String.fromEnvironment('SENTRY_RELEASE', defaultValue: 'aera@1.0.0');
-        options.tracesSampleRate = AppConfig.tracesSampleRate;
-        options.profilesSampleRate = AppConfig.tracesSampleRate;
+    await SentryFlutter.init((options) {
+      options.dsn = sentryDsn;
+      options.environment = const String.fromEnvironment(
+        'ENVIRONMENT',
+        defaultValue: 'development',
+      );
+      options.release = const String.fromEnvironment(
+        'SENTRY_RELEASE',
+        defaultValue: 'aera@1.0.0',
+      );
+      options.tracesSampleRate = AppConfig.tracesSampleRate;
+      options.profilesSampleRate = AppConfig.tracesSampleRate;
 
-        // Aera holds customer PII, so opt out of everything sensitive
-        options.enableUserInteractionTracing = false;
-        options.enableWatchdogTerminationTracking = true;
-        options.enableAppHangTracking = true;
-        options.attachScreenshot = false;
-        options.attachViewHierarchy = false;
-      },
-    );
+      // Aera holds customer PII, so opt out of everything sensitive
+      options.enableUserInteractionTracing = false;
+      options.enableWatchdogTerminationTracking = true;
+      options.enableAppHangTracking = true;
+      options.attachScreenshot = false;
+      options.attachViewHierarchy = false;
+    });
   }
 
   const app = ProviderScope(child: AeraApp());

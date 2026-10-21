@@ -80,14 +80,16 @@ class TechnicianRepository {
     required Uint8List bytes,
     required String mimeType,
   }) async {
-    final response = await http.put(
-      Uri.parse(uploadUrl),
-      headers: {'Content-Type': mimeType},
-      body: bytes,
-    ).timeout(
-      const Duration(minutes: 5),
-      onTimeout: () => throw TimeoutException('Photo upload timed out'),
-    );
+    final response = await http
+        .put(
+          Uri.parse(uploadUrl),
+          headers: {'Content-Type': mimeType},
+          body: bytes,
+        )
+        .timeout(
+          const Duration(minutes: 5),
+          onTimeout: () => throw TimeoutException('Photo upload timed out'),
+        );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
         'Photo upload failed (${response.statusCode}): ${response.body}',

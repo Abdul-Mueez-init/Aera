@@ -19,10 +19,6 @@ import { portalRouter } from "./modules/portal/portal.routes.js";
 import { notificationRouter } from "./modules/notifications/notification.routes.js";
 import { aiRouter } from "./modules/ai/ai.routes.js";
 
-// Sentry is already initialized in instrument.ts before this file loads
-// We only import the handlers here
-import * as Sentry from "@sentry/node";
-
 export function buildApp() {
   const app = express();
 

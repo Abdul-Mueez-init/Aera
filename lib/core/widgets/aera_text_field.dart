@@ -86,7 +86,10 @@ class AeraTextField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: AeraRadii.borderMd,
-              borderSide: const BorderSide(color: AeraColors.accent, width: 1.5),
+              borderSide: const BorderSide(
+                color: AeraColors.accent,
+                width: 1.5,
+              ),
             ),
           ),
         ),

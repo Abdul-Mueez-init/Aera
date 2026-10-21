@@ -119,7 +119,9 @@ class NotificationListNotifier extends StateNotifier<NotificationListState> {
       state = state.copyWith(items: updatedItems, meta: updatedMeta);
     } catch (e) {
       // Surface error to user via state
-      state = state.copyWith(error: 'Failed to mark notification as read: ${e.toString()}');
+      state = state.copyWith(
+        error: 'Failed to mark notification as read: ${e.toString()}',
+      );
     }
   }
 
@@ -146,7 +148,9 @@ class NotificationListNotifier extends StateNotifier<NotificationListState> {
 
       state = state.copyWith(items: updatedItems, meta: updatedMeta);
     } catch (e) {
-      state = state.copyWith(error: 'Failed to mark all as read: ${e.toString()}');
+      state = state.copyWith(
+        error: 'Failed to mark all as read: ${e.toString()}',
+      );
     }
   }
 }

@@ -3,12 +3,7 @@ import '../theme/aera_colors.dart';
 import '../theme/aera_radii.dart';
 import '../theme/aera_typography.dart';
 
-enum AeraButtonVariant {
-  primary,
-  secondary,
-  outline,
-  danger,
-}
+enum AeraButtonVariant { primary, secondary, outline, danger }
 
 class AeraButton extends StatelessWidget {
   const AeraButton({
@@ -74,10 +69,7 @@ class AeraButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null) ...[
-                icon!,
-                const SizedBox(width: 8),
-              ],
+              if (icon != null) ...[icon!, const SizedBox(width: 8)],
               Text(
                 text,
                 style: AeraTypography.bodyMedium.copyWith(

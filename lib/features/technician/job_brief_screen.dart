@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_typography.dart';
+import '../../core/utils/map_links.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
@@ -65,19 +65,14 @@ class _JobBriefScreenState extends ConsumerState<JobBriefScreen> {
     if (job == null) return;
 
     final address = job.serviceAddress;
-    final query = '${address.line1}, ${address.city} ${address.region} ${address.postalCode}';
-    final encodedQuery = Uri.encodeComponent(query);
-    final mapsUrl = 'https://www.google.com/maps/search/?api=1&query=$encodedQuery';
+    final query =
+        '${address.line1}, ${address.city} ${address.region} ${address.postalCode}';
 
-    final uri = Uri.parse(mapsUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open maps')),
-        );
-      }
+    final opened = await openMapsForAddress(query);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open maps')));
     }
   }
 
@@ -298,7 +293,9 @@ class _JobBriefScreenState extends ConsumerState<JobBriefScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        DateFormat('EEEE, MMM d, yyyy').format(job.scheduledStart!),
+                        DateFormat(
+                          'EEEE, MMM d, yyyy',
+                        ).format(job.scheduledStart!),
                         style: AeraTypography.bodyMedium,
                       ),
                       const SizedBox(height: 4),

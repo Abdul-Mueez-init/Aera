@@ -43,11 +43,7 @@ class AeraCard extends StatelessWidget {
       return Material(
         color: Colors.transparent,
         borderRadius: borderRadius,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: borderRadius,
-          child: card,
-        ),
+        child: InkWell(onTap: onTap, borderRadius: borderRadius, child: card),
       );
     }
 

@@ -35,10 +35,24 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
   SUPABASE_JOB_PHOTOS_BUCKET: z.string().trim().min(1).default("job-photos"),
-  // Google Places API (New) key used server-side only for nearby service-zone
-  // discovery. The mobile/web Maps SDK must use a separate, platform-restricted
-  // key; never expose this server key in Flutter or logs.
-  GOOGLE_MAPS_PLACES_API_KEY: optionalNonEmptyString,
+  // OpenStreetMap configuration for geocoding and neighborhood discovery.
+  // No API keys required; these are public services with usage policies.
+  // OSM_USER_AGENT identifies the client to OSM services (required by policy).
+  OSM_USER_AGENT: z
+    .string()
+    .trim()
+    .min(1)
+    .default("AeraFieldService/1.0 (+https://quantixlabs.live)"),
+  // Nominatim base URL for geocoding (address ↔ coordinates).
+  NOMINATIM_BASE_URL: z
+    .string()
+    .url()
+    .default("https://nominatim.openstreetmap.org"),
+  // Overpass API base URL for neighborhood discovery.
+  OVERPASS_BASE_URL: z
+    .string()
+    .url()
+    .default("https://overpass-api.de/api/interpreter"),
   // Phase 10 Slice D — email adapter (Resend: https://resend.com).
   // Left unset in local/dev/test: resend-email.adapter.ts skips sending and
   // logs a warning instead of failing, so no key is required to run the app

@@ -16,13 +16,13 @@ import '../../ai/providers/ai_provider.dart';
 
 final authNotifierProvider =
     StateNotifierProvider<AuthNotifier, AsyncValue<AuthSession?>>((ref) {
-  final repo = ref.watch(authRepositoryProvider);
-  final client = ref.watch(apiClientProvider);
-  final notifier = AuthNotifier(repo, ref);
-  client.setSessionExpiredCallback(notifier.handleSessionExpired);
-  ref.onDispose(() => client.setSessionExpiredCallback(null));
-  return notifier;
-});
+      final repo = ref.watch(authRepositoryProvider);
+      final client = ref.watch(apiClientProvider);
+      final notifier = AuthNotifier(repo, ref);
+      client.setSessionExpiredCallback(notifier.handleSessionExpired);
+      ref.onDispose(() => client.setSessionExpiredCallback(null));
+      return notifier;
+    });
 
 final currentUserProvider = Provider<AuthUser?>((ref) {
   final session = ref.watch(authNotifierProvider).valueOrNull;

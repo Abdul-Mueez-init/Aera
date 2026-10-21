@@ -33,11 +33,14 @@ AeraStatusType _invoiceStatusType(String status) {
   }
 }
 
-String _statusLabel(String status) =>
-    status.replaceAll('_', ' ').split(' ').map((w) {
+String _statusLabel(String status) => status
+    .replaceAll('_', ' ')
+    .split(' ')
+    .map((w) {
       if (w.isEmpty) return w;
       return '${w[0]}${w.substring(1).toLowerCase()}';
-    }).join(' ');
+    })
+    .join(' ');
 
 String _formatMoney(int minor, String currency) =>
     '$currency ${(minor / 100).toStringAsFixed(2)}';
@@ -61,9 +64,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
   Future<void> _issueInvoice() async {
     setState(() => _issuing = true);
     try {
-      await ref.read(invoicesRepositoryProvider).issueInvoice(
-        widget.invoiceId,
-      );
+      await ref.read(invoicesRepositoryProvider).issueInvoice(widget.invoiceId);
       ref.invalidate(invoiceDetailProvider(widget.invoiceId));
       ref.invalidate(invoicesListProvider);
       if (mounted) {
@@ -91,9 +92,9 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
       final token = await ref
           .read(customersRepositoryProvider)
           .createPortalAccess(invoice.customerId);
-      
+
       final link = LinkBuilder.invoicePayment(token, invoice.id);
-      
+
       // Show dialog with share options
       if (mounted) {
         await showDialog<void>(
@@ -147,9 +148,14 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
               TextButton.icon(
                 onPressed: () async {
                   final message = 'Your invoice payment link: $link';
-                  final whatsappUrl = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(message)}');
+                  final whatsappUrl = Uri.parse(
+                    'https://wa.me/?text=${Uri.encodeComponent(message)}',
+                  );
                   if (await canLaunchUrl(whatsappUrl)) {
-                    await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
+                    await launchUrl(
+                      whatsappUrl,
+                      mode: LaunchMode.externalApplication,
+                    );
                   }
                 },
                 icon: const Icon(Icons.message, size: 18),
@@ -165,16 +171,14 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not build the customer link'),
-          ),
+          const SnackBar(content: Text('Could not build the customer link')),
         );
       }
     } finally {
@@ -201,10 +205,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
 
     return Scaffold(
       backgroundColor: AeraColors.canvas,
-      appBar: const AeraAppBar(
-        title: 'Invoice Detail',
-        subtitle: 'Billing',
-      ),
+      appBar: const AeraAppBar(title: 'Invoice Detail', subtitle: 'Billing'),
       body: SafeArea(
         child: invoiceAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -316,9 +317,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                             children: [
                               Text(
                                 invoice.customer.fullName,
-                                style: AeraTypography.h3.copyWith(
-                                  fontSize: 16,
-                                ),
+                                style: AeraTypography.h3.copyWith(fontSize: 16),
                               ),
                               if (invoice.customer.email != null)
                                 Text(
@@ -398,7 +397,10 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                         children: [
                           _calcRow(
                             'Subtotal',
-                            _formatMoney(invoice.subtotalMinor, invoice.currency),
+                            _formatMoney(
+                              invoice.subtotalMinor,
+                              invoice.currency,
+                            ),
                           ),
                           if (invoice.discountMinor > 0) ...[
                             const SizedBox(height: 4),
@@ -423,7 +425,10 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                                 ),
                               ),
                               Text(
-                                _formatMoney(invoice.totalMinor, invoice.currency),
+                                _formatMoney(
+                                  invoice.totalMinor,
+                                  invoice.currency,
+                                ),
                                 style: AeraTypography.h3.copyWith(
                                   fontWeight: FontWeight.w700,
                                   color: AeraColors.accent,
@@ -498,16 +503,16 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       _formatMoney(
                                         payment.amountMinor,
                                         payment.currency,
                                       ),
-                                      style: AeraTypography.bodyMedium
-                                          .copyWith(fontWeight: FontWeight.w700),
+                                      style: AeraTypography.bodyMedium.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
                                     Text(
                                       '${_statusLabel(payment.method)}'
@@ -753,7 +758,10 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
                 ),
               ),
             ),
-            Text('Record Payment', style: AeraTypography.h3.copyWith(fontSize: 17)),
+            Text(
+              'Record Payment',
+              style: AeraTypography.h3.copyWith(fontSize: 17),
+            ),
             const SizedBox(height: 4),
             Text(
               'Balance due: ${_formatMoney(widget.balanceDueMinor, widget.currency)}',
@@ -763,7 +771,9 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
             AeraTextField(
               label: 'Amount (${widget.currency})',
               controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
             ),
             const SizedBox(height: 12),
             Text(

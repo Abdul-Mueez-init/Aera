@@ -106,11 +106,7 @@ class _NavItem extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              isSelected ? activeIcon : icon,
-              size: 22,
-              color: color,
-            ),
+            Icon(isSelected ? activeIcon : icon, size: 22, color: color),
             const SizedBox(height: 3),
             Text(
               label,

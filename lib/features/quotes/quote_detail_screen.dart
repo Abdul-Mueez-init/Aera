@@ -58,9 +58,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              approve
-                  ? 'Quote marked as approved'
-                  : 'Quote marked as declined',
+              approve ? 'Quote marked as approved' : 'Quote marked as declined',
             ),
           ),
         );
@@ -108,14 +106,12 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     try {
       final link = LinkBuilder.quoteApproval(shareToken);
       Clipboard.setData(ClipboardData(text: link));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Link copied to clipboard')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Link copied to clipboard')));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not build the customer link'),
-        ),
+        const SnackBar(content: Text('Could not build the customer link')),
       );
     }
   }
@@ -124,8 +120,10 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     try {
       final link = LinkBuilder.quoteApproval(shareToken);
       final message = 'Your quote is ready for review: $link';
-      final whatsappUrl = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(message)}');
-      
+      final whatsappUrl = Uri.parse(
+        'https://wa.me/?text=${Uri.encodeComponent(message)}',
+      );
+
       if (await canLaunchUrl(whatsappUrl)) {
         await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
       } else {
@@ -138,9 +136,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not build the customer link'),
-          ),
+          const SnackBar(content: Text('Could not build the customer link')),
         );
       }
     }
@@ -151,22 +147,20 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
       final link = LinkBuilder.quoteApproval(shareToken);
       final message = 'Your quote is ready for review: $link';
       final smsUrl = Uri.parse('sms:?body=${Uri.encodeComponent(message)}');
-      
+
       if (await canLaunchUrl(smsUrl)) {
         await launchUrl(smsUrl, mode: LaunchMode.externalApplication);
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not open SMS')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Could not open SMS')));
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not build the customer link'),
-          ),
+          const SnackBar(content: Text('Could not build the customer link')),
         );
       }
     }
@@ -232,7 +226,8 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
                             ),
                           ),
                           IconButton(
-                            onPressed: () => _shareViaWhatsApp(quote.shareToken!),
+                            onPressed: () =>
+                                _shareViaWhatsApp(quote.shareToken!),
                             icon: const Icon(
                               Icons.message,
                               size: 18,

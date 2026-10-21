@@ -25,7 +25,7 @@ final sessionStoreProvider = Provider<SessionStore>(
 /// already signed in stay signed in.
 class SecureSessionStore implements SessionStore {
   SecureSessionStore({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   static const String storageKey = 'aera_auth_session';
 

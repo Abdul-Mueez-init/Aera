@@ -7,6 +7,7 @@ import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
+import '../../core/utils/map_links.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
@@ -18,7 +19,9 @@ import 'data/jobs_repository.dart' show Job, Technician, jobsRepositoryProvider;
 import 'providers/jobs_provider.dart';
 
 // Needed for technician list
-final techniciansProvider = FutureProvider.autoDispose<List<Technician>>((ref) async {
+final techniciansProvider = FutureProvider.autoDispose<List<Technician>>((
+  ref,
+) async {
   final repo = ref.watch(jobsRepositoryProvider);
   return repo.listTechnicians();
 });
@@ -81,17 +84,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
         .join(', ');
     if (destination.isEmpty) return;
 
-    final uri = Uri.https('www.google.com', '/maps/dir/', {
-      'api': '1',
-      'destination': destination,
-    });
-
-    var opened = false;
-    try {
-      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      opened = false;
-    }
+    final opened = await openMapsForAddress(destination, directions: true);
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not open a maps app')),
@@ -164,9 +157,9 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Could not generate invoice')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not generate invoice')),
+        );
       }
     } finally {
       if (mounted) setState(() => _generatingInvoice = false);
@@ -293,7 +286,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
   Future<void> _assignTechnician(Job job) async {
     // Show loading dialog while technicians are being fetched
     if (!mounted) return;
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -387,15 +380,15 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
           .assignTechnician(job.id, selectedTechnicianId);
       ref.invalidate(jobDetailProvider(job.id));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Technician assigned')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Technician assigned')));
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (_) {
       if (mounted) {
@@ -621,13 +614,17 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                             child: Text(
                               job.assignedTechnician?.fullName ??
                                   'No technician assigned',
-                              style: AeraTypography.bodySm.copyWith(fontSize: 12),
+                              style: AeraTypography.bodySm.copyWith(
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                           if (job.assignedTechnician == null &&
                               (job.status == 'NEW' || job.status == 'QUOTING'))
                             TextButton(
-                              onPressed: _assigning ? null : () => _assignTechnician(job),
+                              onPressed: _assigning
+                                  ? null
+                                  : () => _assignTechnician(job),
                               child: Text(
                                 'Assign',
                                 style: AeraTypography.label.copyWith(
@@ -875,8 +872,8 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                                 type: job.invoices.first.status == 'PAID'
                                     ? AeraStatusType.paid
                                     : job.invoices.first.status == 'ISSUED'
-                                        ? AeraStatusType.info
-                                        : AeraStatusType.pending,
+                                    ? AeraStatusType.info
+                                    : AeraStatusType.pending,
                               ),
                             ],
                           ),
@@ -901,7 +898,8 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                         ],
                       ),
                     ),
-                  ] else if (ref.watch(currentRoleProvider) != 'TECHNICIAN') ...[
+                  ] else if (ref.watch(currentRoleProvider) !=
+                      'TECHNICIAN') ...[
                     const SizedBox(height: 12),
                     AeraButton(
                       text: 'Generate Invoice',
@@ -914,8 +912,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                       onPressed: () => _generateInvoiceForJob(),
                     ),
                   ],
-                ]
-                else if (job.status == 'CANCELLED')
+                ] else if (job.status == 'CANCELLED')
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(

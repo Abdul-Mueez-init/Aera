@@ -231,14 +231,16 @@ class JobInvoiceSummary {
   final int balanceDueMinor;
   final String currency;
 
-  factory JobInvoiceSummary.fromJson(Map<String, dynamic> json) => JobInvoiceSummary(
-    id: json['id'] as String,
-    invoiceNumber: json['invoiceNumber'] as String? ?? '',
-    status: json['status'] as String? ?? 'DRAFT',
-    totalMinor: int.tryParse(json['totalMinor']?.toString() ?? '') ?? 0,
-    balanceDueMinor: int.tryParse(json['balanceDueMinor']?.toString() ?? '') ?? 0,
-    currency: json['currency'] as String? ?? 'USD',
-  );
+  factory JobInvoiceSummary.fromJson(Map<String, dynamic> json) =>
+      JobInvoiceSummary(
+        id: json['id'] as String,
+        invoiceNumber: json['invoiceNumber'] as String? ?? '',
+        status: json['status'] as String? ?? 'DRAFT',
+        totalMinor: int.tryParse(json['totalMinor']?.toString() ?? '') ?? 0,
+        balanceDueMinor:
+            int.tryParse(json['balanceDueMinor']?.toString() ?? '') ?? 0,
+        currency: json['currency'] as String? ?? 'USD',
+      );
 }
 
 class Job {

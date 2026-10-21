@@ -52,11 +52,7 @@ class CreateCompanyInput {
 }
 
 class UpdateCompanyInput {
-  const UpdateCompanyInput({
-    this.name,
-    this.timezone,
-    this.defaultCurrency,
-  });
+  const UpdateCompanyInput({this.name, this.timezone, this.defaultCurrency});
 
   final String? name;
   final String? timezone;
@@ -75,10 +71,7 @@ class CompanyRepository {
   final ApiClient _client;
 
   Future<Company> createCompany(CreateCompanyInput input) async {
-    final res = await _client.post(
-      '/api/v1/companies',
-      body: input.toJson(),
-    );
+    final res = await _client.post('/api/v1/companies', body: input.toJson());
     return Company.fromJson(res as Map<String, dynamic>);
   }
 

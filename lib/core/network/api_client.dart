@@ -19,8 +19,8 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 
 class ApiClient {
   ApiClient({String? baseUrl, http.Client? client})
-      : _client = client ?? http.Client(),
-        baseUrl = baseUrl ?? AppConfig.apiBaseUrl;
+    : _client = client ?? http.Client(),
+      baseUrl = baseUrl ?? AppConfig.apiBaseUrl;
 
   final http.Client _client;
   final String baseUrl;
@@ -193,10 +193,12 @@ class ApiClient {
   }) async {
     final uri = _buildUri(path, queryParameters);
     final response = await _sendWithRefresh(
-      () => _client.get(uri, headers: _buildHeaders(headers)).timeout(
-        timeout ?? _defaultTimeout,
-        onTimeout: () => throw TimeoutException('GET request timed out'),
-      ),
+      () => _client
+          .get(uri, headers: _buildHeaders(headers))
+          .timeout(
+            timeout ?? _defaultTimeout,
+            onTimeout: () => throw TimeoutException('GET request timed out'),
+          ),
     );
     return _processResponse(response);
   }
@@ -211,14 +213,16 @@ class ApiClient {
   }) async {
     final uri = _buildUri(path, queryParameters);
     final response = await _sendWithRefresh(
-      () => _client.post(
-        uri,
-        headers: _buildHeaders(headers),
-        body: body != null ? jsonEncode(body) : null,
-      ).timeout(
-        timeout ?? _defaultTimeout,
-        onTimeout: () => throw TimeoutException('POST request timed out'),
-      ),
+      () => _client
+          .post(
+            uri,
+            headers: _buildHeaders(headers),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(
+            timeout ?? _defaultTimeout,
+            onTimeout: () => throw TimeoutException('POST request timed out'),
+          ),
       retryOnUnauthorized: retryOnUnauthorized,
     );
     return _processResponse(response);
@@ -232,14 +236,16 @@ class ApiClient {
   }) async {
     final uri = _buildUri(path);
     final response = await _sendWithRefresh(
-      () => _client.patch(
-        uri,
-        headers: _buildHeaders(headers),
-        body: body != null ? jsonEncode(body) : null,
-      ).timeout(
-        timeout ?? _defaultTimeout,
-        onTimeout: () => throw TimeoutException('PATCH request timed out'),
-      ),
+      () => _client
+          .patch(
+            uri,
+            headers: _buildHeaders(headers),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(
+            timeout ?? _defaultTimeout,
+            onTimeout: () => throw TimeoutException('PATCH request timed out'),
+          ),
     );
     return _processResponse(response);
   }
@@ -251,10 +257,12 @@ class ApiClient {
   }) async {
     final uri = _buildUri(path);
     final response = await _sendWithRefresh(
-      () => _client.delete(uri, headers: _buildHeaders(headers)).timeout(
-        timeout ?? _defaultTimeout,
-        onTimeout: () => throw TimeoutException('DELETE request timed out'),
-      ),
+      () => _client
+          .delete(uri, headers: _buildHeaders(headers))
+          .timeout(
+            timeout ?? _defaultTimeout,
+            onTimeout: () => throw TimeoutException('DELETE request timed out'),
+          ),
     );
     return _processResponse(response);
   }
@@ -267,14 +275,16 @@ class ApiClient {
   }) async {
     final uri = _buildUri(path);
     final response = await _sendWithRefresh(
-      () => _client.put(
-        uri,
-        headers: _buildHeaders(headers),
-        body: body != null ? jsonEncode(body) : null,
-      ).timeout(
-        timeout ?? _defaultTimeout,
-        onTimeout: () => throw TimeoutException('PUT request timed out'),
-      ),
+      () => _client
+          .put(
+            uri,
+            headers: _buildHeaders(headers),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(
+            timeout ?? _defaultTimeout,
+            onTimeout: () => throw TimeoutException('PUT request timed out'),
+          ),
     );
     return _processResponse(response);
   }

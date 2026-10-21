@@ -65,7 +65,9 @@ class _TeamManagementScreenState extends ConsumerState<TeamManagementScreen> {
       _error = null;
     });
     try {
-      final member = await ref.read(membersRepositoryProvider).inviteMember(input);
+      final member = await ref
+          .read(membersRepositoryProvider)
+          .inviteMember(input);
       if (!mounted) return;
       setState(() {
         _members = [..._members, member];
@@ -159,8 +161,9 @@ class _TeamManagementScreenState extends ConsumerState<TeamManagementScreen> {
                   final first = firstName.text.trim();
                   final last = lastName.text.trim();
                   final address = email.text.trim();
-                  final validEmail = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
-                      .hasMatch(address);
+                  final validEmail = RegExp(
+                    r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                  ).hasMatch(address);
                   if (first.isEmpty || last.isEmpty || !validEmail) {
                     setDialogState(() {
                       validationError =
@@ -234,11 +237,11 @@ class _TeamManagementScreenState extends ConsumerState<TeamManagementScreen> {
   }
 
   String _roleLabel(String role) => switch (role) {
-        'OWNER' => 'Owner',
-        'DISPATCHER' => 'Dispatcher',
-        'TECHNICIAN' => 'Technician',
-        _ => role,
-      };
+    'OWNER' => 'Owner',
+    'DISPATCHER' => 'Dispatcher',
+    'TECHNICIAN' => 'Technician',
+    _ => role,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -271,107 +274,105 @@ class _TeamManagementScreenState extends ConsumerState<TeamManagementScreen> {
       body: _loading && _members.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : _error != null && _members.isEmpty
-              ? _TeamLoadError(message: _error!, onRetry: _loadMembers)
-              : RefreshIndicator(
-                  onRefresh: _loadMembers,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                    children: [
-                      Text(
-                        'Company members',
-                        style: AeraTypography.h3.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+          ? _TeamLoadError(message: _error!, onRetry: _loadMembers)
+          : RefreshIndicator(
+              onRefresh: _loadMembers,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                children: [
+                  Text(
+                    'Company members',
+                    style: AeraTypography.h3.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    canInvite
+                        ? 'Manage your roster and invite technicians or dispatchers.'
+                        : 'Your company roster (view only).',
+                    style: AeraTypography.bodySm.copyWith(
+                      color: AeraColors.inkSoft,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(color: AeraColors.danger),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        canInvite
-                            ? 'Manage your roster and invite technicians or dispatchers.'
-                            : 'Your company roster (view only).',
-                        style: AeraTypography.bodySm.copyWith(
-                          color: AeraColors.inkSoft,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      if (_error != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            _error!,
-                            style: const TextStyle(color: AeraColors.danger),
+                    ),
+                  if (_members.isEmpty)
+                    AeraCard(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.groups_outlined, size: 40),
+                          const SizedBox(height: 10),
+                          Text(
+                            'No team members yet',
+                            style: AeraTypography.bodyMedium,
                           ),
-                        ),
-                      if (_members.isEmpty)
-                        AeraCard(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
+                          const SizedBox(height: 4),
+                          const Text('Use Invite member to add your crew.'),
+                        ],
+                      ),
+                    )
+                  else
+                    ..._members.map(
+                      (member) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: AeraCard(
+                          padding: const EdgeInsets.all(14),
+                          child: Row(
                             children: [
-                              const Icon(Icons.groups_outlined, size: 40),
-                              const SizedBox(height: 10),
-                              Text(
-                                'No team members yet',
-                                style: AeraTypography.bodyMedium,
+                              CircleAvatar(
+                                child: Text(
+                                  _displayName(member).isNotEmpty
+                                      ? _displayName(member)[0].toUpperCase()
+                                      : '?',
+                                ),
                               ),
-                              const SizedBox(height: 4),
-                              const Text('Use Invite member to add your crew.'),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _displayName(member),
+                                      style: AeraTypography.bodyMedium.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    Text(
+                                      member.user.email,
+                                      style: AeraTypography.bodySm.copyWith(
+                                        color: AeraColors.inkSoft,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${_roleLabel(member.role)} · ${member.status}',
+                                      style: AeraTypography.label.copyWith(
+                                        color: member.status == 'ACTIVE'
+                                            ? AeraColors.success
+                                            : AeraColors.inkSoft,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
-                        )
-                      else
-                        ..._members.map(
-                          (member) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: AeraCard(
-                              padding: const EdgeInsets.all(14),
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    child: Text(
-                                      _displayName(member).isNotEmpty
-                                          ? _displayName(member)[0].toUpperCase()
-                                          : '?',
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          _displayName(member),
-                                          style: AeraTypography.bodyMedium
-                                              .copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        Text(
-                                          member.user.email,
-                                          style: AeraTypography.bodySm.copyWith(
-                                            color: AeraColors.inkSoft,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '${_roleLabel(member.role)} · ${member.status}',
-                                          style: AeraTypography.label.copyWith(
-                                            color: member.status == 'ACTIVE'
-                                                ? AeraColors.success
-                                                : AeraColors.inkSoft,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
                         ),
-                    ],
-                  ),
-                ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
     );
   }
 }
@@ -384,22 +385,22 @@ class _TeamLoadError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, color: AeraColors.danger, size: 34),
-              const SizedBox(height: 12),
-              Text(message, textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Try again'),
-              ),
-            ],
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline, color: AeraColors.danger, size: 34),
+          const SizedBox(height: 12),
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Try again'),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }

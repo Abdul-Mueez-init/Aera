@@ -140,7 +140,7 @@ class AuthSession {
 
 class AuthRepository {
   AuthRepository(this._client, {SessionStore? store})
-      : _store = store ?? SecureSessionStore();
+    : _store = store ?? SecureSessionStore();
 
   final ApiClient _client;
   final SessionStore _store;
