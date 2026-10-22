@@ -98,9 +98,10 @@ void main() {
         expect(AppConfig.tracesSampleRate, lessThanOrEqualTo(1.0));
       });
 
-      test('appRelease can be empty (optional for local builds)', () {
+      test('appRelease defaults to a non-empty release name', () {
         TestWidgetsFlutterBinding.ensureInitialized();
-        expect(AppConfig.appRelease, isEmpty);
+        // SENTRY_RELEASE falls back to 'aera@1.0.0' when not provided.
+        expect(AppConfig.appRelease, isNotEmpty);
       });
     });
   });

@@ -6,7 +6,6 @@ import {
   forwardGeocode,
   locateCustomArea,
 } from "../src/modules/companies/osm-geo.service.js";
-import { AppError } from "../src/common/errors.js";
 
 describe("parseOverpassElements", () => {
   it("parses node elements with coordinates", () => {
