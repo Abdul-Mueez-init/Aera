@@ -316,6 +316,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                   vertical: 12,
                 ),
                 children: [
+                  // AFTER
                   Row(
                     children: [
                       const Icon(
@@ -324,14 +325,18 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                         color: AeraColors.accent,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        'STEP 03 / 04 • SERVICE OFFERINGS',
-                        style: AeraTypography.labelUpper.copyWith(
-                          color: AeraColors.accent,
-                          fontSize: 10,
+                      Expanded(
+                        child: Text(
+                          'STEP 03 / 04 • SERVICE OFFERINGS',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AeraTypography.labelUpper.copyWith(
+                            color: AeraColors.accent,
+                            fontSize: 10,
+                          ),
                         ),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 8),
                       Text('${_selected.length} selected'),
                     ],
                   ),
