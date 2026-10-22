@@ -753,19 +753,34 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          ..._zones.map(
-                            (zone) => CheckboxListTile(
-                              value: _selectedZoneIds.contains(zone.placeId),
-                              contentPadding: EdgeInsets.zero,
-                              controlAffinity: ListTileControlAffinity.leading,
-                              title: Text(zone.name),
-                              onChanged: (selected) => setState(() {
-                                if (selected == true) {
-                                  _selectedZoneIds.add(zone.placeId);
-                                } else {
-                                  _selectedZoneIds.remove(zone.placeId);
-                                }
-                              }),
+                          // AeraCard paints an opaque DecoratedBox; ListTile
+                          // needs a Material between it and the card so its
+                          // background and ink splashes remain visible.
+                          Material(
+                            type: MaterialType.transparency,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ..._zones.map(
+                                  (zone) => CheckboxListTile(
+                                    value: _selectedZoneIds.contains(
+                                      zone.placeId,
+                                    ),
+                                    contentPadding: EdgeInsets.zero,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    title: Text(zone.name),
+                                    onChanged: (selected) => setState(() {
+                                      if (selected == true) {
+                                        _selectedZoneIds.add(zone.placeId);
+                                      } else {
+                                        _selectedZoneIds.remove(zone.placeId);
+                                      }
+                                    }),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],

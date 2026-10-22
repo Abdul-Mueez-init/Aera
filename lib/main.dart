@@ -39,6 +39,7 @@ Future<void> main() async {
         defaultValue: 'aera@1.0.0',
       );
       options.tracesSampleRate = AppConfig.tracesSampleRate;
+      // ignore: experimental_member_use
       options.profilesSampleRate = AppConfig.tracesSampleRate;
 
       // Aera holds customer PII, so opt out of everything sensitive
@@ -46,6 +47,7 @@ Future<void> main() async {
       options.enableWatchdogTerminationTracking = true;
       options.enableAppHangTracking = true;
       options.attachScreenshot = false;
+      // ignore: experimental_member_use
       options.attachViewHierarchy = false;
     });
   }
