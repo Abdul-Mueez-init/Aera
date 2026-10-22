@@ -517,8 +517,7 @@ async function discoverViaNominatim(
 
       const latitude = Number(data.lat);
       const longitude = Number(data.lon);
-      const hasCoords =
-        Number.isFinite(latitude) && Number.isFinite(longitude);
+      const hasCoords = Number.isFinite(latitude) && Number.isFinite(longitude);
       const itemLat = hasCoords ? latitude : point.latitude;
       const itemLng = hasCoords ? longitude : point.longitude;
       const distance = distanceKm(lat, lng, itemLat, itemLng);
