@@ -2,12 +2,14 @@ import { buildApp } from "./app.js";
 import { env } from "./config/env.js";
 import { logger } from "./common/logger.js";
 import { startInvoiceReminderScheduler } from "./modules/invoices/invoice-reminder.service.js";
+import { startPortalSweepScheduler } from "./modules/portal/portal-sweep.service.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 const app = buildApp();
 
 let stopInvoiceReminders: (() => void) | undefined;
+let stopPortalSweep: (() => void) | undefined;
 
 const server = app.listen(env.PORT, env.HOST, () => {
   logger.info(
@@ -18,6 +20,10 @@ const server = app.listen(env.PORT, env.HOST, () => {
   // Started here, not in buildApp(), so tests never spin up timers.
   if (env.INVOICE_REMINDERS_ENABLED) {
     stopInvoiceReminders = startInvoiceReminderScheduler();
+  }
+
+  if (env.PORTAL_SWEEP_ENABLED) {
+    stopPortalSweep = startPortalSweepScheduler();
   }
 });
 
@@ -47,6 +53,7 @@ const shutdown = async (signal: string): Promise<void> => {
   forceExitTimer.unref();
 
   stopInvoiceReminders?.();
+  stopPortalSweep?.();
 
   // Stop accepting new connections. server.close() only resolves once every
   // connection ends, and idle keep-alive sockets would otherwise hold it open

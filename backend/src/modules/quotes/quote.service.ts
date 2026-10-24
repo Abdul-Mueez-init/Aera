@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { AppError } from "../../common/errors.js";
 import type { AuthContext } from "../../common/auth/auth.types.js";
 import { prisma } from "../../db/prisma.js";
@@ -55,7 +54,6 @@ const quoteSelect = {
   sentAt: true,
   approvedAt: true,
   declinedAt: true,
-  shareToken: true,
   createdAt: true,
   updatedAt: true,
   customer: {
@@ -243,7 +241,6 @@ export async function sendQuote(context: AuthContext, quoteId: string) {
     select: {
       id: true,
       status: true,
-      shareToken: true,
       jobId: true,
       expiresAt: true,
     },
@@ -271,7 +268,6 @@ export async function sendQuote(context: AuthContext, quoteId: string) {
     data: {
       status: "SENT",
       sentAt: new Date(),
-      shareToken: quote.shareToken ?? randomBytes(32).toString("hex"),
       declinedAt: null,
     },
     select: quoteSelect,
@@ -284,59 +280,14 @@ export async function sendQuote(context: AuthContext, quoteId: string) {
   return jsonSafe(sent);
 }
 
-export async function getPublicQuote(shareToken: string) {
-  const quote = await prisma.quote.findUnique({
-    where: { shareToken },
-    select: {
-      id: true,
-      status: true,
-      subtotalMinor: true,
-      discountMinor: true,
-      taxMinor: true,
-      taxRateBps: true,
-      totalMinor: true,
-      currency: true,
-      expiresAt: true,
-      sentAt: true,
-      approvedAt: true,
-      declinedAt: true,
-      customer: { select: { firstName: true, lastName: true } },
-      items: {
-        orderBy: { sortOrder: "asc" },
-        select: {
-          description: true,
-          quantity: true,
-          unitPriceMinor: true,
-          totalMinor: true,
-        },
-      },
-      job: { select: { jobNumber: true, serviceType: true } },
-    },
-  });
-  if (!quote) {
-    throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
-  }
-
-  const now = new Date();
-  const isPastExpiry =
-    quote.expiresAt !== null && quote.expiresAt.getTime() <= now.getTime();
-  const isExpired =
-    quote.status === "EXPIRED" ||
-    (quote.status !== "APPROVED" &&
-      quote.status !== "DECLINED" &&
-      isPastExpiry);
-
-  if (isExpired) {
-    if (quote.status !== "EXPIRED") {
-      await prisma.quote.updateMany({
-        where: { id: quote.id, status: { in: ["DRAFT", "SENT"] } },
-        data: { status: "EXPIRED" },
-      });
-    }
-    throw new AppError("QUOTE_EXPIRED", "This quote link has expired", 410);
-  }
-
-  return jsonSafe(quote);
+// Deprecated: portal-access-grants system replaces shareToken-based public access
+// Kept for reference but no longer used
+export async function getPublicQuote() {
+  throw new AppError(
+    "PORTAL_LINK_INVALID",
+    "Invalid portal link",
+    401,
+  );
 }
 
 interface ProcessQuoteResponseOptions {
@@ -469,7 +420,7 @@ export async function respondToPublicQuote(
   }
 
   if (quote.status === action) {
-    return getPublicQuote(shareToken);
+    return getPublicQuote();
   }
 
   const now = new Date();
@@ -508,7 +459,11 @@ export async function respondToPublicQuote(
     now,
   });
 
-  return getPublicQuote(shareToken);
+  throw new AppError(
+    "PORTAL_LINK_INVALID",
+    "Invalid portal link",
+    401,
+  );
 }
 
 export async function respondToQuote(

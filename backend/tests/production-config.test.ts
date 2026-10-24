@@ -147,4 +147,32 @@ describe("Production Configuration Validation", () => {
       expect(env.SENTRY_TRACES_SAMPLE_RATE).toBeLessThanOrEqual(1);
     });
   });
+
+  describe("Portal Configuration", () => {
+    it("should require PORTAL_PUBLIC_BASE_URL in production", () => {
+      if (process.env.NODE_ENV === "production") {
+        expect(env.PORTAL_PUBLIC_BASE_URL).toBeDefined();
+        expect(env.PORTAL_PUBLIC_BASE_URL).toMatch(/^https:\/\//);
+      }
+    });
+
+    it("should require PORTAL_CODE_SECRET in production", () => {
+      if (process.env.NODE_ENV === "production") {
+        expect(env.PORTAL_CODE_SECRET).toBeDefined();
+        if (env.PORTAL_CODE_SECRET) {
+          expect(env.PORTAL_CODE_SECRET.length).toBeGreaterThanOrEqual(32);
+        }
+      }
+    });
+
+    it("should have portal configuration set", () => {
+      expect(env.PORTAL_LINK_UNUSED_TTL_HOURS).toBeGreaterThan(0);
+      expect(env.PORTAL_SESSION_IDLE_DAYS).toBeGreaterThan(0);
+      expect(env.PORTAL_SESSION_MAX_DAYS).toBeGreaterThan(0);
+      expect(env.PORTAL_POST_COMPLETION_MAX_DAYS).toBeGreaterThan(0);
+      expect(env.PORTAL_SWEEP_MINUTES).toBeGreaterThan(0);
+      expect(env.HANDSHAKE_MAX_ATTEMPTS).toBeGreaterThan(0);
+      expect(env.HANDSHAKE_LOCK_MINUTES).toBeGreaterThan(0);
+    });
+  });
 });

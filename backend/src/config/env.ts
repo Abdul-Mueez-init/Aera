@@ -142,6 +142,20 @@ const envSchema = z.object({
   // Phase 5 — Maximum queue size for in-memory queue. Default 1000.
   // Should be replaced with durable queue (Redis/BullMQ) in production.
   QUEUE_MAX_SIZE: z.coerce.number().min(1).max(10000).optional(),
+  // Customer portal configuration
+  PORTAL_PUBLIC_BASE_URL: z.string().url().optional(),
+  PORTAL_CODE_SECRET: z.string().min(32).optional(),
+  PORTAL_LINK_UNUSED_TTL_HOURS: z.coerce.number().int().positive().default(168),
+  PORTAL_SESSION_IDLE_DAYS: z.coerce.number().int().positive().default(7),
+  PORTAL_SESSION_MAX_DAYS: z.coerce.number().int().positive().default(45),
+  PORTAL_POST_COMPLETION_MAX_DAYS: z.coerce.number().int().positive().default(14),
+  PORTAL_SWEEP_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  PORTAL_SWEEP_MINUTES: z.coerce.number().int().positive().default(60),
+  HANDSHAKE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  HANDSHAKE_LOCK_MINUTES: z.coerce.number().int().positive().default(15),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -31,14 +31,39 @@ export function buildApp() {
   // Phase 5: CORS allowlist from environment. If CORS_ORIGINS is set, use it;
   // otherwise, fall back to open CORS for development. Production/staging must
   // have CORS_ORIGINS set to restrict origins.
+  //
+  // Phase G3: Enable credentials for portal cookie-based sessions.
+  // Never use origin: "*" with credentials.
   if (env.CORS_ORIGINS && env.CORS_ORIGINS.length > 0) {
-    app.use(cors({ origin: env.CORS_ORIGINS }));
+    app.use(
+      cors({
+        origin: env.CORS_ORIGINS,
+        credentials: true,
+        allowedHeaders: [
+          "Content-Type",
+          "Authorization",
+          "X-Aera-Portal",
+          "Idempotency-Key",
+        ],
+      }),
+    );
   } else if (env.NODE_ENV === "production" || env.NODE_ENV === "staging") {
     throw new Error(
       "CORS_ORIGINS must be set in production/staging environments to restrict allowed origins",
     );
   } else {
-    app.use(cors());
+    // Development: open CORS with credentials
+    app.use(
+      cors({
+        credentials: true,
+        allowedHeaders: [
+          "Content-Type",
+          "Authorization",
+          "X-Aera-Portal",
+          "Idempotency-Key",
+        ],
+      }),
+    );
   }
 
   app.use(express.json({ limit: "1mb" }));

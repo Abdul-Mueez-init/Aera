@@ -7,6 +7,16 @@ class AppConfig {
     defaultValue: 'development',
   );
 
+  // Phase 8: Build surface - 'staff' for owner/dispatcher/technician app,
+  // 'customer' for customer-facing web portal
+  static const String appSurface = String.fromEnvironment(
+    'APP_SURFACE',
+    defaultValue: 'staff',
+  );
+
+  static bool get isCustomerSurface => appSurface == 'customer';
+  static bool get isStaffSurface => appSurface == 'staff';
+
   // Phase 12 — crash/error reporting (Sentry). Left unset in local/dev/test:
   // sentry_bootstrap.dart then skips initialisation and the SDK is a no-op,
   // so no DSN is required to run the app or the test suite.

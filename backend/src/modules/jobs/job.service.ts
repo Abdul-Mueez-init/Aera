@@ -12,6 +12,8 @@ import {
 } from "./job.policy.js";
 import { generateInvoiceFromJob } from "../invoices/invoice.service.js";
 import { getNextJobNumber } from "../../common/counters/counter.service.js";
+import { isHandshakeRequired } from "../portal/portal-handshake.service.js";
+import { closePortalIfDone } from "../portal/portal.grants.js";
 
 export type JobStatusValue =
   | "NEW"
@@ -529,6 +531,18 @@ export async function transitionJob(
     );
   }
 
+  // Enforce handshake verification for EN_ROUTE → IN_PROGRESS
+  if (job.status === "EN_ROUTE" && toStatus === "IN_PROGRESS") {
+    const handshakeRequired = await isHandshakeRequired(jobId);
+    if (handshakeRequired) {
+      throw new AppError(
+        "HANDSHAKE_REQUIRED",
+        "Customer handshake code must be verified before starting work",
+        422,
+      );
+    }
+  }
+
   // Require technician assignment for active job states
   if (
     (toStatus === "EN_ROUTE" ||
@@ -569,6 +583,11 @@ export async function transitionJob(
         reason: reason?.trim() || undefined,
       },
     });
+
+    // Close portal if job is cancelled
+    if (toStatus === "CANCELLED") {
+      await closePortalIfDone(jobId, transaction);
+    }
   });
 
   return getJob(context, jobId);
@@ -884,6 +903,10 @@ export async function completeJob(
         transaction,
       );
     }
+
+    // Attempt to close portal if job is done
+    // This is a no-op if conditions aren't met
+    await closePortalIfDone(jobId, transaction);
   });
   return getJob(context, jobId);
 }

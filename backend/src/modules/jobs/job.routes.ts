@@ -18,6 +18,7 @@ import {
   type JobStatusValue,
   type NoteVisibilityValue,
 } from "./job.service.js";
+import { portalStaffRouter } from "../portal/portal-staff.routes.js";
 
 const router = Router();
 const managerRoles = ["OWNER", "DISPATCHER"] as const;
@@ -290,5 +291,8 @@ router.get("/:jobId/history", requireAuth, async (request, response) => {
     data: await getJobHistory(request.auth!, routeId(request.params.jobId)),
   });
 });
+
+// Mount portal staff routes under /jobs/:jobId/portal-access
+router.use("/:jobId/portal-access", portalStaffRouter);
 
 export { router as jobRouter };

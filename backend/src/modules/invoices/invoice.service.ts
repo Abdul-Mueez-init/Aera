@@ -15,6 +15,7 @@ import {
 import { notificationPublisher } from "../notifications/notification.port.js";
 import { getNextInvoiceNumber } from "../../common/counters/counter.service.js";
 import { calculateLineItemTotal } from "../../common/money/money.service.js";
+import { closePortalIfDone } from "../portal/portal.grants.js";
 
 export type InvoiceStatusValue =
   "DRAFT" | "ISSUED" | "PARTIALLY_PAID" | "PAID" | "VOID" | "OVERDUE";
@@ -514,6 +515,7 @@ export async function recordPayment(
         },
         select: {
           id: true,
+          jobId: true,
           balanceDueMinor: true,
           amountPaidMinor: true,
         },
@@ -561,6 +563,11 @@ export async function recordPayment(
         payment.id,
         transaction,
       );
+
+      // Close portal if invoice is now fully paid
+      if (newStatus === "PAID" && updatedInvoice.jobId) {
+        await closePortalIfDone(updatedInvoice.jobId, transaction);
+      }
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {

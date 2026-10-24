@@ -99,6 +99,20 @@ enum NotificationType {
   INVOICE_PAYMENT_REMINDER
 }
 
+enum PortalGrantStatus {
+  ACTIVE
+  DEACTIVATED
+}
+
+enum PortalDeactivationReason {
+  AUTO_COMPLETED
+  AUTO_CANCELLED
+  AUTO_MAX_AGE
+  AUTO_LINK_UNUSED
+  MANUAL
+  REISSUED
+}
+
 enum DeviceTokenPlatform {
   ANDROID
   IOS
@@ -174,7 +188,8 @@ model Company {
   payments       Payment[]
   reviews         CustomerReview[]
   portalTokens   CustomerPortalToken[]
-    notifications  Notification[]
+  portalGrants   PortalAccessGrant[]
+  notifications  Notification[]
   deviceTokens   DeviceToken[]
   aiConversations AiConversation[]
   counters       CompanyCounter[]
@@ -339,6 +354,10 @@ model Job {
   startedAt             DateTime?
   completedAt           DateTime?
   completionSummary     String?
+  handshakeVersion       Int             @default(0)
+  handshakeFailedAttempts Int           @default(0)
+  handshakeLockedUntil  DateTime?
+  handshakeVerifiedAt   DateTime?
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
   company               Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -745,4 +764,60 @@ model PaymentOperation {
   @@index([companyId, invoiceId, status])
   @@index([status, createdAt])
   @@map("payment_operations")
+}
+
+model PortalAccessGrant {
+  id                String                    @id @default(uuid()) @db.Uuid
+  companyId         String                    @db.Uuid
+  customerId        String                    @db.Uuid
+  jobId             String                    @db.Uuid
+  issuedBy          String?                   @db.Uuid
+  linkTokenHash     String                    @unique
+  linkExpiresAt     DateTime
+  linkConsumedAt    DateTime?
+  status            PortalGrantStatus         @default(ACTIVE)
+  deactivatedAt     DateTime?
+  deactivatedReason PortalDeactivationReason?
+  deactivatedBy     String?                   @db.Uuid
+  createdAt         DateTime                  @default(now())
+  company           Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sessions          PortalSession[]
+
+  @@index([companyId, jobId, status])
+  @@index([status, linkExpiresAt])
+  @@map("portal_access_grants")
+}
+
+model PortalSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  grantId          String    @db.Uuid
+  companyId        String    @db.Uuid
+  customerId       String    @db.Uuid
+  jobId            String    @db.Uuid
+  sessionTokenHash String    @unique
+  userAgentHash    String?
+  createdAt        DateTime  @default(now())
+  lastSeenAt       DateTime  @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  grant            PortalAccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@index([grantId, revokedAt])
+  @@map("portal_sessions")
+}
+
+model PortalAuditEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @db.Uuid
+  jobId       String   @db.Uuid
+  customerId  String?  @db.Uuid
+  grantId     String?  @db.Uuid
+  actorUserId String?  @db.Uuid
+  action      String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([companyId, jobId, createdAt(sort: Desc)])
+  @@index([companyId, customerId, createdAt(sort: Desc)])
+  @@map("portal_audit_events")
 }

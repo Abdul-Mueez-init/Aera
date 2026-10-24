@@ -2,6 +2,7 @@ import { prisma } from "../../db/prisma.js";
 import { logger } from "../../common/logger.js";
 import { captureBackgroundError } from "../../common/observability.js";
 import type { PaymentProvider, PaymentRequest } from "./payment.port.js";
+import { closePortalIfDone } from "../portal/portal.grants.js";
 
 const MAX_RETRIES = 3;
 
@@ -237,6 +238,7 @@ export async function processProviderAcceptedOperations(
           },
           select: {
             id: true,
+            jobId: true,
             balanceDueMinor: true,
           },
         });
@@ -272,6 +274,11 @@ export async function processProviderAcceptedOperations(
 
         // Mark operation as COMPLETED
         await completePaymentOperation(operation.id, payment.id, tx);
+
+        // Close portal if invoice is now fully paid
+        if (newStatus === "PAID" && updatedInvoice.jobId) {
+          await closePortalIfDone(updatedInvoice.jobId, tx);
+        }
       });
 
       logger.info(

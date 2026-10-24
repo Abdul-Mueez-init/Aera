@@ -8,6 +8,8 @@ import {
   shouldReportError,
 } from "../src/common/observability.js";
 import { AppError } from "../src/common/errors.js";
+import { pino } from "pino";
+import { Writable } from "node:stream";
 
 describe("shouldReportError", () => {
   it("ignores expected client errors", () => {
@@ -116,5 +118,60 @@ describe("scrubSentrySpan", () => {
     );
     expect(scrubbed.attributes["http.route"]).toBe("/api/v1/portal/:token");
     expect(scrubbed.attributes["http.status_code"]).toBe(200);
+  });
+});
+
+describe("logger redaction", () => {
+  it("redacts sensitive headers and body fields", () => {
+    const logs: string[] = [];
+    const stream = new Writable({
+      write(chunk: Buffer, encoding, callback) {
+        logs.push(chunk.toString("utf8"));
+        callback();
+      },
+    });
+
+    const testLogger = pino(
+      {
+        level: "info",
+        base: undefined,
+        redact: {
+          paths: [
+            "req.headers.authorization",
+            "req.headers.cookie",
+            "req.headers.set-cookie",
+            "req.body.password",
+            "req.body.token",
+            "req.body.sessionToken",
+            "req.body.linkToken",
+          ],
+          remove: true,
+        },
+      },
+      stream,
+    );
+
+    testLogger.info({
+      req: {
+        headers: {
+          authorization: "Bearer secret-token",
+          cookie: "session=abc123",
+          "user-agent": "test",
+        },
+        body: {
+          password: "hunter2",
+          token: "secret-token",
+          sessionToken: "session-xyz",
+          normalField: "value",
+        },
+      },
+    });
+
+    const logOutput = logs.join("");
+    expect(logOutput).not.toContain("secret-token");
+    expect(logOutput).not.toContain("hunter2");
+    expect(logOutput).not.toContain("session-xyz");
+    expect(logOutput).not.toContain("abc123");
+    expect(logOutput).toContain("normalField");
   });
 });

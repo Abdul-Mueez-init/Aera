@@ -237,6 +237,9 @@ async function seedDemoData() {
   await prisma.job.deleteMany();
   await prisma.serviceAddress.deleteMany();
   await prisma.customerReview.deleteMany();
+  await prisma.portalAuditEvent.deleteMany();
+  await prisma.portalSession.deleteMany();
+  await prisma.portalAccessGrant.deleteMany();
   await prisma.customerPortalToken.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.companyMember.deleteMany();
@@ -382,6 +385,27 @@ async function seedDemoData() {
     console.log(`✅ Created job #${jobNumber}: ${serviceType} (${status})`);
   }
 
+  // Create one portal access grant for testing
+  console.log("🔐 Creating portal access grant...");
+  const firstJob = jobs[0];
+  if (firstJob) {
+    const { generateToken, hashToken } = await import("../modules/portal/portal.tokens.js");
+    const linkToken = generateToken();
+    const linkTokenHash = hashToken(linkToken);
+
+    await prisma.portalAccessGrant.create({
+      data: {
+        companyId: company.id,
+        customerId: firstJob.customerId,
+        jobId: firstJob.id,
+        linkTokenHash,
+        linkExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        status: "ACTIVE",
+      },
+    });
+    console.log(`✅ Created portal access grant for job #${firstJob.jobNumber}`);
+  }
+
   // Create quotes
   console.log("📄 Creating quotes...");
   const quotes = [];
@@ -416,10 +440,6 @@ async function seedDemoData() {
         sentAt: status !== "DRAFT" ? now : null,
         approvedAt: status === "APPROVED" ? now : null,
         declinedAt: status === "DECLINED" ? now : null,
-        shareToken:
-          status === "SENT" || status === "APPROVED"
-            ? `quote-${i + 1}-token`
-            : null,
       },
     });
 
@@ -579,6 +599,7 @@ async function seedDemoData() {
   console.log(`   - Users: ${users.length}`);
   console.log(`   - Customers: ${customers.length}`);
   console.log(`   - Jobs: ${jobs.length}`);
+  console.log(`   - Portal Grants: 1`);
   console.log(`   - Quotes: ${quotes.length}`);
   console.log(`   - Invoices: ${invoices.length}`);
   console.log("\n🔐 Demo Credentials:");

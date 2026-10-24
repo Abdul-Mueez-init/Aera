@@ -1,6 +1,7 @@
 import { Router, type Response } from "express";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../../common/auth/auth.middleware.js";
+import { prisma } from "../../db/prisma.js";
 import {
   archiveCustomer,
   createCustomer,
@@ -10,7 +11,6 @@ import {
   listCustomers,
   updateCustomer,
 } from "./customer.service.js";
-import { createPortalToken } from "../portal/portal.service.js";
 
 const router = Router();
 const manageCustomers = ["OWNER", "DISPATCHER"] as const;
@@ -199,16 +199,48 @@ router.post(
   },
 );
 
-router.post(
-  "/:customerId/portal-access",
+/**
+ * GET /api/v1/customers/:customerId/portal-activity
+ * Get recent portal audit events for a customer.
+ */
+router.get(
+  "/:customerId/portal-activity",
   requireAuth,
   requireRole(...manageCustomers),
   async (request, response) => {
     const customerId = Array.isArray(request.params.customerId)
       ? request.params.customerId[0]
       : request.params.customerId;
-    response.status(201).json({
-      data: await createPortalToken(request.auth!, customerId),
+
+    const parsed = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(50).default(20),
+      })
+      .safeParse(request.query);
+
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+
+    const events = await prisma.portalAuditEvent.findMany({
+      where: {
+        companyId: request.auth!.companyId,
+        customerId,
+      },
+      orderBy: { createdAt: "desc" },
+      take: parsed.data.limit,
+      select: {
+        id: true,
+        jobId: true,
+        action: true,
+        metadata: true,
+        createdAt: true,
+      },
+    });
+
+    response.status(200).json({
+      data: events,
     });
   },
 );

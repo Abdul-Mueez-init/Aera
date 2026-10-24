@@ -3,10 +3,8 @@ import { z } from "zod";
 import { requireAuth, requireRole } from "../../common/auth/auth.middleware.js";
 import {
   createQuote,
-  getPublicQuote,
   getQuote,
   listQuotes,
-  respondToPublicQuote,
   respondToQuote,
   sendQuote,
   type QuoteStatusValue,
@@ -85,26 +83,6 @@ router.post(
       .json({ data: await createQuote(request.auth!, parsed.data) });
   },
 );
-
-router.get("/shared/:shareToken", async (request, response) => {
-  response.status(200).json({
-    data: await getPublicQuote(routeId(request.params.shareToken)),
-  });
-});
-
-router.post("/shared/:shareToken/respond", async (request, response) => {
-  const parsed = responseSchema.safeParse(request.body);
-  if (!parsed.success) {
-    sendValidationError(response, parsed.error);
-    return;
-  }
-  response.status(200).json({
-    data: await respondToPublicQuote(
-      routeId(request.params.shareToken),
-      parsed.data.action,
-    ),
-  });
-});
 
 router.get(
   "/:quoteId",

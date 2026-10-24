@@ -161,3 +161,97 @@ export const aiMessageRateLimiter = rateLimit({
     );
   },
 });
+
+/**
+ * Customer portal rate limiters (Handoff Phase 2).
+ * These protect the portal endpoints from abuse while allowing legitimate use.
+ */
+
+/**
+ * Portal exchange rate limiter - protects against brute-force token guessing.
+ * Keyed by IP only since the token is not yet validated.
+ */
+export const portalExchangeRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === "test",
+  handler: (_request, _response, next) => {
+    next(
+      new AppError(
+        "RATE_LIMITED",
+        "Too many portal link attempts. Please try again later.",
+        429,
+      ),
+    );
+  },
+});
+
+/**
+ * Portal read rate limiter - protects against enumeration/scraping.
+ * Keyed by IP (session validated after).
+ */
+export const portalReadRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === "test",
+  handler: (_request, _response, next) => {
+    next(
+      new AppError(
+        "RATE_LIMITED",
+        "Too many portal read requests. Please try again later.",
+        429,
+      ),
+    );
+  },
+});
+
+/**
+ * Portal write rate limiter - protects against mutation abuse.
+ * Keyed by IP (session validated after).
+ */
+export const portalWriteRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === "test",
+  handler: (_request, _response, next) => {
+    next(
+      new AppError(
+        "RATE_LIMITED",
+        "Too many portal write requests. Please try again later.",
+        429,
+      ),
+    );
+  },
+});
+
+/**
+ * Handshake rate limiter - protects against code brute-forcing.
+ * Keyed by userId:jobId (requires auth context).
+ */
+export const handshakeRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === "test",
+  keyGenerator: (request) => {
+    const userId = request.auth?.userId ?? "unauthenticated";
+    const jobId = request.params.jobId ?? "unknown";
+    return `${userId}:${jobId}`;
+  },
+  handler: (_request, _response, next) => {
+    next(
+      new AppError(
+        "RATE_LIMITED",
+        "Too many handshake attempts. Please try again later.",
+        429,
+      ),
+    );
+  },
+});

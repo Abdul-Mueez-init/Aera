@@ -40,16 +40,10 @@ class LinkBuilder {
   static String invoicePayment(String token, String invoiceId) =>
       _build('/invoice-payment/$token/$invoiceId');
 
-  /// Build a full customer portal link.
-  ///
-  /// Example: https://customer.example.com/portal/abc123
-  static String customerPortal(String token) => _build('/portal/$token');
-
-  /// Build a full technician tracking link.
-  ///
-  /// Example: https://customer.example.com/technician-tracking/abc123/job-789
-  static String technicianTracking(String token, String jobId) =>
-      _build('/technician-tracking/$token/$jobId');
+  // Phase 8: Portal link building moved to backend - customerPortal and technicianTracking removed
+  // The backend now returns the full link via the portal access grant API
+  // Quote approval and invoice payment are also being replaced by the portal system
+  // but kept here temporarily for any remaining staff-side usage
 
   /// Validate that the URI uses HTTPS in production/staging environments.
   static void _validateHttps(Uri uri) {

@@ -20,7 +20,7 @@ export default defineConfig({
       "**/.{git,cache,output,temp}/**",
     ],
     globals: true,
-    isolate: false,
-    pool: 4,
+    isolate: true,
+    pool: 1, // Force sequential execution to avoid database conflicts
   },
 });
