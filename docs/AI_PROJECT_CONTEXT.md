@@ -279,8 +279,9 @@ Source: `backend/prisma/schema.prisma` (authoritative over the older blueprint i
 **NOT evidenced — gaps to ask Moiz about:**
 
 1. ~~Which AWS service?~~ **Resolved 2026-10-25: EC2, SSH (.pem), no Docker, manual git-fetch + service restart deploy.**
-2. AWS region and instance sizing are still unknown. The exact service name/restart command on EC2 is still unknown.
-3. What terminates HTTPS in production — nginx on the box, an ALB, Cloudflare? Which domain does the production API actually use (not `api.aera.com`, presumably — is it an `api.`/`portal.` subdomain of `quantixlabs.live`, or something else)?
+2. ~~AWS region?~~ **Resolved 2026-10-25: Singapore** — chosen because the Supabase project is also hosted in Singapore. Instance sizing still unknown. The exact service name/restart command on EC2 is still unknown (Moiz runs a restart command but hasn't yet identified its name for this doc).
+2b. ~~Production API domain?~~ **Resolved 2026-10-25: `api.quantixlabs.live`**, pointed at the EC2 server's IP address. (This confirms the `quantixlabs.live` brand inferred from env defaults, and confirms `api.aera.com` in the README is aspirational.)
+3. What terminates HTTPS in production — nginx on the box, an ALB, Cloudflare? ~~Which domain does the production API actually use~~ **Resolved 2026-10-25: `api.quantixlabs.live` → EC2 IP.** The HTTPS termination part is still unknown.
 4. Is the production DB the same Supabase project as dev/staging, or separate projects per environment? Who holds the production `DATABASE_URL`, `JWT_SECRET`, `PORTAL_CODE_SECRET` and service-role key, and where are they stored on the host?
 5. Are invoice reminders / portal sweep / in-process queue safe there — i.e., is production really a single backend instance today?
 6. Where is the customer web build actually hosted (Cloudflare Pages per the code comment, or elsewhere), and what is `CUSTOMER_WEB_BASE_URL` in production?
@@ -363,4 +364,18 @@ Closed by remediation Phases 2–3: Android debug-key signing fallback (now fail
 
 ---
 
-*Draft prepared from repo evidence only (plus Moiz's two user-provided facts: AWS hosting, Supabase Postgres). Nothing in the repo was modified during this inspection.*
+## 11. Live Supabase verification (added 2026-10-25, after Moiz connected Supabase)
+
+Verified live via the Supabase Management API (read-only SELECTs only) on 2026-10-25:
+
+- **Project:** "Aera", ref `bagrszakjvgmkyvanjce`, region **ap-southeast-1 (Singapore)**, status ACTIVE_HEALTHY, Postgres **17.6**. Created 2026-09-07. This independently confirms Moiz's EC2/Supabase Singapore pairing.
+- **Tables:** 29 business tables present in `public`, matching the Prisma schema as of the Oct 16 onboarding migration (incl. `payment_operations.ledgerPaymentId` and the `PROVIDER_ACCEPTED` enum value).
+- **⚠️ Live DB is behind HEAD by the newest migration:** `20261022204225_add_portal_access_grants_and_handshake` (in commit `29ae8f9`) is **not applied** — tables `portal_access_grants`, `portal_sessions`, `portal_audit_events` do not exist and `jobs` has no `handshake%` columns. Today's portal code will error against this DB wherever the new portal/handshake features run.
+- **⚠️ Migration-history drift is real:** `_prisma_migrations` contains exactly **one** recorded migration (`20261009180000_remove_payment_idempotency_duplicate`). The rest of the schema clearly arrived by another route (db push/baseline), so a plain `prisma migrate deploy` would try to replay already-existing objects. The auto-migrate-on-start that briefly existed (commit `15fee9a`) was reverted in `19482a6`, and the current `start` script runs no migrations. Resolving this baseline (e.g. `prisma migrate resolve --applied` for the already-present migrations, then applying the portal migration) is a prerequisite for safely deploying HEAD to EC2 — a planned, approved operation, not yet done.
+- **Storage:** bucket `job-photos` exists and is **private**, as designed.
+- **RLS (live):** zero policies anywhere, and no `public` table has rowsecurity enabled. Safe only under the server-mediated model (see §5/§10).
+- **Data scale (exact counts):** users 5, companies 3, customers 1, jobs 1, quotes 0, invoices 0, payments 0, job_photos 0 — dev/test-scale data only; no real customer data yet.
+
+---
+
+*Document prepared from repo evidence, Moiz's user-provided deployment facts (EC2/Singapore/manual deploy, api.quantixlabs.live), and the live Supabase verification in §11. The repo was not modified during the original inspection; this document itself was later pushed to the repo as `docs/AI_PROJECT_CONTEXT.md` (commit `bf106f4`).*
