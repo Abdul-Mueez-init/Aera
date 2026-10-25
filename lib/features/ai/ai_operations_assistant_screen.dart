@@ -166,11 +166,6 @@ class _AiOperationsAssistantScreenState
               tooltip: 'New conversation',
               onPressed: _startNewConversation,
             ),
-          IconButton(
-            icon: const Icon(Icons.apps),
-            tooltip: 'Screen Catalog',
-            onPressed: () => Scaffold.of(context).openEndDrawer(),
-          ),
         ],
       ),
       body: Column(
@@ -262,7 +257,33 @@ class _EmptyState extends ConsumerWidget {
         ),
         recent.when(
           loading: () => const SizedBox.shrink(),
-          error: (_, _) => const SizedBox.shrink(),
+          error: (error, _) => Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  size: 16,
+                  color: AeraColors.danger,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    error is ApiException
+                        ? error.message
+                        : 'Could not load past conversations.',
+                    style: AeraTypography.bodySm.copyWith(
+                      color: AeraColors.danger,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => ref.invalidate(aiConversationsListProvider),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
           data: (conversations) {
             if (conversations.isEmpty) return const SizedBox.shrink();
             return Padding(

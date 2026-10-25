@@ -8,6 +8,7 @@ import {
   passwordResetConfirmRateLimiter,
   passwordResetRequestRateLimiter,
   refreshRateLimiter,
+  registerRateLimiter,
 } from "../../common/rateLimit.js";
 import {
   acceptInvitationAndLogin,
@@ -46,6 +47,7 @@ const refreshSchema = z.object({
 const acceptInvitationSchema = z.object({
   token: z.string().min(1),
   password: z.string().min(12),
+  email: z.string().trim().email(),
 });
 
 const forgotPasswordSchema = z.object({
@@ -67,16 +69,21 @@ function validationError(error: z.ZodError) {
   };
 }
 
-router.post("/register", authRateLimiter, async (request, response) => {
-  const parsed = registerSchema.safeParse(request.body);
-  if (!parsed.success) {
-    response.status(422).json(validationError(parsed.error));
-    return;
-  }
+router.post(
+  "/register",
+  registerRateLimiter,
+  authRateLimiter,
+  async (request, response) => {
+    const parsed = registerSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json(validationError(parsed.error));
+      return;
+    }
 
-  const result = await register(parsed.data);
-  response.status(201).json({ data: result });
-});
+    const result = await register(parsed.data);
+    response.status(201).json({ data: result });
+  },
+);
 
 router.post("/login", authRateLimiter, async (request, response) => {
   const parsed = loginSchema.safeParse(request.body);
@@ -113,6 +120,7 @@ router.post(
     const result = await acceptInvitationAndLogin(
       parsed.data.token,
       parsed.data.password,
+      parsed.data.email,
     );
     response.status(200).json({ data: result });
   },

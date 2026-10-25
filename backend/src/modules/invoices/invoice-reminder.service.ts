@@ -107,8 +107,11 @@ export async function runInvoiceReminderSweep(
       // This reduces the race window but doesn't eliminate it entirely
       // Full elimination requires a distributed lock or durable queue
       await prisma.$transaction(async (tx) => {
-        // Re-check within transaction
-        const concurrent = await tx.notification.findFirst({
+        // Re-check within transaction. Must scan ALL recent reminder
+        // rows for the company: the old findFirst compared one
+        // arbitrary row's invoiceId, so a reminder for invoice A never
+        // deduped when the "first" recent row happened to be invoice B.
+        const concurrent = await tx.notification.findMany({
           where: {
             type: "INVOICE_PAYMENT_REMINDER",
             companyId: invoice.companyId,
@@ -117,12 +120,13 @@ export async function runInvoiceReminderSweep(
           select: { payload: true },
         });
 
-        if (concurrent) {
-          const recentInvoiceId = invoiceIdFromPayload(concurrent.payload);
-          if (recentInvoiceId === invoice.id) {
-            // Another transaction already sent this
-            return;
-          }
+        if (
+          concurrent.some(
+            (row) => invoiceIdFromPayload(row.payload) === invoice.id,
+          )
+        ) {
+          // Another transaction already sent this
+          return;
         }
 
         // Send the reminder

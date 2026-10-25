@@ -55,7 +55,7 @@ import '../../features/ai/ai_insight_detail_screen.dart';
 import '../../features/settings/notifications_screen.dart';
 import '../../features/settings/profile_settings_screen.dart';
 import '../../features/settings/company_settings_screen.dart';
-import '../../features/settings/team_management_screen.dart';
+import '../../features/team/team_screen.dart';
 import '../../features/more/more_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -172,7 +172,8 @@ final List<RouteBase> _staffRoutes = [
   ),
   GoRoute(
     path: '/reset-password',
-    builder: (context, state) => const ResetPasswordScreen(),
+    builder: (context, state) =>
+        ResetPasswordScreen(email: state.uri.queryParameters['email']),
   ),
   GoRoute(
     path: '/accept-invitation',
@@ -221,7 +222,10 @@ final List<RouteBase> _staffRoutes = [
   ),
   GoRoute(
     path: '/create-quote',
-    builder: (context, state) => const CreateQuoteScreen(),
+    builder: (context, state) => CreateQuoteScreen(
+      initialCustomerId: state.uri.queryParameters['customerId'],
+      initialJobId: state.uri.queryParameters['jobId'],
+    ),
   ),
   GoRoute(
     path: '/create-invoice',
@@ -314,10 +318,7 @@ final List<RouteBase> _staffRoutes = [
     path: '/notifications',
     builder: (context, state) => const NotificationsScreen(),
   ),
-  GoRoute(
-    path: '/team',
-    builder: (context, state) => const TeamManagementScreen(),
-  ),
+  GoRoute(path: '/team', builder: (context, state) => const TeamScreen()),
   GoRoute(
     path: '/profile-settings',
     builder: (context, state) => const ProfileSettingsScreen(),

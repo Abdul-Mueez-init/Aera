@@ -170,6 +170,24 @@ export async function validatePortalSession(
     );
   }
 
+  // Defence in depth: archiving a customer deactivates their grants,
+  // but a session must also die here if the customer is no longer
+  // ACTIVE for any other reason (e.g. archived before that cleanup
+  // existed, or archived through a different path).
+  const customer = await prisma.customer.findUnique({
+    where: { id: session.grant.customerId },
+    select: { status: true },
+  });
+  if (!customer || customer.status !== "ACTIVE") {
+    const contacts = await getCompanyContacts(session.companyId);
+    throw new AppError(
+      "PORTAL_ACCESS_DEACTIVATED",
+      "Portal access has been deactivated",
+      410,
+      { state: "DEACTIVATED", ...contacts },
+    );
+  }
+
   const now = new Date();
   if (session.expiresAt < now) {
     throw new AppError(

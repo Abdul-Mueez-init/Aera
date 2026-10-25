@@ -1,6 +1,8 @@
 import { prisma } from "../../db/prisma.js";
+import { AppError } from "../../common/errors.js";
 import { resendEmailAdapter } from "../notifications/resend-email.adapter.js";
 import { textbeeSmsAdapter } from "../notifications/textbee-sms.adapter.js";
+import { escapeHtml } from "../notifications/email-templates.js";
 
 /**
  * Portal link delivery channels.
@@ -37,7 +39,7 @@ export async function sendPortalLink(
   });
 
   if (!customer) {
-    throw new Error("Customer not found");
+    throw new AppError("RESOURCE_NOT_FOUND", "Customer not found", 404);
   }
 
   // Get company name for the message
@@ -47,7 +49,7 @@ export async function sendPortalLink(
   });
 
   if (!company) {
-    throw new Error("Company not found");
+    throw new AppError("RESOURCE_NOT_FOUND", "Company not found", 404);
   }
 
   const results: DeliveryResult[] = [];
@@ -137,10 +139,10 @@ async function sendEmailPortalLink(
   const subject = `${companyName}: Your Service Portal`;
   const text = `Hello ${customerFirstName},\n\nOpen your service portal here: ${link}\n\nThe link works once on this device.\n\n- ${companyName}`;
   const html = `
-    <p>Hello ${customerFirstName},</p>
+    <p>Hello ${escapeHtml(customerFirstName)},</p>
     <p>Open your service portal here: <a href="${link}">${link}</a></p>
     <p>The link works once on this device.</p>
-    <p>- ${companyName}</p>
+    <p>- ${escapeHtml(companyName)}</p>
   `;
 
   try {
@@ -185,7 +187,7 @@ export async function sendHandshakeCode(
   });
 
   if (!customer) {
-    throw new Error("Customer not found");
+    throw new AppError("RESOURCE_NOT_FOUND", "Customer not found", 404);
   }
 
   // Get company name
@@ -195,7 +197,7 @@ export async function sendHandshakeCode(
   });
 
   if (!company) {
-    throw new Error("Company not found");
+    throw new AppError("RESOURCE_NOT_FOUND", "Company not found", 404);
   }
 
   const results: DeliveryResult[] = [];
@@ -279,11 +281,11 @@ async function sendEmailHandshakeCode(
   const subject = `${companyName}: Your Verification Code`;
   const text = `Hello ${customerFirstName},\n\n${technicianFirstName} is on the way.\n\nYour code is: ${code}\n\nGive this code only to the technician at your door. Do not share it by phone or message.\n\n- ${companyName}`;
   const html = `
-    <p>Hello ${customerFirstName},</p>
-    <p>${technicianFirstName} is on the way.</p>
+    <p>Hello ${escapeHtml(customerFirstName)},</p>
+    <p>${escapeHtml(technicianFirstName)} is on the way.</p>
     <p><strong>Your code is: ${code}</strong></p>
     <p>Give this code only to the technician at your door. Do not share it by phone or message.</p>
-    <p>- ${companyName}</p>
+    <p>- ${escapeHtml(companyName)}</p>
   `;
 
   try {

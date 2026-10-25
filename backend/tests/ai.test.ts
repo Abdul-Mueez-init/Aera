@@ -54,6 +54,7 @@ async function inviteAndAccept(
     .send({
       token: invite.body.data.invitationToken,
       password: "a-brand-new-password-123",
+      email: `${role.toLowerCase()}-${suffix}@example.com`,
     });
   expect(accept.status).toBe(200);
   return { Authorization: `Bearer ${accept.body.data.accessToken}` } as Auth;

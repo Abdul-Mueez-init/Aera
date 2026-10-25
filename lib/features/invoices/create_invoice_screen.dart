@@ -57,7 +57,7 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
     _jobId = widget.initialJobId;
   }
 
-  Future<void> _submit() async {
+  Future<void> _submit({bool allowZeroAmount = false}) async {
     final jobId = _jobId;
     if (jobId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -72,7 +72,10 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
       // it's returned instead of erroring, so no pre-check is needed here.
       final invoice = await ref
           .read(invoicesRepositoryProvider)
-          .generateFromJob(jobId);
+          .generateFromJob(
+            jobId,
+            allowZeroAmount: allowZeroAmount ? true : null,
+          );
 
       ref.invalidate(invoicesListProvider);
 
@@ -106,14 +109,50 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
       if (mounted) {
         context.pushReplacement('/invoices/${invoice.id}');
       }
-    } catch (e) {
+    } on ApiException catch (e) {
+      // A fresh $0 generation is rejected with INVOICE_ZERO_AMOUNT unless
+      // allowZeroAmount is set — mirror the job-detail flow: warn with the
+      // placeholder dialog first, then retry with the flag on confirm.
+      if (e.code == 'INVOICE_ZERO_AMOUNT' && !allowZeroAmount && mounted) {
+        final confirmZero = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Placeholder \$0 invoice'),
+            content: const Text(
+              'This job had no approved quote and no logged parts, so the '
+              'generated invoice would have a \$0 total. There is currently '
+              'no way to edit invoice line items through the app — this '
+              'will need a manual correction. Generate it anyway?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Generate \$0 invoice'),
+              ),
+            ],
+          ),
+        );
+        if (confirmZero == true && mounted) {
+          await _submit(allowZeroAmount: true);
+        }
+        return;
+      }
       if (mounted) {
-        final message = e is ApiException
-            ? e.message
-            : 'Could not generate invoice. Please try again.';
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not generate invoice. Please try again.'),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -278,7 +317,9 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                 color: Colors.white,
               ),
               isLoading: _saving,
-              onPressed: (selectedJob == null || _saving) ? null : _submit,
+              onPressed: (selectedJob == null || _saving)
+                  ? null
+                  : () => _submit(),
             ),
             const SizedBox(height: 20),
           ],

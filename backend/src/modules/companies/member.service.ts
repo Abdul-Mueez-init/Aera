@@ -132,18 +132,18 @@ export async function inviteMember(
       },
     });
 
-    // SECURITY NOTE: Returning the invitation token in the API response is a
-    // temporary workaround pending email delivery implementation (Phase 10).
-    // This token is a 7-day bearer token that can access the invitation acceptance
-    // endpoint. Anyone with access to response logs, proxies, analytics, or a
-    // compromised owner client can obtain this token.
+    // SECURITY NOTE: The invitation token is returned in the API response
+    // because it is currently the ONLY delivery channel: invitation
+    // emails do not exist yet, and the owner's app shows the token once
+    // so it can be shared with the invitee. It is returned solely on
+    // these authenticated owner-only invite/resend responses and is
+    // never logged. When invitation email delivery lands, stop
+    // returning it here.
     //
-    // In production with email delivery: remove this token from the response
-    // and send it via email instead. The token should never be logged or returned
-    // in API responses.
-    //
-    // Current mitigation: Token expires in 7 days, can be revoked by resending
-    // invitation, and requires the user's email to match during acceptance.
+    // Mitigations in force: 7-day expiry, single use, reissue revokes
+    // the previous token, and acceptance requires the accepter to enter
+    // the invited email address (enforced in acceptInvitation), so a
+    // leaked token alone is not sufficient.
     return {
       ...member,
       invitationToken,
@@ -223,6 +223,7 @@ export async function resendInvitation(context: AuthContext, memberId: string) {
 export async function acceptInvitation(
   token: string,
   password: string,
+  email: string,
 ): Promise<{ userId: string; companyId: string }> {
   const tokenHash = hashInvitationToken(token);
 
@@ -249,9 +250,23 @@ export async function acceptInvitation(
   // account has to prove it by entering its current password.
   const invitedUser = await prisma.user.findUnique({
     where: { id: member.userId },
-    select: { passwordHash: true },
+    select: { passwordHash: true, email: true },
   });
   if (!invitedUser) {
+    throw new AppError(
+      "INVITATION_INVALID_OR_EXPIRED",
+      "This invitation link is invalid or has expired",
+      400,
+    );
+  }
+
+  // The accepter must prove they are the person the invitation was
+  // addressed to by entering that email. Same generic error as an
+  // invalid token, so this endpoint stays a non-oracle.
+  if (
+    !invitedUser.email ||
+    invitedUser.email.trim().toLowerCase() !== email.trim().toLowerCase()
+  ) {
     throw new AppError(
       "INVITATION_INVALID_OR_EXPIRED",
       "This invitation link is invalid or has expired",
@@ -318,6 +333,42 @@ export interface UpdateMemberInput {
   status?: "ACTIVE" | "SUSPENDED";
 }
 
+type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+/**
+ * Last-owner invariant: a company must always keep at least one ACTIVE
+ * owner. Without it, any owner could demote/suspend/remove every other
+ * owner and seize the tenant, and a sole owner could demote themselves
+ * and orphan the company (nobody left who can manage members).
+ * Callers run this inside a transaction that first locks the company
+ * row, so two owners cannot race each other's checks.
+ */
+async function assertNotLastActiveOwner(
+  tx: TxClient,
+  member: { id: string; companyId: string; role: string; status: string },
+) {
+  if (member.role !== "OWNER" || member.status !== "ACTIVE") return;
+  const otherOwners = await tx.companyMember.count({
+    where: {
+      companyId: member.companyId,
+      role: "OWNER",
+      status: "ACTIVE",
+      id: { not: member.id },
+    },
+  });
+  if (otherOwners === 0) {
+    throw new AppError(
+      "LAST_OWNER_REQUIRED",
+      "A company must keep at least one active owner; promote another member to owner first",
+      409,
+    );
+  }
+}
+
+async function lockCompanyRow(tx: TxClient, companyId: string) {
+  await tx.$queryRaw`SELECT id FROM companies WHERE id = ${companyId}::uuid FOR UPDATE`;
+}
+
 export async function updateMember(
   context: AuthContext,
   memberId: string,
@@ -350,33 +401,48 @@ export async function updateMember(
     );
   }
 
-  const updated = await prisma.companyMember.update({
-    where: { id: memberId },
-    data: {
-      ...(updates.role !== undefined ? { role: updates.role } : {}),
-      ...(updates.status !== undefined ? { status: updates.status } : {}),
-    },
-    select: {
-      id: true,
-      role: true,
-      status: true,
-      updatedAt: true,
-    },
-  });
+  const removesOwnership =
+    member.role === "OWNER" &&
+    member.status === "ACTIVE" &&
+    ((updates.role !== undefined && updates.role !== "OWNER") ||
+      updates.status === "SUSPENDED");
 
-  if (updates.status === "SUSPENDED") {
-    await prisma.refreshSession.updateMany({
-      where: {
-        userId: member.userId,
-        companyId: member.companyId,
-        revokedAt: null,
-      },
+  const updated = await prisma.$transaction(async (tx) => {
+    if (removesOwnership) {
+      await lockCompanyRow(tx, member.companyId);
+      await assertNotLastActiveOwner(tx, member);
+    }
+
+    const row = await tx.companyMember.update({
+      where: { id: memberId },
       data: {
-        revokedAt: new Date(),
-        lastUsedAt: new Date(),
+        ...(updates.role !== undefined ? { role: updates.role } : {}),
+        ...(updates.status !== undefined ? { status: updates.status } : {}),
+      },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+        updatedAt: true,
       },
     });
-  }
+
+    if (updates.status === "SUSPENDED") {
+      await tx.refreshSession.updateMany({
+        where: {
+          userId: member.userId,
+          companyId: member.companyId,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: new Date(),
+          lastUsedAt: new Date(),
+        },
+      });
+    }
+
+    return row;
+  });
 
   return updated;
 }
@@ -406,11 +472,15 @@ export async function removeMember(context: AuthContext, memberId: string) {
     );
   }
 
-  await prisma.$transaction([
-    prisma.companyMember.delete({
+  await prisma.$transaction(async (tx) => {
+    if (member.role === "OWNER" && member.status === "ACTIVE") {
+      await lockCompanyRow(tx, member.companyId);
+      await assertNotLastActiveOwner(tx, member);
+    }
+    await tx.companyMember.delete({
       where: { id: memberId },
-    }),
-    prisma.refreshSession.updateMany({
+    });
+    await tx.refreshSession.updateMany({
       where: {
         userId: member.userId,
         companyId: member.companyId,
@@ -420,8 +490,8 @@ export async function removeMember(context: AuthContext, memberId: string) {
         revokedAt: new Date(),
         lastUsedAt: new Date(),
       },
-    }),
-  ]);
+    });
+  });
 
   return { id: memberId, removed: true };
 }

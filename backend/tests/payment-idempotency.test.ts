@@ -393,3 +393,232 @@ describe("Phase G1: Payment Idempotency Integration Tests", () => {
     expect(paymentB.status).toBe(201);
   });
 });
+
+describe("Audit fixes: payment validation and operation recovery", () => {
+  /** An ISSUED invoice with a real $100.00 balance, built on the zero-amount flow. */
+  async function createIssuedInvoiceWithBalance(label: string) {
+    const owner = await registerOwner(label);
+    const { customerId, addressId } = await createCustomerAndAddress(
+      owner.accessToken,
+    );
+    const job = await createJob(owner.accessToken, customerId, addressId);
+    await completeJob(owner.accessToken, job.id, owner.companyId);
+    const invoice = await createInvoice(owner.accessToken, job.id);
+    await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        subtotalMinor: 10000n,
+        totalMinor: 10000n,
+        balanceDueMinor: 10000n,
+      },
+    });
+    const issueRes = await request(app)
+      .post(`/api/v1/invoices/${invoice.id}/issue`)
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({});
+    expect(issueRes.status).toBe(200);
+    return { owner, invoiceId: invoice.id as string };
+  }
+
+  function pay(
+    accessToken: string,
+    invoiceId: string,
+    key: string,
+    amountMinor: number,
+  ) {
+    return request(app)
+      .post(`/api/v1/invoices/${invoiceId}/payments`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .set("idempotency-key", key)
+      .send({ amountMinor, currency: "USD", method: "CASH" });
+  }
+
+  async function operationFor(key: string) {
+    return prisma.paymentOperation.findFirst({
+      where: { idempotencyKey: key },
+    });
+  }
+
+  it("rejects an overpayment before creating any operation, and the same key stays usable", async () => {
+    const { owner, invoiceId } = await createIssuedInvoiceWithBalance(
+      "audit-overpay",
+    );
+    const key = `audit-overpay-${Date.now()}`;
+
+    const overpay = await pay(owner.accessToken, invoiceId, key, 10001);
+    expect(overpay.status).toBe(422);
+    expect(overpay.body.error.code).toBe("PAYMENT_EXCEEDS_BALANCE_DUE");
+    expect(await operationFor(key)).toBeNull();
+
+    const exact = await pay(owner.accessToken, invoiceId, key, 10000);
+    expect(exact.status).toBe(201);
+    expect(exact.body.data.balanceDueMinor).toBe("0");
+    expect(exact.body.data.status).toBe("PAID");
+  });
+
+  it("rejects a $0 payment while a balance is due, without touching the invoice", async () => {
+    const { owner, invoiceId } = await createIssuedInvoiceWithBalance(
+      "audit-zero",
+    );
+    const key = `audit-zero-${Date.now()}`;
+
+    const zero = await pay(owner.accessToken, invoiceId, key, 0);
+    expect(zero.status).toBe(422);
+    expect(zero.body.error.code).toBe("PAYMENT_INVALID_AMOUNT");
+    expect(await operationFor(key)).toBeNull();
+
+    const invoice = await prisma.invoice.findUniqueOrThrow({
+      where: { id: invoiceId },
+    });
+    expect(invoice.status).toBe("ISSUED");
+    expect(invoice.balanceDueMinor).toBe(10000n);
+    expect(invoice.amountPaidMinor).toBe(0n);
+  });
+
+  it("resumes a FAILED operation with no provider payment when the client retries with the same key", async () => {
+    const { owner, invoiceId } = await createIssuedInvoiceWithBalance(
+      "audit-resume-failed",
+    );
+    const key = `audit-resume-failed-${Date.now()}`;
+    await prisma.paymentOperation.create({
+      data: {
+        companyId: owner.companyId,
+        invoiceId,
+        userId: owner.user.id,
+        amountMinor: 4000n,
+        currency: "USD",
+        method: "CASH",
+        provider: "manual",
+        idempotencyKey: key,
+        status: "FAILED",
+        retryCount: 1,
+        errorMessage: "simulated earlier provider failure",
+      },
+    });
+
+    const retry = await pay(owner.accessToken, invoiceId, key, 4000);
+    expect(retry.status).toBe(201);
+    expect(retry.body.data.amountPaidMinor).toBe("4000");
+    expect(retry.body.data.balanceDueMinor).toBe("6000");
+
+    const operation = await operationFor(key);
+    expect(operation?.status).toBe("COMPLETED");
+    expect(operation?.ledgerPaymentId).not.toBeNull();
+  });
+
+  it("commits a PROVIDER_ACCEPTED operation on retry without re-running the provider", async () => {
+    const { owner, invoiceId } = await createIssuedInvoiceWithBalance(
+      "audit-resume-accepted",
+    );
+    const key = `audit-resume-accepted-${Date.now()}`;
+    await prisma.paymentOperation.create({
+      data: {
+        companyId: owner.companyId,
+        invoiceId,
+        userId: owner.user.id,
+        amountMinor: 10000n,
+        currency: "USD",
+        method: "CASH",
+        provider: "manual",
+        providerPaymentId: "provider-took-the-money",
+        idempotencyKey: key,
+        status: "PROVIDER_ACCEPTED",
+      },
+    });
+
+    const retry = await pay(owner.accessToken, invoiceId, key, 10000);
+    expect(retry.status).toBe(201);
+    expect(retry.body.data.status).toBe("PAID");
+
+    const operation = await operationFor(key);
+    expect(operation?.status).toBe("COMPLETED");
+    const payment = await prisma.payment.findFirst({
+      where: { invoiceId, idempotencyKey: key },
+    });
+    expect(payment?.providerPaymentId).toBe("provider-took-the-money");
+  });
+
+  it("refuses to silently retry an operation parked for reconciliation", async () => {
+    const { owner, invoiceId } = await createIssuedInvoiceWithBalance(
+      "audit-recon",
+    );
+    const key = `audit-recon-${Date.now()}`;
+    await prisma.paymentOperation.create({
+      data: {
+        companyId: owner.companyId,
+        invoiceId,
+        userId: owner.user.id,
+        amountMinor: 10000n,
+        currency: "USD",
+        method: "CASH",
+        provider: "manual",
+        providerPaymentId: "provider-took-the-money",
+        idempotencyKey: key,
+        status: "FAILED",
+        retryCount: 1,
+        errorMessage: "manual reconciliation required",
+      },
+    });
+
+    const retry = await pay(owner.accessToken, invoiceId, key, 10000);
+    expect(retry.status).toBe(409);
+    expect(retry.body.error.code).toBe(
+      "PAYMENT_OPERATION_RECONCILIATION_REQUIRED",
+    );
+    const payments = await prisma.payment.findMany({
+      where: { invoiceId, idempotencyKey: key },
+    });
+    expect(payments).toHaveLength(0);
+  });
+
+  it("rejects reusing a key with a different amount on a resumable operation", async () => {
+    const { owner, invoiceId } = await createIssuedInvoiceWithBalance(
+      "audit-payload",
+    );
+    const key = `audit-payload-${Date.now()}`;
+    await prisma.paymentOperation.create({
+      data: {
+        companyId: owner.companyId,
+        invoiceId,
+        userId: owner.user.id,
+        amountMinor: 4000n,
+        currency: "USD",
+        method: "CASH",
+        provider: "manual",
+        idempotencyKey: key,
+        status: "FAILED",
+        retryCount: 1,
+      },
+    });
+
+    const retry = await pay(owner.accessToken, invoiceId, key, 5000);
+    expect(retry.status).toBe(409);
+    expect(retry.body.error.code).toBe("PAYMENT_IDEMPOTENCY_CONFLICT");
+  });
+
+  it("concurrent submissions with the same key never produce a raw 500 and credit the invoice once", async () => {
+    const { owner, invoiceId } = await createIssuedInvoiceWithBalance(
+      "audit-concurrent",
+    );
+    const key = `audit-concurrent-${Date.now()}`;
+
+    const [first, second] = await Promise.all([
+      pay(owner.accessToken, invoiceId, key, 5000),
+      pay(owner.accessToken, invoiceId, key, 5000),
+    ]);
+
+    expect(first.status).not.toBe(500);
+    expect(second.status).not.toBe(500);
+    expect([first.status, second.status]).toContain(201);
+
+    const payments = await prisma.payment.findMany({
+      where: { invoiceId, idempotencyKey: key },
+    });
+    expect(payments).toHaveLength(1);
+    const invoice = await prisma.invoice.findUniqueOrThrow({
+      where: { id: invoiceId },
+    });
+    expect(invoice.amountPaidMinor).toBe(5000n);
+    expect(invoice.balanceDueMinor).toBe(5000n);
+  });
+});

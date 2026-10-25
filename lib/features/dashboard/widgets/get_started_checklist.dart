@@ -19,7 +19,11 @@ class GetStartedChecklist extends ConsumerWidget {
     final isOwner = role == 'OWNER';
     final progress = ref.watch(getStartedProvider).valueOrNull;
 
-    if (progress == null || progress.isComplete(needsTechnician: isOwner)) {
+    // Hide while loading, once complete, and when a probe failed
+    // (unknown): never present a failed check as "not started".
+    if (progress == null ||
+        progress.isUnknown ||
+        progress.isComplete(needsTechnician: isOwner)) {
       return const SizedBox.shrink();
     }
 
@@ -33,18 +37,18 @@ class GetStartedChecklist extends ConsumerWidget {
     final steps = <_Step>[
       _Step(
         title: 'Add your first customer',
-        done: progress.hasCustomer,
+        done: progress.hasCustomer ?? false,
         onTap: () => open('/create-customer'),
       ),
       _Step(
         title: 'Create your first job',
-        done: progress.hasJob,
+        done: progress.hasJob ?? false,
         onTap: () => open('/create-job'),
       ),
       if (isOwner)
         _Step(
           title: 'Invite a technician',
-          done: progress.hasTechnician,
+          done: progress.hasTechnician ?? false,
           onTap: () => open('/team'),
         ),
     ];

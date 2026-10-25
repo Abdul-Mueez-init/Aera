@@ -31,6 +31,23 @@ class _DraftItem {
 
   double get quantity => double.tryParse(quantityController.text.trim()) ?? 0;
   double get unitPrice => double.tryParse(unitPriceController.text.trim()) ?? 0;
+
+  /// Inline quantity validation (backend contract): required, > 0, and
+  /// at most 2 decimal places — anything else would come back as a
+  /// server 422, so it is caught here instead.
+  String? get quantityError {
+    final raw = quantityController.text.trim();
+    if (raw.isEmpty) return 'Enter a quantity';
+    final value = double.tryParse(raw);
+    if (value == null) return 'Enter a valid quantity';
+    if (value <= 0) return 'Quantity must be greater than 0';
+    final parts = raw.split('.');
+    if (parts.length == 2 && parts[1].length > 2) {
+      return 'At most 2 decimal places';
+    }
+    return null;
+  }
+
   // Note: This preview uses Dart double for display only.
   // The server recomputes the authoritative total using exact BigInt arithmetic
   // in money.service.ts. The preview may show minor rounding differences.
@@ -44,7 +61,16 @@ class _DraftItem {
 }
 
 class CreateQuoteScreen extends ConsumerStatefulWidget {
-  const CreateQuoteScreen({super.key});
+  const CreateQuoteScreen({
+    super.key,
+    this.initialCustomerId,
+    this.initialJobId,
+  });
+
+  /// Optional preselection carried from the job detail screen
+  /// (`/create-quote?customerId=…&jobId=…`).
+  final String? initialCustomerId;
+  final String? initialJobId;
 
   @override
   ConsumerState<CreateQuoteScreen> createState() => _CreateQuoteScreenState();
@@ -59,6 +85,13 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
   final _taxRateController = TextEditingController(text: '0');
   final List<_DraftItem> _items = [_DraftItem()];
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _customerId = widget.initialCustomerId;
+    _jobId = widget.initialJobId;
+  }
 
   @override
   void dispose() {
@@ -88,6 +121,22 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
     if (_customerId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Choose a customer for this quote')),
+      );
+      return;
+    }
+
+    if (_items.any(
+      (it) =>
+          it.descriptionController.text.trim().isNotEmpty &&
+          it.quantityError != null,
+    )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Fix the quantity errors — quantities must be greater than 0 '
+            'with at most 2 decimal places',
+          ),
+        ),
       );
       return;
     }
@@ -157,7 +206,9 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final customersAsync = ref.watch(customersListProvider);
+    // Dedicated picker provider — NOT the shared customersListProvider,
+    // whose search/page state belongs to the Customers tab.
+    final customersAsync = ref.watch(pickerCustomersProvider);
     final customerId = _customerId;
 
     return Scaffold(
@@ -180,6 +231,14 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
                   Text(
                     'CUSTOMER',
                     style: AeraTypography.labelUpper.copyWith(fontSize: 10),
+                  ),
+                  const SizedBox(height: 10),
+                  AeraTextField(
+                    label: 'Search customers',
+                    hintText: 'Type a name to filter…',
+                    onChanged: (value) =>
+                        ref.read(pickerCustomersSearchProvider.notifier).state =
+                            value.trim(),
                   ),
                   const SizedBox(height: 10),
                   customersAsync.when(
@@ -209,7 +268,12 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
                         );
                       }
                       return DropdownButtonFormField<String>(
-                        initialValue: customerId,
+                        // A preselected customer outside the loaded page
+                        // must not crash the dropdown: only use the value
+                        // when it matches a loaded item.
+                        initialValue: page.items.any((c) => c.id == customerId)
+                            ? customerId
+                            : null,
                         isExpanded: true,
                         decoration: InputDecoration(
                           filled: true,
@@ -293,7 +357,12 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
                               );
                             }
                             return DropdownButtonFormField<String>(
-                              initialValue: _jobId,
+                              // Only preselect when the job is actually in
+                              // the eligible list (a completed/cancelled job
+                              // passed in from job detail is filtered out).
+                              initialValue: eligible.any((j) => j.id == _jobId)
+                                  ? _jobId
+                                  : null,
                               isExpanded: true,
                               decoration: InputDecoration(
                                 filled: true,
@@ -421,6 +490,16 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
                           ),
                         ],
                       ),
+                      if (item.quantityError != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          item.quantityError!,
+                          style: AeraTypography.bodySm.copyWith(
+                            color: AeraColors.danger,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       Container(
                         padding: const EdgeInsets.symmetric(

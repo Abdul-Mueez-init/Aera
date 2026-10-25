@@ -97,8 +97,9 @@ class JobNote {
       body: json['body'] as String? ?? '',
       visibility: json['visibility'] as String? ?? 'INTERNAL',
       createdAt:
-          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
-          DateTime.now(),
+          (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                  DateTime.now())
+              .toLocal(),
       authorName: (name == null || name.isEmpty) ? null : name,
     );
   }
@@ -132,8 +133,9 @@ class JobStatusHistoryEntry {
       toStatus: json['toStatus'] as String? ?? '',
       reason: json['reason'] as String?,
       createdAt:
-          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
-          DateTime.now(),
+          (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                  DateTime.now())
+              .toLocal(),
       actorName: (name == null || name.isEmpty) ? null : name,
     );
   }
@@ -175,8 +177,9 @@ class JobPhoto {
       kind: json['kind'] as String? ?? 'OTHER',
       caption: json['caption'] as String?,
       createdAt:
-          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
-          DateTime.now(),
+          (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                  DateTime.now())
+              .toLocal(),
       uploaderName: (name == null || name.isEmpty) ? null : name,
     );
   }
@@ -210,7 +213,9 @@ class JobPart {
     unitPriceMinor: int.tryParse(json['unitPriceMinor']?.toString() ?? '') ?? 0,
     currency: json['currency'] as String? ?? 'USD',
     createdAt:
-        DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+        (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                DateTime.now())
+            .toLocal(),
   );
 }
 
@@ -219,27 +224,33 @@ class JobInvoiceSummary {
     required this.id,
     required this.invoiceNumber,
     required this.status,
-    required this.totalMinor,
-    required this.balanceDueMinor,
-    required this.currency,
+    this.totalMinor,
+    this.balanceDueMinor,
+    this.currency,
   });
 
   final String id;
   final String invoiceNumber;
   final String status;
-  final int totalMinor;
-  final int balanceDueMinor;
-  final String currency;
+
+  /// Financial fields are null when the backend withholds them — for
+  /// TECHNICIAN the invoice select is deliberately only
+  /// `{id, invoiceNumber, status, createdAt}` (job.service.ts), so a
+  /// missing amount must stay "unknown", never a fabricated 0.
+  final int? totalMinor;
+  final int? balanceDueMinor;
+  final String? currency;
 
   factory JobInvoiceSummary.fromJson(Map<String, dynamic> json) =>
       JobInvoiceSummary(
         id: json['id'] as String,
         invoiceNumber: json['invoiceNumber'] as String? ?? '',
         status: json['status'] as String? ?? 'DRAFT',
-        totalMinor: int.tryParse(json['totalMinor']?.toString() ?? '') ?? 0,
-        balanceDueMinor:
-            int.tryParse(json['balanceDueMinor']?.toString() ?? '') ?? 0,
-        currency: json['currency'] as String? ?? 'USD',
+        totalMinor: int.tryParse(json['totalMinor']?.toString() ?? ''),
+        balanceDueMinor: int.tryParse(
+          json['balanceDueMinor']?.toString() ?? '',
+        ),
+        currency: json['currency'] as String?,
       );
 }
 
@@ -298,22 +309,26 @@ class Job {
     priority: json['priority'] as String? ?? 'NORMAL',
     status: json['status'] as String? ?? 'NEW',
     scheduledStart: json['scheduledStart'] != null
-        ? DateTime.tryParse(json['scheduledStart'] as String)
+        ? DateTime.tryParse(json['scheduledStart'] as String)?.toLocal()
         : null,
     scheduledEnd: json['scheduledEnd'] != null
-        ? DateTime.tryParse(json['scheduledEnd'] as String)
+        ? DateTime.tryParse(json['scheduledEnd'] as String)?.toLocal()
         : null,
     startedAt: json['startedAt'] != null
-        ? DateTime.tryParse(json['startedAt'] as String)
+        ? DateTime.tryParse(json['startedAt'] as String)?.toLocal()
         : null,
     completedAt: json['completedAt'] != null
-        ? DateTime.tryParse(json['completedAt'] as String)
+        ? DateTime.tryParse(json['completedAt'] as String)?.toLocal()
         : null,
     completionSummary: json['completionSummary'] as String?,
     createdAt:
-        DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+        (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                DateTime.now())
+            .toLocal(),
     updatedAt:
-        DateTime.tryParse(json['updatedAt'] as String? ?? '') ?? DateTime.now(),
+        (DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+                DateTime.now())
+            .toLocal(),
     customer: JobCustomer.fromJson(
       json['customer'] as Map<String, dynamic>? ?? const {},
     ),
@@ -410,16 +425,16 @@ class PortalAccessStatus {
       PortalAccessStatus(
         status: json['status'] as String? ?? '',
         createdAt: json['createdAt'] != null
-            ? DateTime.tryParse(json['createdAt'] as String)
+            ? DateTime.tryParse(json['createdAt'] as String)?.toLocal()
             : null,
         linkConsumedAt: json['linkConsumedAt'] != null
-            ? DateTime.tryParse(json['linkConsumedAt'] as String)
+            ? DateTime.tryParse(json['linkConsumedAt'] as String)?.toLocal()
             : null,
         lastSeenAt: json['lastSeenAt'] != null
-            ? DateTime.tryParse(json['lastSeenAt'] as String)
+            ? DateTime.tryParse(json['lastSeenAt'] as String)?.toLocal()
             : null,
         deactivatedAt: json['deactivatedAt'] != null
-            ? DateTime.tryParse(json['deactivatedAt'] as String)
+            ? DateTime.tryParse(json['deactivatedAt'] as String)?.toLocal()
             : null,
         deactivatedReason: json['deactivatedReason'] as String?,
       );
@@ -445,7 +460,7 @@ class PortalIssueResult {
         grantId: json['grantId'] as String? ?? '',
         link: json['link'] as String? ?? '',
         linkExpiresAt: json['linkExpiresAt'] != null
-            ? DateTime.tryParse(json['linkExpiresAt'] as String)
+            ? DateTime.tryParse(json['linkExpiresAt'] as String)?.toLocal()
             : null,
         deliveries:
             (json['deliveries'] as List<dynamic>?)

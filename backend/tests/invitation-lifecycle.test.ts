@@ -61,7 +61,7 @@ describe("Expired invitations: resend", () => {
     // The expired code no longer works.
     const expired = await request(app)
       .post("/api/v1/auth/accept-invitation")
-      .send({ token: oldToken, password: "expired-code-password-1" });
+      .send({ token: oldToken, password: "expired-code-password-1", email: first.body.data.user.email });
     expect(expired.status).toBe(400);
     expect(expired.body.error.code).toBe("INVITATION_INVALID_OR_EXPIRED");
 
@@ -91,20 +91,20 @@ describe("Expired invitations: resend", () => {
     // The old code stays dead even though the member is pending again.
     const oldAgain = await request(app)
       .post("/api/v1/auth/accept-invitation")
-      .send({ token: oldToken, password: "old-code-password-123456" });
+      .send({ token: oldToken, password: "old-code-password-123456", email: first.body.data.user.email });
     expect(oldAgain.status).toBe(400);
 
     // The new code works, exactly once.
     const accept = await request(app)
       .post("/api/v1/auth/accept-invitation")
-      .send({ token: newToken, password: "fresh-code-password-123456" });
+      .send({ token: newToken, password: "fresh-code-password-123456", email: first.body.data.user.email });
     expect(accept.status).toBe(200);
     expect(accept.body.data.role).toBe("TECHNICIAN");
     expect(accept.body.data.company.id).toBe(owner.company.id);
 
     const reuse = await request(app)
       .post("/api/v1/auth/accept-invitation")
-      .send({ token: newToken, password: "reuse-code-password-123456" });
+      .send({ token: newToken, password: "reuse-code-password-123456", email: first.body.data.user.email });
     expect(reuse.status).toBe(400);
   });
 
@@ -143,6 +143,7 @@ describe("Expired invitations: resend", () => {
     await request(app).post("/api/v1/auth/accept-invitation").send({
       token: first.body.data.invitationToken,
       password: "joined-password-123456",
+      email,
     });
 
     const again = await invite(owner, "TECHNICIAN", email);
@@ -157,6 +158,7 @@ describe("Expired invitations: resend", () => {
     await request(app).post("/api/v1/auth/accept-invitation").send({
       token: first.body.data.invitationToken,
       password: "active-member-password-123",
+      email: first.body.data.user.email,
     });
 
     const active = await request(app)
@@ -185,6 +187,7 @@ describe("Expired invitations: resend", () => {
       .send({
         token: dispatcherInvite.body.data.invitationToken,
         password: "dispatcher-password-123456",
+        email: dispatcherInvite.body.data.user.email,
       });
     expect(dispatcherAccept.status).toBe(200);
     const asDispatcher = await request(app)
@@ -249,6 +252,7 @@ describe("Invited members cannot be activated by the owner", () => {
     await request(app).post("/api/v1/auth/accept-invitation").send({
       token: pending.body.data.invitationToken,
       password: "real-member-password-123",
+      email: pending.body.data.user.email,
     });
 
     const suspend = await request(app)

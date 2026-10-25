@@ -120,6 +120,10 @@ export async function getScheduleWorkload(
       },
     },
     orderBy: { scheduledStart: "asc" },
+    // Bounded like jobs-at-risk (take: 200): this feeds an LLM tool
+    // response, so an unbounded single-day result inflates one AI
+    // turn's memory/latency for a very large company.
+    take: 200,
   });
 
   const technicianCounts = new Map<string, { name: string; count: number }>();

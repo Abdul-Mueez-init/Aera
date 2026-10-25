@@ -124,8 +124,9 @@ class Payment {
     currency: json['currency'] as String? ?? 'USD',
     method: json['method'] as String? ?? 'OTHER',
     receivedAt:
-        DateTime.tryParse(json['receivedAt'] as String? ?? '') ??
-        DateTime.now(),
+        (DateTime.tryParse(json['receivedAt'] as String? ?? '') ??
+                DateTime.now())
+            .toLocal(),
     provider: json['provider'] as String?,
     reference: json['reference'] as String?,
     idempotencyKey: json['idempotencyKey'] as String?,
@@ -202,18 +203,22 @@ class Invoice {
         int.tryParse(json['balanceDueMinor']?.toString() ?? '') ?? 0,
     currency: json['currency'] as String? ?? 'USD',
     dueAt: json['dueAt'] != null
-        ? DateTime.tryParse(json['dueAt'] as String)
+        ? DateTime.tryParse(json['dueAt'] as String)?.toLocal()
         : null,
     issuedAt: json['issuedAt'] != null
-        ? DateTime.tryParse(json['issuedAt'] as String)
+        ? DateTime.tryParse(json['issuedAt'] as String)?.toLocal()
         : null,
     paidAt: json['paidAt'] != null
-        ? DateTime.tryParse(json['paidAt'] as String)
+        ? DateTime.tryParse(json['paidAt'] as String)?.toLocal()
         : null,
     createdAt:
-        DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+        (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                DateTime.now())
+            .toLocal(),
     updatedAt:
-        DateTime.tryParse(json['updatedAt'] as String? ?? '') ?? DateTime.now(),
+        (DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+                DateTime.now())
+            .toLocal(),
     customer: InvoiceCustomer.fromJson(
       json['customer'] as Map<String, dynamic>? ?? const {},
     ),
@@ -263,16 +268,32 @@ class InvoicesRepository {
 
   final ApiClient _client;
 
+  /// The list endpoint is paginated ({ items, meta }); this walks every
+  /// page so callers (and the receivables they compute) see the complete
+  /// set, not just the first page.
   Future<List<Invoice>> listInvoices({String? status}) async {
-    final res = await _client.get(
-      '/api/v1/invoices',
-      queryParameters: {
-        if (status != null && status.isNotEmpty) 'status': status,
-      },
-    );
-    return (res as List<dynamic>)
-        .map((i) => Invoice.fromJson(i as Map<String, dynamic>))
-        .toList();
+    final invoices = <Invoice>[];
+    var page = 1;
+    while (true) {
+      final res = await _client.get(
+        '/api/v1/invoices',
+        queryParameters: {
+          'page': page.toString(),
+          'pageSize': '100',
+          if (status != null && status.isNotEmpty) 'status': status,
+        },
+      );
+      final map = res as Map<String, dynamic>;
+      invoices.addAll(
+        (map['items'] as List<dynamic>)
+            .map((i) => Invoice.fromJson(i as Map<String, dynamic>)),
+      );
+      final meta = map['meta'] as Map<String, dynamic>?;
+      final pageCount = (meta?['pageCount'] as num?)?.toInt() ?? page;
+      if (page >= pageCount) break;
+      page += 1;
+    }
+    return invoices;
   }
 
   Future<Invoice> getInvoice(String invoiceId) async {

@@ -170,7 +170,11 @@ router.delete(
     const customerId = Array.isArray(request.params.customerId)
       ? request.params.customerId[0]
       : request.params.customerId;
-    await archiveCustomer(request.auth!.companyId, customerId);
+    await archiveCustomer(
+      request.auth!.companyId,
+      customerId,
+      request.auth!.userId,
+    );
     response.status(204).send();
   },
 );

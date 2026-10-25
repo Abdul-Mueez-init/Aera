@@ -10,6 +10,7 @@ import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_status_chip.dart';
 import '../../core/widgets/aera_text_field.dart';
+import '../jobs/providers/jobs_provider.dart';
 import 'data/invoices_repository.dart';
 import 'providers/invoices_provider.dart';
 
@@ -94,6 +95,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
         invoiceId: widget.invoiceId,
         balanceDueMinor: invoice.balanceDueMinor,
         currency: invoice.currency,
+        jobId: invoice.jobId ?? invoice.job?.id,
       ),
     );
   }
@@ -540,11 +542,16 @@ class _RecordPaymentSheet extends ConsumerStatefulWidget {
     required this.invoiceId,
     required this.balanceDueMinor,
     required this.currency,
+    this.jobId,
   });
 
   final String invoiceId;
   final int balanceDueMinor;
   final String currency;
+
+  /// The invoice's job, when attached — a payment changes the invoice
+  /// status/balance the job detail screen shows from its own cache.
+  final String? jobId;
 
   @override
   ConsumerState<_RecordPaymentSheet> createState() =>
@@ -600,6 +607,9 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
           );
       ref.invalidate(invoiceDetailProvider(widget.invoiceId));
       ref.invalidate(invoicesListProvider);
+      if (widget.jobId != null) {
+        ref.invalidate(jobDetailProvider(widget.jobId!));
+      }
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(

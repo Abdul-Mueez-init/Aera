@@ -35,6 +35,33 @@ export const authRateLimiter = rateLimit({
 });
 
 /**
+ * Registration ceiling keyed by IP ONLY. authRateLimiter keys by
+ * IP+email, which is right for login (no global victim lockout) but
+ * means each new signup email gets a fresh bucket — one IP could
+ * script unlimited account/company creation. This coarser cap sits in
+ * front of /register only: 20 signups per IP per hour is far above any
+ * legitimate office/NAT use and far below scripted tenant spam.
+ * Skipped under NODE_ENV=test like the other IP-only limiters (the
+ * suite registers many accounts from one IP).
+ */
+export const registerRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === "test",
+  handler: (_request, _response, next) => {
+    next(
+      new AppError(
+        "RATE_LIMITED",
+        "Too many signups from this network. Please try again later.",
+        429,
+      ),
+    );
+  },
+});
+
+/**
  * Invitation acceptance has no email in the request body (it is identified by
  * an opaque token), so it must NOT share authRateLimiter's `ip:email` key -
  * every request would collapse into one `ip:unknown` bucket and lock out all

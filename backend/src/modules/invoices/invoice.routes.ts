@@ -23,7 +23,11 @@ const statuses = [
   "OVERDUE",
 ] as const;
 const methods = ["CASH", "CARD", "BANK_TRANSFER", "OTHER"] as const;
-const listSchema = z.object({ status: z.enum(statuses).optional() });
+const listSchema = z.object({
+  status: z.enum(statuses).optional(),
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(20),
+});
 const paymentSchema = z.object({
   amountMinor: z.number().int().min(0).max(1_000_000_000),
   currency: z.string().regex(/^[A-Za-z]{3}$/),
@@ -67,6 +71,8 @@ router.get(
       data: await listInvoices(
         request.auth!,
         parsed.data.status as InvoiceStatusValue | undefined,
+        parsed.data.page,
+        parsed.data.pageSize,
       ),
     });
   },

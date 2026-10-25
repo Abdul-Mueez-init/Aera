@@ -10,44 +10,22 @@ async function getNextCounterInTransaction(
   kind: keyof CounterKind,
   transaction: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
 ): Promise<number> {
-  // Use raw SQL with FOR UPDATE to lock the row for this company/kind combination
-  const counter = await transaction.$queryRaw<
-    Array<{ id: string; lastValue: number }>
-  >`
-    SELECT id, "lastValue" FROM company_counters
-    WHERE "companyId" = ${companyId} AND kind = ${kind}
-    FOR UPDATE
+  // One atomic statement: insert the row at 1 or increment it in place.
+  // The old SELECT-then-Prisma-upsert bootstrap could surface a raw
+  // unique-violation 500 when two first-ever allocations for a company
+  // raced; ON CONFLICT serializes them inside Postgres instead.
+  const rows = await transaction.$queryRaw<Array<{ lastValue: number }>>`
+    INSERT INTO company_counters (id, "companyId", kind, "lastValue", "createdAt", "updatedAt")
+    VALUES (gen_random_uuid(), ${companyId}::uuid, ${kind}, 1, now(), now())
+    ON CONFLICT ("companyId", kind)
+    DO UPDATE SET "lastValue" = company_counters."lastValue" + 1, "updatedAt" = now()
+    RETURNING "lastValue"
   `;
-
-  if (counter.length > 0) {
-    // Increment existing counter
-    const updated = await transaction.companyCounter.update({
-      where: { id: counter[0].id },
-      data: { lastValue: counter[0].lastValue + 1 },
-    });
-    return updated.lastValue;
-  } else {
-    // Create new counter starting at 1 using upsert to handle race conditions
-    const upserted = await transaction.companyCounter.upsert({
-      where: {
-        companyId_kind: {
-          companyId,
-          kind,
-        },
-      },
-      create: {
-        companyId,
-        kind,
-        lastValue: 1,
-      },
-      update: {
-        lastValue: {
-          increment: 1,
-        },
-      },
-    });
-    return upserted.lastValue;
+  const value = rows[0]?.lastValue;
+  if (value === undefined) {
+    throw new Error(`Counter allocation failed for ${companyId}/${kind}`);
   }
+  return value;
 }
 
 export async function getNextCounter(

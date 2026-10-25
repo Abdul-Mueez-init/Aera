@@ -47,6 +47,28 @@ final customerDetailProvider = FutureProvider.family<Customer, String>((
   return repo.getCustomer(customerId);
 });
 
+/// Customer picker for the create flows (Create Job / Create Quote).
+///
+/// Deliberately NOT [customersListProvider]: that provider is driven by
+/// the Customers tab's [customersQueryProvider], so a leftover tab search
+/// or page would hide selectable customers in the pickers. This provider
+/// carries its own search state (set from the picker's own search field)
+/// and loads a large page. Auto-disposed so picker state never leaks
+/// between visits either.
+final pickerCustomersSearchProvider = StateProvider<String>((ref) => '');
+
+final pickerCustomersProvider = FutureProvider.autoDispose<PaginatedCustomers>((
+  ref,
+) async {
+  final search = ref.watch(pickerCustomersSearchProvider);
+  final repo = ref.watch(customersRepositoryProvider);
+  return repo.listCustomers(
+    page: 1,
+    pageSize: 100,
+    search: search.isEmpty ? null : search,
+  );
+});
+
 final customerJobsProvider =
     FutureProvider.family<PaginatedCustomerJobs, String>((
       ref,

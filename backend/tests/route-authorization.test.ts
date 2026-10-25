@@ -79,6 +79,7 @@ async function inviteAndAccept(
     .post("/api/v1/auth/accept-invitation")
     .send({
       token: invitationToken,
+      email,
       password: "TestPassword123!", // Use a valid password
     });
 
@@ -123,7 +124,7 @@ async function createCustomerAndAddress(ownerAccessToken: string) {
 }
 
 describe("Phase B2: Route Authorization Matrix & Function-Level Policies", () => {
-  it.skip("blocks technicians from manager/dispatcher-only operations - pre-existing test isolation issue", async () => {
+  it("blocks unassigned technicians from job operations", async () => {
     const owner = await registerOwner("b2-unassigned");
     const techAssigned = await inviteAndAccept(
       owner.accessToken,
@@ -233,7 +234,7 @@ describe("Phase B2: Route Authorization Matrix & Function-Level Policies", () =>
     expect(historyRes.body.error.code).toBe("AUTH_FORBIDDEN");
   });
 
-  it.skip("permits assigned technician field workflow while restricting cancellation, customer notes, and manager jumps - pre-existing test setup issue", async () => {
+  it("permits assigned technician field workflow while restricting cancellation, customer notes, and manager jumps", async () => {
     const owner = await registerOwner("b2-assigned");
     const tech = await inviteAndAccept(
       owner.accessToken,
@@ -404,7 +405,7 @@ describe("Phase B2: Route Authorization Matrix & Function-Level Policies", () =>
     expect(historyRes.body.data.length).toBeGreaterThan(0);
   });
 
-  it.skip("blocks technicians from manager/dispatcher-only operations - pre-existing test isolation issue", async () => {
+  it("blocks technicians from manager-only routes", async () => {
     const owner = await registerOwner("b2-manager-only");
     const tech = await inviteAndAccept(
       owner.accessToken,
@@ -483,7 +484,7 @@ describe("Phase B2: Route Authorization Matrix & Function-Level Policies", () =>
     expect(inviteRes.body.error.code).toBe("AUTH_FORBIDDEN");
   });
 
-  it.skip("allows dispatchers to manage jobs and view schedule while blocking owner-only member management - pre-existing test setup issue", async () => {
+  it("allows dispatchers to manage jobs and view schedule while blocking owner-only member management", async () => {
     const owner = await registerOwner("b2-dispatcher");
     const dispatcher = await inviteAndAccept(
       owner.accessToken,
@@ -531,7 +532,7 @@ describe("Phase B2: Route Authorization Matrix & Function-Level Policies", () =>
     expect(removeRes.body.error.code).toBe("AUTH_FORBIDDEN");
   });
 
-  it.skip("prevents using a client-supplied company ID in route parameters to bypass session tenancy - pre-existing test isolation issue", async () => {
+  it("prevents using a client-supplied company ID in route parameters to bypass session tenancy", async () => {
     const ownerA = await registerOwner("b2-tenant-a");
     const ownerB = await registerOwner("b2-tenant-b");
 
@@ -554,7 +555,7 @@ describe("Phase B2: Route Authorization Matrix & Function-Level Policies", () =>
     expect(validAccess.body.data.id).toBe(ownerA.company.id);
   });
 
-  it.skip("portal sessions cannot access staff endpoints - requires portal grant working", async () => {
+  it("portal sessions cannot access staff endpoints", async () => {
     const owner = await registerOwner("portal-staff-isolation");
 
     const { customerId, addressId } = await createCustomerAndAddress(

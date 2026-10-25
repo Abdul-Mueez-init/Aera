@@ -40,5 +40,24 @@ void main() {
       expect(progress.isComplete(needsTechnician: true), isTrue);
       expect(progress.isComplete(needsTechnician: false), isTrue);
     });
+
+    test('a failed probe is unknown, not "not done"', () {
+      const progress = GetStartedProgress(
+        hasCustomer: null,
+        hasJob: true,
+        hasTechnician: true,
+      );
+      expect(progress.isUnknown, isTrue);
+      expect(progress.isComplete(needsTechnician: false), isFalse);
+    });
+
+    test('fully probed progress is not unknown', () {
+      const progress = GetStartedProgress(
+        hasCustomer: false,
+        hasJob: false,
+        hasTechnician: false,
+      );
+      expect(progress.isUnknown, isFalse);
+    });
   });
 }

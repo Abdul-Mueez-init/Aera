@@ -106,8 +106,9 @@ class QuoteApprovalEvent {
       action: json['action'] as String? ?? '',
       source: json['source'] as String? ?? '',
       createdAt:
-          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
-          DateTime.now(),
+          (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                  DateTime.now())
+              .toLocal(),
       actorName: (name == null || name.isEmpty) ? null : name,
     );
   }
@@ -172,21 +173,25 @@ class Quote {
     totalMinor: int.tryParse(json['totalMinor']?.toString() ?? '') ?? 0,
     currency: json['currency'] as String? ?? 'USD',
     expiresAt: json['expiresAt'] != null
-        ? DateTime.tryParse(json['expiresAt'] as String)
+        ? DateTime.tryParse(json['expiresAt'] as String)?.toLocal()
         : null,
     sentAt: json['sentAt'] != null
-        ? DateTime.tryParse(json['sentAt'] as String)
+        ? DateTime.tryParse(json['sentAt'] as String)?.toLocal()
         : null,
     approvedAt: json['approvedAt'] != null
-        ? DateTime.tryParse(json['approvedAt'] as String)
+        ? DateTime.tryParse(json['approvedAt'] as String)?.toLocal()
         : null,
     declinedAt: json['declinedAt'] != null
-        ? DateTime.tryParse(json['declinedAt'] as String)
+        ? DateTime.tryParse(json['declinedAt'] as String)?.toLocal()
         : null,
     createdAt:
-        DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+        (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                DateTime.now())
+            .toLocal(),
     updatedAt:
-        DateTime.tryParse(json['updatedAt'] as String? ?? '') ?? DateTime.now(),
+        (DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+                DateTime.now())
+            .toLocal(),
     customer: QuoteCustomer.fromJson(
       json['customer'] as Map<String, dynamic>? ?? const {},
     ),
@@ -259,16 +264,32 @@ class QuotesRepository {
 
   final ApiClient _client;
 
+  /// The list endpoint is paginated ({ items, meta }); this walks every
+  /// page so callers (and the totals they display) see the complete set,
+  /// not just the first page.
   Future<List<Quote>> listQuotes({String? status}) async {
-    final res = await _client.get(
-      '/api/v1/quotes',
-      queryParameters: {
-        if (status != null && status.isNotEmpty) 'status': status,
-      },
-    );
-    return (res as List<dynamic>)
-        .map((q) => Quote.fromJson(q as Map<String, dynamic>))
-        .toList();
+    final quotes = <Quote>[];
+    var page = 1;
+    while (true) {
+      final res = await _client.get(
+        '/api/v1/quotes',
+        queryParameters: {
+          'page': page.toString(),
+          'pageSize': '100',
+          if (status != null && status.isNotEmpty) 'status': status,
+        },
+      );
+      final map = res as Map<String, dynamic>;
+      quotes.addAll(
+        (map['items'] as List<dynamic>)
+            .map((q) => Quote.fromJson(q as Map<String, dynamic>)),
+      );
+      final meta = map['meta'] as Map<String, dynamic>?;
+      final pageCount = (meta?['pageCount'] as num?)?.toInt() ?? page;
+      if (page >= pageCount) break;
+      page += 1;
+    }
+    return quotes;
   }
 
   Future<Quote> getQuote(String quoteId) async {

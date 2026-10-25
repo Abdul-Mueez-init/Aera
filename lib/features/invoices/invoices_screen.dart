@@ -94,9 +94,15 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
               return matchCust || matchId;
             }).toList();
 
-            final outstandingMinor = invoices
-                .where((i) => i.status != 'DRAFT' && i.status != 'VOID')
-                .fold<int>(0, (sum, i) => sum + i.balanceDueMinor);
+            // Balances must never be summed across currencies — group
+            // outstanding and overdue amounts per currency instead.
+            final outstandingByCurrency = <String, int>{};
+            for (final i in invoices.where(
+              (i) => i.status != 'DRAFT' && i.status != 'VOID',
+            )) {
+              outstandingByCurrency[i.currency] =
+                  (outstandingByCurrency[i.currency] ?? 0) + i.balanceDueMinor;
+            }
             final pendingCount = invoices
                 .where(
                   (i) => i.status == 'ISSUED' || i.status == 'PARTIALLY_PAID',
@@ -105,13 +111,12 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
             final overdue = invoices
                 .where((i) => i.status == 'OVERDUE')
                 .toList();
-            final overdueMinor = overdue.fold<int>(
-              0,
-              (sum, i) => sum + i.balanceDueMinor,
-            );
-            final currency = invoices.isNotEmpty
-                ? invoices.first.currency
-                : 'USD';
+            final overdueByCurrency = <String, int>{};
+            for (final i in overdue) {
+              overdueByCurrency[i.currency] =
+                  (overdueByCurrency[i.currency] ?? 0) + i.balanceDueMinor;
+            }
+            final outstandingEntries = outstandingByCurrency.entries.toList();
 
             return RefreshIndicator(
               onRefresh: () async {
@@ -211,36 +216,14 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 4),
-                                Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.baseline,
-                                  textBaseline: TextBaseline.alphabetic,
-                                  children: [
-                                    Text(
-                                      '$currency ',
-                                      style: AeraTypography.body.copyWith(
-                                        color: AeraColors.accent,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    Text(
-                                      (outstandingMinor / 100).toStringAsFixed(
-                                        2,
-                                      ),
-                                      style: AeraTypography.display.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 32,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'Outstanding',
-                                      style: AeraTypography.label.copyWith(
-                                        color: AeraColors.inkSoft,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                // One row per currency — amounts in
+                                // different currencies are never blended.
+                                if (outstandingEntries.isEmpty)
+                                  _outstandingRow('USD', 0)
+                                else
+                                  ...outstandingEntries.map(
+                                    (e) => _outstandingRow(e.key, e.value),
+                                  ),
                               ],
                             ),
                             Container(
@@ -274,7 +257,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
                               _pill(
                                 icon: Icons.warning,
                                 label:
-                                    '${overdue.length} Overdue (${_formatMoney(overdueMinor, currency)})',
+                                    '${overdue.length} Overdue (${overdueByCurrency.entries.map((e) => _formatMoney(e.value, e.key)).join(' · ')})',
                                 bg: AeraColors.dangerSoft,
                                 fg: AeraColors.danger,
                               ),
@@ -374,6 +357,34 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
           },
         ),
       ),
+    );
+  }
+
+  Widget _outstandingRow(String currency, int minor) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(
+          '$currency ',
+          style: AeraTypography.body.copyWith(
+            color: AeraColors.accent,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Text(
+          (minor / 100).toStringAsFixed(2),
+          style: AeraTypography.display.copyWith(
+            fontWeight: FontWeight.w700,
+            fontSize: 32,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          'Outstanding',
+          style: AeraTypography.label.copyWith(color: AeraColors.inkSoft),
+        ),
+      ],
     );
   }
 

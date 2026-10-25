@@ -25,9 +25,13 @@ class AiConversation {
     id: json['id'] as String,
     title: json['title'] as String?,
     createdAt:
-        DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+        (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                DateTime.now())
+            .toLocal(),
     updatedAt:
-        DateTime.tryParse(json['updatedAt'] as String? ?? '') ?? DateTime.now(),
+        (DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+                DateTime.now())
+            .toLocal(),
   );
 }
 
@@ -100,8 +104,9 @@ class AiMessage {
       role: json['role'] as String? ?? 'ASSISTANT',
       content: json['content'] as String? ?? '',
       createdAt:
-          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
-          DateTime.now(),
+          (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                  DateTime.now())
+              .toLocal(),
       toolCalls:
           rawToolCalls
               ?.map(

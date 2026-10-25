@@ -239,6 +239,27 @@ class _MemberCard extends ConsumerWidget {
       } else if (action == 'reactivate') {
         await repo.updateMember(member.id, status: 'ACTIVE');
         messenger.showSnackBar(SnackBar(content: Text('$_name reactivated')));
+      } else if (action == 'resend') {
+        final updated = await repo.resendInvitation(member.id);
+        messenger.showSnackBar(
+          SnackBar(content: Text('New invitation code issued for $_name')),
+        );
+        ref.invalidate(teamMembersProvider);
+        final token = updated.invitationToken;
+        if (token != null && token.isNotEmpty && context.mounted) {
+          final company =
+              ref.read(currentCompanyProvider)?.name ?? 'your company';
+          await showDialog<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => _InvitationCodeDialog(
+              member: updated,
+              token: token,
+              companyName: company,
+            ),
+          );
+        }
+        return;
       } else if (action == 'remove') {
         final ok = await _confirm(
           context,
@@ -265,6 +286,11 @@ class _MemberCard extends ConsumerWidget {
 
   List<PopupMenuEntry<String>> _menuItems() {
     final items = <PopupMenuEntry<String>>[];
+    if (member.status == 'INVITED') {
+      items.add(
+        const PopupMenuItem(value: 'resend', child: Text('Resend invitation')),
+      );
+    }
     if (member.status == 'ACTIVE') {
       if (member.role != 'DISPATCHER') {
         items.add(
@@ -350,8 +376,8 @@ class _MemberCard extends ConsumerWidget {
                 if (member.status == 'INVITED') ...[
                   const SizedBox(height: 8),
                   Text(
-                    'Waiting to accept. The code was shown once; remove and '
-                    're-invite for a new one.',
+                    'Waiting to accept. Use Resend invitation in the menu '
+                    'to issue a new code.',
                     style: AeraTypography.label.copyWith(
                       color: AeraColors.outline,
                     ),

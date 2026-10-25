@@ -77,6 +77,23 @@ function customerSelect() {
   } as const;
 }
 
+function serviceAddressSelect() {
+  return {
+    id: true,
+    label: true,
+    line1: true,
+    line2: true,
+    city: true,
+    region: true,
+    postalCode: true,
+    countryCode: true,
+    lat: true,
+    lng: true,
+    createdAt: true,
+    updatedAt: true,
+  } as const;
+}
+
 function customerJobSelect() {
   return {
     id: true,
@@ -126,7 +143,17 @@ export async function listCustomers(filters: CustomerFilters) {
   const [items, total] = await prisma.$transaction([
     prisma.customer.findMany({
       where,
-      select: customerSelect(),
+      select: {
+        ...customerSelect(),
+        // The list card renders the customer's first address; without
+        // this the API omitted serviceAddresses entirely and every row
+        // claimed "No address on file".
+        serviceAddresses: {
+          orderBy: { createdAt: "asc" },
+          take: 1,
+          select: serviceAddressSelect(),
+        },
+      },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       skip,
       take: filters.pageSize,
@@ -159,20 +186,7 @@ export async function getCustomer(companyId: string, customerId: string) {
       ...customerSelect(),
       serviceAddresses: {
         orderBy: { createdAt: "asc" },
-        select: {
-          id: true,
-          label: true,
-          line1: true,
-          line2: true,
-          city: true,
-          region: true,
-          postalCode: true,
-          countryCode: true,
-          lat: true,
-          lng: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        select: serviceAddressSelect(),
       },
     },
   });
@@ -216,15 +230,57 @@ export async function updateCustomer(
   return getCustomer(companyId, customerId);
 }
 
-export async function archiveCustomer(companyId: string, customerId: string) {
-  const result = await prisma.customer.updateMany({
-    where: { companyId, id: customerId, status: "ACTIVE" },
-    data: { status: "ARCHIVED", deletedAt: new Date() },
-  });
+export async function archiveCustomer(
+  companyId: string,
+  customerId: string,
+  actorUserId?: string,
+) {
+  await prisma.$transaction(async (tx) => {
+    const result = await tx.customer.updateMany({
+      where: { companyId, id: customerId, status: "ACTIVE" },
+      data: { status: "ARCHIVED", deletedAt: new Date() },
+    });
 
-  if (result.count !== 1) {
-    throw new AppError("RESOURCE_NOT_FOUND", "Customer not found", 404);
-  }
+    if (result.count !== 1) {
+      throw new AppError("RESOURCE_NOT_FOUND", "Customer not found", 404);
+    }
+
+    // Archiving a customer must end their portal access with it: an
+    // ACTIVE grant + live session would otherwise keep working — the
+    // archived customer could still view the job, approve quotes and
+    // leave a review. Deactivate every ACTIVE grant, revoke its
+    // sessions, and audit each deactivation.
+    const grants = await tx.portalAccessGrant.findMany({
+      where: { companyId, customerId, status: "ACTIVE" },
+      select: { id: true, jobId: true },
+    });
+    for (const grant of grants) {
+      await tx.portalAccessGrant.update({
+        where: { id: grant.id },
+        data: {
+          status: "DEACTIVATED",
+          deactivatedAt: new Date(),
+          deactivatedReason: "MANUAL",
+          deactivatedBy: actorUserId ?? null,
+        },
+      });
+      await tx.portalSession.updateMany({
+        where: { grantId: grant.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await tx.portalAuditEvent.create({
+        data: {
+          companyId,
+          jobId: grant.jobId,
+          customerId,
+          grantId: grant.id,
+          actorUserId: actorUserId ?? null,
+          action: "PORTAL_DEACTIVATED",
+          metadata: { reason: "CUSTOMER_ARCHIVED" },
+        },
+      });
+    }
+  });
 }
 
 export async function createServiceAddress(

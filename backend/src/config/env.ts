@@ -97,6 +97,18 @@ const envSchema = z.object({
   INVOICE_REMINDER_INTERVAL_DAYS: z.coerce.number().int().positive().default(3),
   // Used only for invoices with no dueAt: due = issuedAt + this many days.
   INVOICE_PAYMENT_TERMS_DAYS: z.coerce.number().int().positive().default(14),
+  // Payment-operation recovery sweep: retries operations that never
+  // reached the provider and commits ledger entries for operations the
+  // provider already accepted (crash window between the two).
+  PAYMENT_OPERATIONS_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  PAYMENT_OPERATION_SWEEP_MINUTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(5),
   // Phase 11 Slice D — AI gateway (Google Gemini, generativelanguage.googleapis.com).
   // Left unset in local/dev/test: gemini.client.ts skips the model call and
   // logs a warning instead of failing, so no key is required to run the app

@@ -8,6 +8,7 @@ import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_status_chip.dart';
+import '../jobs/providers/jobs_provider.dart';
 import 'data/quotes_repository.dart';
 import 'providers/quotes_provider.dart';
 
@@ -44,6 +45,12 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   bool _responding = false;
 
   Future<void> _respondQuote(bool approve) async {
+    // Approving a job-linked quote advances the job server-side
+    // (QUOTING → SCHEDULED/NEW), so the job detail cache must go too.
+    final jobId = ref
+        .read(quoteDetailProvider(widget.quoteId))
+        .valueOrNull
+        ?.jobId;
     setState(() => _responding = true);
     try {
       await ref
@@ -51,6 +58,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
           .respondToQuote(widget.quoteId, approve: approve);
       ref.invalidate(quoteDetailProvider(widget.quoteId));
       ref.invalidate(quotesListProvider);
+      if (jobId != null) ref.invalidate(jobDetailProvider(jobId));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

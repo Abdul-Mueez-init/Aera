@@ -190,6 +190,8 @@ export async function createQuote(
 export async function listQuotes(
   context: AuthContext,
   status?: QuoteStatusValue,
+  page = 1,
+  pageSize = 20,
 ) {
   if (status === "SENT" || status === "EXPIRED" || !status) {
     await prisma.quote.updateMany({
@@ -202,13 +204,32 @@ export async function listQuotes(
     });
   }
 
-  const quotes = await prisma.quote.findMany({
-    where: { companyId: context.companyId, ...(status ? { status } : {}) },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    select: quoteSelect,
-  });
-  return jsonSafe(quotes);
+  // Same pagination contract as listJobs: { items, meta }. The old
+  // silent `take: 100` truncated the list while the client labelled
+  // `quotes.length` as the total count.
+  const where = {
+    companyId: context.companyId,
+    ...(status ? { status } : {}),
+  };
+  const [items, total] = await prisma.$transaction([
+    prisma.quote.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: quoteSelect,
+    }),
+    prisma.quote.count({ where }),
+  ]);
+  return {
+    items: jsonSafe(items),
+    meta: {
+      page,
+      pageSize,
+      total,
+      pageCount: Math.ceil(total / pageSize),
+    },
+  };
 }
 
 export async function getQuote(context: AuthContext, quoteId: string) {
@@ -278,16 +299,6 @@ export async function sendQuote(context: AuthContext, quoteId: string) {
     quoteId,
   });
   return jsonSafe(sent);
-}
-
-// Deprecated: portal-access-grants system replaces shareToken-based public access
-// Kept for reference but no longer used
-export async function getPublicQuote() {
-  throw new AppError(
-    "PORTAL_LINK_INVALID",
-    "Invalid portal link",
-    401,
-  );
 }
 
 export interface ProcessQuoteResponseOptions {
@@ -405,71 +416,6 @@ export async function processQuoteResponse(options: ProcessQuoteResponseOptions)
     companyId,
     quoteId,
   });
-}
-
-export async function respondToPublicQuote(
-  shareToken: string,
-  action: QuoteApprovalActionValue,
-) {
-  const quote = await prisma.quote.findUnique({
-    where: { shareToken },
-    select: {
-      id: true,
-      companyId: true,
-      status: true,
-      expiresAt: true,
-      jobId: true,
-    },
-  });
-  if (!quote) {
-    throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
-  }
-
-  if (quote.status === action) {
-    return getPublicQuote();
-  }
-
-  const now = new Date();
-  const isPastExpiry =
-    quote.expiresAt !== null && quote.expiresAt.getTime() <= now.getTime();
-  const isExpired =
-    quote.status === "EXPIRED" ||
-    (quote.status !== "APPROVED" &&
-      quote.status !== "DECLINED" &&
-      isPastExpiry);
-
-  if (isExpired) {
-    if (quote.status !== "EXPIRED") {
-      await prisma.quote.updateMany({
-        where: { id: quote.id, status: { in: ["DRAFT", "SENT"] } },
-        data: { status: "EXPIRED" },
-      });
-    }
-    throw new AppError("QUOTE_EXPIRED", "This quote link has expired", 410);
-  }
-
-  if (quote.status !== "SENT") {
-    throw new AppError(
-      "QUOTE_ALREADY_RESOLVED",
-      "Quote has already been resolved",
-      409,
-    );
-  }
-
-  await processQuoteResponse({
-    quoteId: quote.id,
-    companyId: quote.companyId,
-    jobId: quote.jobId,
-    action,
-    source: "CUSTOMER",
-    now,
-  });
-
-  throw new AppError(
-    "PORTAL_LINK_INVALID",
-    "Invalid portal link",
-    401,
-  );
 }
 
 export async function respondToQuote(

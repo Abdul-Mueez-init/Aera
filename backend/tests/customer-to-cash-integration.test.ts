@@ -480,6 +480,7 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
       .send({
         token: invitationToken,
         password: "correct-horse-battery-staple",
+        email: techInvite.body.data.user.email,
       });
     expect(techAccept.status).toBe(200);
     const techUserId = techAccept.body.data.user.id as string;
@@ -823,11 +824,12 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     expect([403, 404]).toContain(crossAccess.status);
 
     // STEP 8: Verify quote appears in customer's quote list
+    // (list contract is the paginated { items, meta } shape, like jobs)
     const quoteList = await request(app).get("/api/v1/quotes").set(auth);
     expect(quoteList.status).toBe(200);
-    expect(quoteList.body.data.length).toBeGreaterThan(0);
+    expect(quoteList.body.data.items.length).toBeGreaterThan(0);
 
-    const ourQuote = quoteList.body.data.find(
+    const ourQuote = quoteList.body.data.items.find(
       (q: { id: string }) => q.id === quote.body.data.id,
     );
     expect(ourQuote).toBeDefined();

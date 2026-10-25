@@ -76,10 +76,10 @@ class ScheduledJob {
     priority: json['priority'] as String? ?? 'NORMAL',
     status: json['status'] as String? ?? 'NEW',
     scheduledStart: json['scheduledStart'] != null
-        ? DateTime.tryParse(json['scheduledStart'] as String)
+        ? DateTime.tryParse(json['scheduledStart'] as String)?.toLocal()
         : null,
     scheduledEnd: json['scheduledEnd'] != null
-        ? DateTime.tryParse(json['scheduledEnd'] as String)
+        ? DateTime.tryParse(json['scheduledEnd'] as String)?.toLocal()
         : null,
     customer: JobCustomer.fromJson(
       json['customer'] as Map<String, dynamic>? ?? const {},

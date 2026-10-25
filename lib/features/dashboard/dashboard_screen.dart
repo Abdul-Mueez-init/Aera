@@ -138,13 +138,6 @@ class DashboardScreen extends ConsumerWidget {
             ),
             onPressed: () => context.push('/notifications'),
           ),
-          Builder(
-            builder: (ctx) => IconButton(
-              icon: const Icon(Icons.menu, color: AeraColors.ink),
-              tooltip: 'Screen Catalog',
-              onPressed: () => Scaffold.of(ctx).openEndDrawer(),
-            ),
-          ),
           IconButton(
             icon: CircleAvatar(
               radius: 14,
@@ -222,23 +215,16 @@ class DashboardScreen extends ConsumerWidget {
                       )
                       .fold<int>(0, (sum, j) => sum + j.count);
 
+                  // Balances are per-currency on the backend — show every
+                  // currency, never just the first.
                   final outstandingBalance =
                       summary
                           .outstandingInvoices
                           .balanceDueByCurrency
                           .isNotEmpty
-                      ? _formatMoney(
-                          summary
-                              .outstandingInvoices
-                              .balanceDueByCurrency
-                              .first
-                              .totalMinor,
-                          summary
-                              .outstandingInvoices
-                              .balanceDueByCurrency
-                              .first
-                              .currency,
-                        )
+                      ? summary.outstandingInvoices.balanceDueByCurrency
+                            .map((c) => _formatMoney(c.totalMinor, c.currency))
+                            .join(' · ')
                       : '0';
 
                   return Column(
@@ -451,7 +437,32 @@ class DashboardScreen extends ConsumerWidget {
                   );
                 },
                 loading: () => const SizedBox.shrink(),
-                error: (e, s) => const SizedBox.shrink(),
+                error: (e, s) => AeraCard(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 18,
+                        color: AeraColors.danger,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Could not load operational alerts.',
+                          style: AeraTypography.bodySm.copyWith(
+                            color: AeraColors.danger,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            ref.invalidate(dashboardAlertsProvider),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 20),
 
@@ -686,7 +697,8 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    '· JOB-${job.jobNumber}',
+                    // The backend already prefixes jobNumber with "JOB-".
+                    '· ${job.jobNumber}',
                     style: AeraTypography.label.copyWith(
                       color: AeraColors.inkSoft,
                     ),

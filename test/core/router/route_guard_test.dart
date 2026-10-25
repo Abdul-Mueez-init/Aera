@@ -255,6 +255,35 @@ void main() {
     });
   });
 
+  group('signed-in owner with onboarding pending opening portal paths', () {
+    test('portal paths are exempt from the onboarding redirect', () {
+      for (final path in ['/open', '/p', '/p/closed']) {
+        expect(
+          _redirect(
+            AuthGate.signedIn,
+            path,
+            role: 'OWNER',
+            ownerOnboardingPending: true,
+          ),
+          isNull,
+          reason: path,
+        );
+      }
+    });
+
+    test('non-portal paths still redirect to onboarding', () {
+      expect(
+        _redirect(
+          AuthGate.signedIn,
+          '/dashboard',
+          role: 'OWNER',
+          ownerOnboardingPending: true,
+        ),
+        '/onboarding/business-basics',
+      );
+    });
+  });
+
   group('persisted onboarding resume step', () {
     test('incomplete owner resumes from the server-persisted step', () {
       expect(

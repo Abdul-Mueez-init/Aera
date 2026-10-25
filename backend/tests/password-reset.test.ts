@@ -424,6 +424,7 @@ describe("POST /auth/reset-password", () => {
       .send({
         token: invite.body.data.invitationToken,
         password: OLD_PASSWORD,
+        email: user.email,
       });
     expect(join.status).toBe(200);
 

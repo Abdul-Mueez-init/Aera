@@ -78,6 +78,9 @@ async function getAccessToken(): Promise<string> {
     .sign(privateKey);
 
   const response = await fetch(OAUTH_TOKEN_URL, {
+    // Bounded: the notification queue drains serially, so one hung
+    // provider call would otherwise stall every queued notification.
+    signal: AbortSignal.timeout(10_000),
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: JWT_BEARER_GRANT, assertion }),
@@ -117,6 +120,7 @@ export const fcmPushAdapter: PushPort = {
     const response = await fetch(
       `https://fcm.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/messages:send`,
       {
+        signal: AbortSignal.timeout(10_000),
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,

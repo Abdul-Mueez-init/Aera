@@ -13,6 +13,9 @@ import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_status_chip.dart';
 import '../auth/providers/auth_provider.dart';
+import '../calendar/providers/calendar_provider.dart';
+import '../customers/providers/customers_provider.dart';
+import '../technician/widgets/handshake_code_sheet.dart';
 import '../invoices/data/invoices_repository.dart';
 import '../invoices/providers/invoices_provider.dart';
 import 'data/jobs_repository.dart' show Job, Technician, jobsRepositoryProvider;
@@ -258,6 +261,10 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
       await ref.read(jobsRepositoryProvider).completeJob(widget.jobId, summary);
       ref.invalidate(jobDetailProvider(widget.jobId));
       ref.invalidate(jobsListProvider);
+      // The customer's job list and the schedule views show this job too.
+      ref.invalidate(customerJobsProvider);
+      ref.invalidate(dayScheduleProvider);
+      ref.invalidate(workloadProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Job marked as completed')),
@@ -282,6 +289,146 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
 
   void _scheduleThis(Job job) {
     context.push('/schedule-job/${job.id}');
+  }
+
+  /// EN_ROUTE → IN_PROGRESS can never go through the generic status
+  /// transition (the backend rejects it with 422 HANDSHAKE_REQUIRED for
+  /// every role). The assigned technician starts with the customer's
+  /// handshake code; office staff use the audited override. Mirrors the
+  /// two working flows in `EnRouteScreen` and `JobPortalCard`.
+  Future<void> _startWithHandshake() async {
+    final result = await showModalBottomSheet<Object?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => HandshakeCodeSheet(jobId: widget.jobId),
+    );
+    if (!mounted) return;
+    if (result == true) {
+      ref.invalidate(jobDetailProvider(widget.jobId));
+      ref.invalidate(jobsListProvider);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Job started')));
+    } else if (result is String) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result)));
+    }
+  }
+
+  Future<void> _overrideStart() async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final text = controller.text.trim();
+          final valid = text.length >= 5 && text.length <= 300;
+          return AlertDialog(
+            backgroundColor: AeraColors.surface,
+            shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
+            title: Text(
+              'Override start',
+              style: AeraTypography.h3.copyWith(fontSize: 17),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Starts the job without the customer code. The reason '
+                  'is recorded in the job history and portal activity.',
+                  style: AeraTypography.bodySm,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  maxLength: 300,
+                  maxLines: 3,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(
+                    hintText: 'Reason (required, 5–300 characters)',
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: valid
+                    ? () => Navigator.of(dialogContext).pop(text)
+                    : null,
+                child: const Text(
+                  'Start job',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    controller.dispose();
+    if (reason == null) return;
+
+    setState(() => _updating = true);
+    try {
+      await ref
+          .read(jobsRepositoryProvider)
+          .overrideStartJob(widget.jobId, reason);
+      ref.invalidate(jobDetailProvider(widget.jobId));
+      ref.invalidate(jobsListProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Job started — override recorded')),
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not start the job')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
+  }
+
+  /// The EN_ROUTE primary action: handshake sheet for the assigned
+  /// technician, audited override for office staff, nothing for anyone
+  /// else (e.g. a technician who is not assigned to this job).
+  Widget _enRoutePrimaryAction(Job job, String? role, String? userId) {
+    final isAssignedTechnician =
+        role == 'TECHNICIAN' &&
+        userId != null &&
+        job.assignedTechnician?.id == userId;
+    if (isAssignedTechnician) {
+      return AeraButton(
+        text: 'Arrived On Site',
+        icon: const Icon(Icons.check, size: 18, color: Colors.white),
+        isLoading: _updating,
+        onPressed: _updating ? null : _startWithHandshake,
+      );
+    }
+    if (role == 'OWNER' || role == 'DISPATCHER') {
+      return AeraButton(
+        text: 'Arrived On Site',
+        icon: const Icon(Icons.check, size: 18, color: Colors.white),
+        isLoading: _updating,
+        onPressed: _updating ? null : _overrideStart,
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   Future<void> _assignTechnician(Job job) async {
@@ -380,6 +527,9 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
           .read(jobsRepositoryProvider)
           .assignTechnician(job.id, selectedTechnicianId);
       ref.invalidate(jobDetailProvider(job.id));
+      ref.invalidate(customerJobsProvider);
+      ref.invalidate(dayScheduleProvider);
+      ref.invalidate(workloadProvider);
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -444,6 +594,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
           data: (job) {
             final (priorityColor, prioritySoft) = _priorityColors(job.priority);
             final role = ref.watch(currentRoleProvider);
+            final currentUserId = ref.watch(currentUserProvider)?.id;
             final canManagePortal = role == 'OWNER' || role == 'DISPATCHER';
             final companyName = ref.watch(currentCompanyProvider)?.name ?? '';
 
@@ -803,18 +954,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                     onPressed: _updating ? null : () => _transition('EN_ROUTE'),
                   )
                 else if (job.status == 'EN_ROUTE')
-                  AeraButton(
-                    text: 'Arrived On Site',
-                    icon: const Icon(
-                      Icons.check,
-                      size: 18,
-                      color: Colors.white,
-                    ),
-                    isLoading: _updating,
-                    onPressed: _updating
-                        ? null
-                        : () => _transition('IN_PROGRESS'),
-                  )
+                  _enRoutePrimaryAction(job, role, currentUserId)
                 else if (job.status == 'IN_PROGRESS' ||
                     job.status == 'WAITING_PARTS')
                   AeraButton(
@@ -889,24 +1029,31 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Total: \$${(job.invoices.first.totalMinor / 100).toStringAsFixed(2)}  •  Balance: \$${(job.invoices.first.balanceDueMinor / 100).toStringAsFixed(2)}',
-                            style: AeraTypography.bodySm.copyWith(
-                              color: AeraColors.inkSoft,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: AeraButton(
-                              text: 'View Invoice',
-                              variant: AeraButtonVariant.secondary,
-                              onPressed: () => context.push(
-                                '/invoices/${job.invoices.first.id}',
+                          // Technicians receive no financial fields
+                          // (amounts are null): show number + status only,
+                          // and no View Invoice button — the route guard
+                          // would bounce them home anyway.
+                          if (job.invoices.first.totalMinor != null &&
+                              job.invoices.first.balanceDueMinor != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Total: ${job.invoices.first.currency ?? ''} ${(job.invoices.first.totalMinor! / 100).toStringAsFixed(2)}  •  Balance: ${job.invoices.first.currency ?? ''} ${(job.invoices.first.balanceDueMinor! / 100).toStringAsFixed(2)}',
+                              style: AeraTypography.bodySm.copyWith(
+                                color: AeraColors.inkSoft,
                               ),
                             ),
-                          ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: AeraButton(
+                                text: 'View Invoice',
+                                variant: AeraButtonVariant.secondary,
+                                onPressed: () => context.push(
+                                  '/invoices/${job.invoices.first.id}',
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -969,7 +1116,9 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                       child: AeraButton(
                         text: 'Create Quote',
                         variant: AeraButtonVariant.secondary,
-                        onPressed: () => context.push('/create-quote'),
+                        onPressed: () => context.push(
+                          '/create-quote?customerId=${job.customer.id}&jobId=${job.id}',
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),

@@ -13,11 +13,13 @@
  *   - Run with NODE_ENV=development
  */
 
-import { PrismaClient } from "../generated/prisma/index.js";
 import { hashPassword } from "../common/auth/password.js";
 import { getNextJobNumber } from "../common/counters/counter.service.js";
-
-const prisma = new PrismaClient();
+// Use the app's shared client: a bare `new PrismaClient()` has thrown
+// under Prisma 7 (driver adapter required), so this seed could not
+// run at all — and reviving it without the guard in main() below would
+// arm a production database wipe.
+import { prisma } from "../db/prisma.js";
 
 // Fixed seeds for deterministic data generation
 const SEEDS = {
@@ -261,9 +263,12 @@ async function seedDemoData() {
   const users = [];
   for (const userData of USERS) {
     const passwordHash = await hashPassword("Demo123!"); // Fixed password for demo
+    // `role` lives on CompanyMember, not User — spreading it into
+    // user.create was schema drift that made the seed throw.
+    const { role: _seedRole, ...userFields } = userData;
     const user = await prisma.user.create({
       data: {
-        ...userData,
+        ...userFields,
         passwordHash,
         isActive: true,
       },
@@ -609,6 +614,22 @@ async function seedDemoData() {
 }
 
 async function main() {
+  // SAFETY GUARD: seedDemoData() deleteMany()s nearly every table and
+  // creates fixed-password demo accounts (including an OWNER). One
+  // mistaken run against a production database would destroy all live
+  // data. A doc comment is not a control — refuse unless the operator
+  // explicitly confirms the wipe in a dev/test environment.
+  const nodeEnv = process.env.NODE_ENV ?? "development";
+  if (
+    (nodeEnv !== "development" && nodeEnv !== "test") ||
+    process.env.DEMO_SEED_CONFIRM !== "wipe-demo-data"
+  ) {
+    console.error(
+      "❌ Refusing to run: this seed WIPES the database and creates demo accounts with a known password.\n" +
+        "   It only runs with NODE_ENV=development or NODE_ENV=test AND DEMO_SEED_CONFIRM=wipe-demo-data set.",
+    );
+    process.exit(1);
+  }
   try {
     await seedDemoData();
   } catch (error) {

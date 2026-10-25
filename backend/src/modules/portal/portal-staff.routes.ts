@@ -253,7 +253,7 @@ router.get("/portal-access", async (request, response) => {
  * which changes the derived code, and re-delivers it to the customer.
  * The staff start override lives at POST /jobs/:jobId/start/override.
  */
-router.post("/handshake/regenerate", async (request, response) => {
+router.post("/handshake/regenerate", portalWriteRateLimiter, async (request, response) => {
   const jobIdMatch = request.originalUrl?.match(/\/jobs\/([^/]+)\/handshake/);
   const jobId = jobIdMatch ? jobIdMatch[1] : (request.params as { jobId?: string }).jobId;
 

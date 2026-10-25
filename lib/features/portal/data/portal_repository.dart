@@ -258,13 +258,13 @@ class PortalJob {
     problemDescription: json['problemDescription'] as String? ?? '',
     status: json['status'] as String? ?? 'NEW',
     scheduledStart: json['scheduledStart'] != null
-        ? DateTime.tryParse(json['scheduledStart'] as String)
+        ? DateTime.tryParse(json['scheduledStart'] as String)?.toLocal()
         : null,
     scheduledEnd: json['scheduledEnd'] != null
-        ? DateTime.tryParse(json['scheduledEnd'] as String)
+        ? DateTime.tryParse(json['scheduledEnd'] as String)?.toLocal()
         : null,
     completedAt: json['completedAt'] != null
-        ? DateTime.tryParse(json['completedAt'] as String)
+        ? DateTime.tryParse(json['completedAt'] as String)?.toLocal()
         : null,
     address: json['address'] != null
         ? PortalJobAddress.fromJson(json['address'] as Map<String, dynamic>)
@@ -341,7 +341,7 @@ class PortalQuote {
     totalMinor: int.tryParse(json['totalMinor']?.toString() ?? '') ?? 0,
     currency: json['currency'] as String? ?? 'USD',
     expiresAt: json['expiresAt'] != null
-        ? DateTime.tryParse(json['expiresAt'] as String)
+        ? DateTime.tryParse(json['expiresAt'] as String)?.toLocal()
         : null,
     items:
         (json['items'] as List<dynamic>?)
@@ -387,10 +387,10 @@ class PortalInvoice {
         int.tryParse(json['balanceDueMinor']?.toString() ?? '') ?? 0,
     currency: json['currency'] as String? ?? 'USD',
     issuedAt: json['issuedAt'] != null
-        ? DateTime.tryParse(json['issuedAt'] as String)
+        ? DateTime.tryParse(json['issuedAt'] as String)?.toLocal()
         : null,
     dueAt: json['dueAt'] != null
-        ? DateTime.tryParse(json['dueAt'] as String)
+        ? DateTime.tryParse(json['dueAt'] as String)?.toLocal()
         : null,
     items:
         (json['items'] as List<dynamic>?)
@@ -558,6 +558,15 @@ class PortalRepository {
     }
     if (response.statusCode == 401 && code == 'PORTAL_LINK_INVALID') {
       return const PortalInvalid();
+    }
+    if (response.statusCode == 401 && code == 'PORTAL_SESSION_EXPIRED') {
+      // A live session that expired by age/idle timeout (portal.session.ts).
+      // The portal is closed for this customer — same end state as an
+      // expired link, though a contacts payload may not be attached.
+      return PortalClosed(
+        variant: PortalClosedVariant.expired,
+        contact: contact,
+      );
     }
     return PortalFailure(
       message ?? 'Request failed with status ${response.statusCode}',

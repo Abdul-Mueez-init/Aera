@@ -30,11 +30,13 @@ class Member {
     role: json['role'] as String,
     status: json['status'] as String,
     createdAt:
-        DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+        (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                DateTime.now())
+            .toLocal(),
     user: MemberUser.fromJson(json['user'] as Map<String, dynamic>),
     invitationToken: json['invitationToken'] as String?,
     invitationExpiresAt: json['invitationExpiresAt'] != null
-        ? DateTime.tryParse(json['invitationExpiresAt'] as String)
+        ? DateTime.tryParse(json['invitationExpiresAt'] as String)?.toLocal()
         : null,
   );
 
@@ -121,5 +123,16 @@ class MembersRepository {
   /// Removes a member and revokes their sessions (OWNER only).
   Future<void> removeMember(String memberId) async {
     await _client.delete('/api/v1/companies/current/members/$memberId');
+  }
+
+  /// Issues a fresh invitation code for a still-INVITED member (OWNER
+  /// only). The returned member carries the new one-time
+  /// `invitationToken` — show it once, like a fresh invite; the old
+  /// code stops working immediately.
+  Future<Member> resendInvitation(String memberId) async {
+    final res = await _client.post(
+      '/api/v1/companies/current/members/$memberId/resend-invitation',
+    );
+    return Member.fromJson(res as Map<String, dynamic>);
   }
 }

@@ -119,12 +119,14 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
   Future<AuthSession> acceptInvitation({
     required String token,
     required String password,
+    required String email,
   }) async {
     state = const AsyncValue.loading();
     try {
       final session = await _repo.acceptInvitation(
         token: token,
         password: password,
+        email: email,
       );
       state = AsyncValue.data(session);
 
@@ -143,18 +145,11 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
     }
   }
 
-  Future<void> logout() async {
-    await _repo.logout();
-    await _clearSentryUser();
-    state = const AsyncValue.data(null);
-
-    // Invalidate key feature providers to prevent stale data on account switch
-    // Note: This invalidates the providers themselves; their dependencies will
-    // cascade. For company-specific invalidation, add a company-scoped provider
-    // key or explicitly invalidate company-specific providers.
-    //
-    // Currently invalidating main feature providers. In a larger app, consider
-    // grouping providers under a session/company provider for automatic invalidation.
+  /// Resets every session-scoped provider so nothing from the previous
+  /// account survives a sign-out or session expiry: the list providers,
+  /// the non-autoDispose detail families (all instances), the active AI
+  /// conversation selection, and the query/selection StateProviders.
+  void _resetSessionScopedState() {
     _ref.invalidate(jobsListProvider);
     _ref.invalidate(technicianTodayProvider);
     _ref.invalidate(customersListProvider);
@@ -166,6 +161,31 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
     _ref.invalidate(companyDetailsProvider);
     _ref.invalidate(notificationsRepositoryProvider);
     _ref.invalidate(aiConversationsListProvider);
+    // Detail families — invalidating the family clears every cached
+    // instance, not just the ones currently on screen.
+    _ref.invalidate(jobDetailProvider);
+    _ref.invalidate(quoteDetailProvider);
+    _ref.invalidate(invoiceDetailProvider);
+    _ref.invalidate(customerDetailProvider);
+    _ref.invalidate(customerJobsProvider);
+    _ref.invalidate(aiConversationDetailProvider);
+    // Session-local selections and list queries.
+    _ref.invalidate(activeAiConversationIdProvider);
+    _ref.invalidate(jobsQueryProvider);
+    _ref.invalidate(customersQueryProvider);
+    _ref.invalidate(invoicesQueryProvider);
+    _ref.invalidate(quotesQueryProvider);
+    _ref.invalidate(selectedScheduleDateProvider);
+    _ref.invalidate(selectedTechDateProvider);
+    _ref.invalidate(pickerCustomersSearchProvider);
+  }
+
+  Future<void> logout() async {
+    await _repo.logout();
+    await _clearSentryUser();
+    state = const AsyncValue.data(null);
+
+    _resetSessionScopedState();
   }
 
   Future<void> refreshServerIdentity() async {
@@ -189,6 +209,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
     // The user may have signed out, or the notifier may have been disposed,
     // while the awaits above were running.
     if (!mounted || state.valueOrNull == null) return;
+    _resetSessionScopedState();
     state = AsyncValue.error(
       const SessionExpiredException(),
       StackTrace.current,

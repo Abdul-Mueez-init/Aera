@@ -1,7 +1,12 @@
 import { prisma } from "../../db/prisma.js";
 import { logger } from "../../common/logger.js";
 import { captureBackgroundError } from "../../common/observability.js";
-import type { PaymentProvider, PaymentRequest } from "./payment.port.js";
+import { env } from "../../config/env.js";
+import {
+  manualPaymentProvider,
+  type PaymentProvider,
+  type PaymentRequest,
+} from "./payment.port.js";
 import { closePortalIfDone } from "../portal/portal.grants.js";
 
 const MAX_RETRIES = 3;
@@ -160,6 +165,11 @@ export async function processPendingPaymentOperations(
     where: {
       status: { in: ["PENDING", "FAILED"] },
       retryCount: { lt: MAX_RETRIES },
+      // Never re-run the provider for an operation that already produced a
+      // provider payment id: the provider accepted money for it, and a
+      // re-run could double-charge. Such operations need ledger recovery
+      // (or manual reconciliation), not a provider retry.
+      providerPaymentId: null,
     },
     take: limit,
     orderBy: { createdAt: "asc" },
@@ -205,42 +215,50 @@ export async function processProviderAcceptedOperations(
   );
 
   for (const operation of acceptedOperations) {
+    let outcome = "claimed-elsewhere" as
+      | "committed"
+      | "claimed-elsewhere"
+      | "conflict";
     try {
-      // Attempt to commit the ledger payment
+      // Attempt to commit the ledger payment. The operation is claimed
+      // inside the transaction (PROVIDER_ACCEPTED -> PROCESSING) and the
+      // invoice balance update is conditional on sufficient balance and a
+      // payable status, so concurrent committers (this sweep, a retried
+      // recordPayment) can never double-credit the invoice.
       await prisma.$transaction(async (tx) => {
-        // Verify the invoice still exists and has sufficient balance
-        const invoice = await tx.invoice.findUnique({
-          where: { id: operation.invoiceId },
-          select: {
-            id: true,
-            balanceDueMinor: true,
-            amountPaidMinor: true,
-            status: true,
+        const claimed = await tx.paymentOperation.updateMany({
+          where: {
+            id: operation.id,
+            status: "PROVIDER_ACCEPTED",
+            ledgerPaymentId: null,
           },
+          data: { status: "PROCESSING" },
         });
-
-        if (!invoice) {
-          throw new Error(`Invoice ${operation.invoiceId} not found`);
+        if (claimed.count !== 1) {
+          return; // Another committer owns this operation now.
         }
 
-        if (invoice.balanceDueMinor < operation.amountMinor) {
-          throw new Error(
-            `Insufficient balance on invoice ${operation.invoiceId}`,
-          );
-        }
-
-        // Update invoice balance
-        const updatedInvoice = await tx.invoice.update({
-          where: { id: operation.invoiceId },
+        const updated = await tx.invoice.updateMany({
+          where: {
+            id: operation.invoiceId,
+            companyId: operation.companyId,
+            balanceDueMinor: { gte: operation.amountMinor },
+            status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] },
+          },
           data: {
             amountPaidMinor: { increment: operation.amountMinor },
             balanceDueMinor: { decrement: operation.amountMinor },
           },
-          select: {
-            id: true,
-            jobId: true,
-            balanceDueMinor: true,
-          },
+        });
+        if (updated.count !== 1) {
+          throw new Error(
+            `LEDGER_CONFLICT: Invoice ${operation.invoiceId} no longer accepts this payment (balance or status changed)`,
+          );
+        }
+
+        const updatedInvoice = await tx.invoice.findUniqueOrThrow({
+          where: { id: operation.invoiceId },
+          select: { id: true, jobId: true, balanceDueMinor: true },
         });
 
         // Derive status from post-update balance
@@ -279,13 +297,26 @@ export async function processProviderAcceptedOperations(
         if (newStatus === "PAID" && updatedInvoice.jobId) {
           await closePortalIfDone(updatedInvoice.jobId, tx);
         }
+
+        outcome = "committed";
       });
 
-      logger.info(
-        { operationId: operation.id },
-        "Successfully committed PROVIDER_ACCEPTED operation to ledger",
-      );
+      if (outcome === "committed") {
+        logger.info(
+          { operationId: operation.id },
+          "Successfully committed PROVIDER_ACCEPTED operation to ledger",
+        );
+      }
     } catch (error) {
+      // Only a genuine ledger conflict parks the operation; any other
+      // (transient) failure leaves it PROVIDER_ACCEPTED for the next
+      // sweep to retry.
+      if (
+        error instanceof Error &&
+        error.message.startsWith("LEDGER_CONFLICT:")
+      ) {
+        outcome = "conflict";
+      }
       logger.error(
         { operationId: operation.id, error },
         "Failed to commit PROVIDER_ACCEPTED operation to ledger",
@@ -294,7 +325,81 @@ export async function processProviderAcceptedOperations(
         operationId: operation.id,
       });
     }
+
+    if (outcome === "conflict") {
+      // The provider accepted this payment but the ledger can no longer
+      // take it (invoice paid another way, voided, or balance consumed).
+      // Park the operation as FAILED with its provider payment id retained:
+      // that is the reconciliation queue state, and recordPayment refuses
+      // to silently retry keys in this state.
+      await prisma.paymentOperation.updateMany({
+        where: { id: operation.id, status: "PROVIDER_ACCEPTED" },
+        data: {
+          status: "FAILED",
+          errorMessage:
+            "Provider accepted the payment but the invoice balance/status no longer accepts it; manual reconciliation required",
+        },
+      });
+    }
   }
+}
+
+/**
+ * One recovery sweep: retry provider processing for operations that never
+ * reached the provider, then commit ledger entries for operations the
+ * provider already accepted. This closes the crash window between
+ * provider acceptance and ledger commit.
+ */
+export async function runPaymentOperationSweep(): Promise<void> {
+  await processPendingPaymentOperations(manualPaymentProvider);
+  await processProviderAcceptedOperations();
+}
+
+const PAYMENT_SWEEP_INITIAL_DELAY_MS = 30_000;
+
+/**
+ * Start the periodic payment-operation recovery sweep. Mirrors the
+ * invoice-reminder scheduler: serialized ticks, unref'd timers, and
+ * per-tick error containment so one bad sweep never kills the loop.
+ */
+export function startPaymentOperationScheduler(): () => void {
+  let stopped = false;
+  let running = false;
+  let timer: NodeJS.Timeout | undefined;
+
+  const tick = async () => {
+    if (stopped || running) return;
+    running = true;
+    try {
+      await runPaymentOperationSweep();
+    } catch (error) {
+      logger.error({ error }, "Payment operation sweep failed");
+      captureBackgroundError(error, "payment-operation-sweep");
+    } finally {
+      running = false;
+    }
+  };
+
+  const initialTimer = setTimeout(() => {
+    void tick();
+  }, PAYMENT_SWEEP_INITIAL_DELAY_MS);
+  initialTimer.unref();
+
+  timer = setInterval(() => {
+    void tick();
+  }, env.PAYMENT_OPERATION_SWEEP_MINUTES * 60_000);
+  timer.unref();
+
+  logger.info(
+    { intervalMinutes: env.PAYMENT_OPERATION_SWEEP_MINUTES },
+    "Payment operation recovery sweep scheduled",
+  );
+
+  return () => {
+    stopped = true;
+    clearTimeout(initialTimer);
+    if (timer) clearInterval(timer);
+  };
 }
 
 export async function getPaymentOperation(operationId: string) {

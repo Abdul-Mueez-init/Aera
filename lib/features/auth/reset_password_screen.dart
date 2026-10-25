@@ -1,34 +1,100 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
+import '../../core/widgets/aera_text_field.dart';
+import 'data/auth_repository.dart';
 
-class ResetPasswordScreen extends StatefulWidget {
-  const ResetPasswordScreen({super.key});
+class ResetPasswordScreen extends ConsumerStatefulWidget {
+  const ResetPasswordScreen({super.key, this.email});
+
+  /// The email the reset code was requested for, carried from the
+  /// forgot-password screen as a route query parameter. The backend
+  /// requires `{email, code, password}` for `POST /reset-password`.
+  final String? email;
 
   @override
-  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+  ConsumerState<ResetPasswordScreen> createState() =>
+      _ResetPasswordScreenState();
 }
 
-class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
-  final _passwordController = TextEditingController(text: 'ApexCraftsman2025!');
-  final _confirmController = TextEditingController(text: 'ApexCraftsman2025!');
+class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
+  final _codeController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
   bool _obscure1 = true;
   bool _obscure2 = true;
+  bool _saving = false;
+  String? _error;
 
   @override
   void dispose() {
+    _codeController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
   }
 
+  Future<void> _submit() async {
+    final email = widget.email?.trim() ?? '';
+    final code = _codeController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty) {
+      setState(
+        () =>
+            _error = 'Missing email — go back and request a reset code first.',
+      );
+      return;
+    }
+    if (code.isEmpty) {
+      setState(() => _error = 'Enter the verification code from your email.');
+      return;
+    }
+    if (password.isEmpty) {
+      setState(() => _error = 'Enter a new password.');
+      return;
+    }
+    if (password != _confirmController.text) {
+      setState(() => _error = 'Passwords do not match.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(authRepositoryProvider)
+          .resetPassword(email: email, code: code, password: password);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password updated — sign in with your new password.'),
+        ),
+      );
+      context.go('/login');
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = 'Could not reset the password. Please try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final email = widget.email ?? '';
     return Scaffold(
       backgroundColor: AeraColors.canvas,
       appBar: const AeraAppBar(title: 'Reset Password', showBrand: true),
@@ -36,7 +102,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           children: [
-            // Verified Badge Banner
+            // Account recovery banner — the email the code was sent to,
+            // taken from the route (never hardcoded).
             AeraCard(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(
@@ -68,7 +135,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             ),
                           ),
                           Text(
-                            'marcus@apexheating.com',
+                            email,
                             style: AeraTypography.bodySm.copyWith(
                               fontWeight: FontWeight.w600,
                               color: AeraColors.ink,
@@ -77,33 +144,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         ],
                       ),
                     ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AeraColors.successSoft,
-                      borderRadius: AeraRadii.borderFull,
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.check_circle,
-                          color: AeraColors.success,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Verified',
-                          style: AeraTypography.label.copyWith(
-                            color: AeraColors.success,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                 ],
               ),
@@ -116,7 +156,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Create a resilient credential to secure your dispatch console and field tickets.',
+              'Enter the verification code from your email, then create a resilient credential to secure your dispatch console and field tickets.',
               style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft),
             ),
             const SizedBox(height: 24),
@@ -126,6 +166,19 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  AeraTextField(
+                    label: 'Verification Code',
+                    hintText: '6-digit code from your email',
+                    controller: _codeController,
+                    keyboardType: TextInputType.number,
+                    prefixIcon: const Icon(
+                      Icons.pin_outlined,
+                      size: 20,
+                      color: AeraColors.outline,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
                   // New password
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -136,26 +189,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           color: AeraColors.inkSoft,
                           fontWeight: FontWeight.w600,
                         ),
-                      ),
-                      Row(
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: AeraColors.success,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Strong',
-                            style: AeraTypography.label.copyWith(
-                              color: AeraColors.success,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),
@@ -201,34 +234,12 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   const SizedBox(height: 18),
 
                   // Confirm Password
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Confirm New Password',
-                        style: AeraTypography.label.copyWith(
-                          color: AeraColors.inkSoft,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.check,
-                            size: 14,
-                            color: AeraColors.success,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Passwords match',
-                            style: AeraTypography.label.copyWith(
-                              color: AeraColors.success,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                  Text(
+                    'Confirm New Password',
+                    style: AeraTypography.label.copyWith(
+                      color: AeraColors.inkSoft,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   TextFormField(
@@ -250,6 +261,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       fillColor: AeraColors.surface,
                     ),
                   ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      _error!,
+                      style: AeraTypography.bodySm.copyWith(
+                        color: AeraColors.danger,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
 
                   AeraButton(
@@ -259,7 +279,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       size: 18,
                       color: Colors.white,
                     ),
-                    onPressed: () => context.go('/login'),
+                    isLoading: _saving,
+                    onPressed: _saving ? null : _submit,
                   ),
                 ],
               ),

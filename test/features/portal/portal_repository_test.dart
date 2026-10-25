@@ -347,6 +347,31 @@ void main() {
       expect(snapshot.company.name, 'Acme HVAC');
     });
 
+    test(
+      '401 PORTAL_SESSION_EXPIRED maps job() to PortalClosed(expired)',
+      () async {
+        final client = MockClient(
+          (_) async => _json(401, {
+            'error': {
+              'code': 'PORTAL_SESSION_EXPIRED',
+              'message': 'Session expired',
+            },
+          }),
+        );
+        final repo = PortalRepository(
+          baseUrl: 'https://api.test',
+          client: client,
+          store: _MemoryPortalSessionStore(),
+          forceWebTransport: true,
+        );
+
+        final result = await repo.job();
+
+        expect(result, isA<PortalClosed>());
+        expect((result as PortalClosed).variant, PortalClosedVariant.expired);
+      },
+    );
+
     test('a deactivated session maps job() to PortalClosed', () async {
       final client = MockClient(
         (_) async => _json(410, _closedBody('PORTAL_ACCESS_DEACTIVATED')),

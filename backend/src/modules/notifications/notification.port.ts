@@ -65,17 +65,28 @@ async function resolveRecipients(
   event: NotificationEvent,
 ): Promise<RecipientContact[]> {
   if (event.recipientUserId) {
-    const user = await prisma.user.findUnique({
-      where: { id: event.recipientUserId },
-      select: { id: true, email: true, phone: true, firstName: true },
+    // The explicit recipient must be an ACTIVE member of the event's
+    // company. Without this check, a technician who was removed or
+    // suspended after being assigned to a job keeps receiving that
+    // company's customer names and amounts by email/SMS/push — and any
+    // future caller passing a non-member id would leak across tenants.
+    const membership = await prisma.companyMember.findFirst({
+      where: {
+        companyId: event.companyId,
+        userId: event.recipientUserId,
+        status: "ACTIVE",
+      },
+      select: {
+        user: { select: { id: true, email: true, phone: true, firstName: true } },
+      },
     });
-    return user
+    return membership
       ? [
           {
-            userId: user.id,
-            email: user.email,
-            phone: user.phone,
-            firstName: user.firstName,
+            userId: membership.user.id,
+            email: membership.user.email,
+            phone: membership.user.phone,
+            firstName: membership.user.firstName,
           },
         ]
       : [];

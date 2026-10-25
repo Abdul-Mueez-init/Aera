@@ -56,6 +56,7 @@ async function inviteAndAccept(
     .send({
       token: invitationToken,
       password: "correct-horse-battery-staple",
+      email,
     });
 
   expect(acceptRes.status).toBe(200);

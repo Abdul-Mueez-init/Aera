@@ -152,6 +152,13 @@ String? resolveRedirect({
       if (p == kSplashPath) return entry;
       return isPublicPath(p) ? null : entry;
     case AuthGate.signedIn:
+      // Portal paths are authorized by the independent portal session,
+      // not the staff session: a signed-in owner with onboarding still
+      // pending must be able to open a customer portal link (e.g. to
+      // test the one they just sent). Never bounce them to onboarding.
+      if (p == '/open' || p == '/p' || p == '/p/closed') {
+        return null;
+      }
       if (role == 'OWNER' && ownerOnboardingPending) {
         final requestedStep = _ownerOnboardingStepForPath(p);
         final requiredStep = _ownerOnboardingStepForPath(ownerOnboardingPath);

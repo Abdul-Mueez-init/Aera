@@ -85,10 +85,12 @@ export const supabaseStorageAdapter: StoragePort = {
   async verifyUpload(
     request: VerifyUploadRequest,
   ): Promise<VerifyUploadResult> {
-    // Get actual object metadata from storage to verify real size and type
-    // Note: Full file signature verification would require downloading the file,
-    // which is expensive. The bucket already enforces MIME types and 10MB limit.
-    // This verifies the object exists and attempts to get its metadata.
+    // Verify the ACTUAL object: mint a short-lived signed URL and HEAD
+    // it, reporting the real Content-Length / Content-Type. The previous
+    // implementation only checked that a signed URL could be created
+    // and echoed the caller's expected mime/size back as if measured —
+    // confirming a presign for image/jpeg proved nothing about the
+    // bytes actually uploaded. Mirrors verifyCompanyLogoUpload below.
     const { data, error } = await getServiceRoleClient()
       .storage.from(env.SUPABASE_JOB_PHOTOS_BUCKET)
       .createSignedUrl(request.objectKey, 60);
@@ -101,19 +103,44 @@ export const supabaseStorageAdapter: StoragePort = {
       return {
         exists: false,
         mimeType: request.expectedMimeType,
-        sizeBytes: request.expectedMaxSizeBytes,
+        sizeBytes: 0,
       };
     }
 
-    // The signed URL was created successfully, which confirms the object exists
-    // For production, consider adding metadata verification via:
-    // 1. Supabase Storage metadata API (if available)
-    // 2. HEAD request to the object to get Content-Length and Content-Type
-    // 3. Download and inspect file signatures for critical validation
+    let head: Response;
+    try {
+      head = await fetch(data.signedUrl, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(8000),
+      });
+    } catch (fetchError) {
+      logger.warn(
+        { err: fetchError, objectKey: request.objectKey },
+        "Could not HEAD uploaded object for verification",
+      );
+      return {
+        exists: false,
+        mimeType: request.expectedMimeType,
+        sizeBytes: 0,
+      };
+    }
+
+    if (!head.ok) {
+      return {
+        exists: false,
+        mimeType: request.expectedMimeType,
+        sizeBytes: 0,
+      };
+    }
+
+    const actualSize = Number(head.headers.get("content-length"));
+    const actualMime =
+      head.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ??
+      request.expectedMimeType;
     return {
       exists: true,
-      mimeType: request.expectedMimeType,
-      sizeBytes: request.expectedMaxSizeBytes,
+      mimeType: actualMime,
+      sizeBytes: Number.isFinite(actualSize) ? actualSize : 0,
     };
   },
 };

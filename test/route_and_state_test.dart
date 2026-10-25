@@ -35,7 +35,7 @@ import 'package:aera/features/quotes/quote_detail_screen.dart';
 import 'package:aera/features/settings/notifications_screen.dart';
 import 'package:aera/features/settings/profile_settings_screen.dart';
 import 'package:aera/features/settings/company_settings_screen.dart';
-import 'package:aera/features/settings/team_management_screen.dart';
+import 'package:aera/features/team/team_screen.dart';
 import 'package:aera/features/jobs/jobs_screen.dart';
 
 void main() {
@@ -296,7 +296,7 @@ void main() {
       expect(find.byType(MoreScreen), findsOneWidget);
     });
 
-    testWidgets('Team menu destination resolves to the team management page', (
+    testWidgets('Team menu destination resolves to the team page', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
@@ -309,7 +309,7 @@ void main() {
       appRouter.go('/team');
       await tester.pumpAndSettle();
 
-      expect(find.byType(TeamManagementScreen), findsOneWidget);
+      expect(find.byType(TeamScreen), findsOneWidget);
       expect(find.text('No routes for location: /team'), findsNothing);
     });
 

@@ -21,9 +21,9 @@ class Notification {
       type: json['type'] as String,
       payload: json['payload'] as Map<String, dynamic>?,
       readAt: json['readAt'] != null
-          ? DateTime.parse(json['readAt'] as String)
+          ? DateTime.parse(json['readAt'] as String).toLocal()
           : null,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: DateTime.parse(json['createdAt'] as String).toLocal(),
     );
   }
 

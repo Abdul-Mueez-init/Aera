@@ -47,6 +47,7 @@ describe("Team invitations", () => {
       .send({
         token: invite.body.data.invitationToken,
         password: "a-brand-new-password-123",
+        email: invite.body.data.user.email,
       });
 
     expect(accept.status).toBe(200);
@@ -59,6 +60,7 @@ describe("Team invitations", () => {
       .send({
         token: invite.body.data.invitationToken,
         password: "another-password-123456",
+        email: invite.body.data.user.email,
       });
     expect(reuseAccept.status).toBe(400);
 
@@ -71,10 +73,45 @@ describe("Team invitations", () => {
     expect(login.body.data.role).toBe("TECHNICIAN");
   });
 
+  it("rejects acceptance when the entered email is not the invited email, without consuming the token", async () => {
+    const owner = await registerOwner();
+    const invite = await request(app)
+      .post("/api/v1/companies/current/invitations")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({
+        email: `bound-${Date.now()}@example.com`,
+        firstName: "Bound",
+        lastName: "Invitee",
+        role: "TECHNICIAN",
+      });
+    expect(invite.status).toBe(201);
+
+    // A leaked token alone is not enough: the accepter must enter the
+    // email the invitation was addressed to.
+    const wrongEmail = await request(app)
+      .post("/api/v1/auth/accept-invitation")
+      .send({
+        token: invite.body.data.invitationToken,
+        password: "a-brand-new-password-123",
+        email: "someone-else@example.com",
+      });
+    expect(wrongEmail.status).toBe(400);
+    expect(wrongEmail.body.error.code).toBe("INVITATION_INVALID_OR_EXPIRED");
+
+    const rightEmail = await request(app)
+      .post("/api/v1/auth/accept-invitation")
+      .send({
+        token: invite.body.data.invitationToken,
+        password: "a-brand-new-password-123",
+        email: invite.body.data.user.email,
+      });
+    expect(rightEmail.status).toBe(200);
+  });
+
   it("rejects an invalid or already-used invitation token", async () => {
     const response = await request(app)
       .post("/api/v1/auth/accept-invitation")
-      .send({ token: "not-a-real-token", password: "some-password-123456" });
+      .send({ token: "not-a-real-token", password: "some-password-123456", email: "nobody@example.com" });
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe("INVITATION_INVALID_OR_EXPIRED");
@@ -101,10 +138,12 @@ describe("Team invitations", () => {
       request(app).post("/api/v1/auth/accept-invitation").send({
         token,
         password: "winning-password-111",
+        email: invite.body.data.user.email,
       }),
       request(app).post("/api/v1/auth/accept-invitation").send({
         token,
         password: "losing-password-222",
+        email: invite.body.data.user.email,
       }),
     ]);
 
@@ -182,6 +221,7 @@ describe("Invitations for emails that already have an account", () => {
       .send({
         token: invite.body.data.invitationToken,
         password: "attacker-chosen-password-1",
+        email: victimEmail,
       });
     expect(takeover.status).toBe(400);
     expect(takeover.body.error.code).toBe("INVITATION_PASSWORD_MISMATCH");
@@ -199,6 +239,7 @@ describe("Invitations for emails that already have an account", () => {
       .send({
         token: invite.body.data.invitationToken,
         password: victimPassword,
+        email: victimEmail,
       });
     expect(accept.status).toBe(200);
     expect(accept.body.data.role).toBe("TECHNICIAN");
@@ -247,6 +288,7 @@ describe("Invitations that can no longer be accepted", () => {
       .send({
         token: invite.invitationToken,
         password: "expired-invite-password-1",
+        email: invite.user.email,
       });
     expect(accept.status).toBe(400);
     expect(accept.body.error.code).toBe("INVITATION_INVALID_OR_EXPIRED");
@@ -283,6 +325,7 @@ describe("Invitations that can no longer be accepted", () => {
       .send({
         token: invite.invitationToken,
         password: "removed-invite-password-1",
+        email: invite.user.email,
       });
     expect(accept.status).toBe(400);
     expect(accept.body.error.code).toBe("INVITATION_INVALID_OR_EXPIRED");
@@ -294,7 +337,7 @@ describe("Invitations that can no longer be accepted", () => {
 
     const tooShort = await request(app)
       .post("/api/v1/auth/accept-invitation")
-      .send({ token: invite.invitationToken, password: "short-pw-1" });
+      .send({ token: invite.invitationToken, password: "short-pw-1", email: invite.user.email });
     expect(tooShort.status).toBe(422);
     expect(tooShort.body.error.code).toBe("VALIDATION_FAILED");
 
@@ -304,6 +347,7 @@ describe("Invitations that can no longer be accepted", () => {
       .send({
         token: invite.invitationToken,
         password: "long-enough-password-1",
+        email: invite.user.email,
       });
     expect(accept.status).toBe(200);
     expect(accept.body.data.role).toBe("TECHNICIAN");

@@ -194,10 +194,17 @@ class AuthRepository {
   Future<AuthSession> acceptInvitation({
     required String token,
     required String password,
+    required String email,
   }) async {
     final res = await _client.post(
       '/api/v1/auth/accept-invitation',
-      body: {'token': token.trim(), 'password': password},
+      // The backend binds the token to the invited email address: the
+      // caller must enter the email the invitation was sent to.
+      body: {
+        'token': token.trim(),
+        'password': password,
+        'email': email.trim(),
+      },
       retryOnUnauthorized: false,
     );
 

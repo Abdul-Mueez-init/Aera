@@ -58,6 +58,23 @@ export async function exchangeToken(token: string) {
     );
   }
 
+  // An archived customer must not be able to open a fresh session even
+  // if a grant somehow remained ACTIVE (defence in depth alongside the
+  // archive-time deactivation in archiveCustomer).
+  const grantCustomer = await prisma.customer.findUnique({
+    where: { id: grant.customerId },
+    select: { status: true },
+  });
+  if (!grantCustomer || grantCustomer.status !== "ACTIVE") {
+    const contacts = await getCompanyContacts(grant.companyId);
+    throw new AppError(
+      "PORTAL_ACCESS_DEACTIVATED",
+      "Portal access has been deactivated",
+      410,
+      { state: "DEACTIVATED", ...contacts },
+    );
+  }
+
   // Check if already used
   if (grant.linkConsumedAt) {
     throw new AppError(

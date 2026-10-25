@@ -126,7 +126,12 @@ class PortalSessionController
     if (result is PortalSessionActive && result.snapshot != null) {
       state = AsyncValue.data(result.snapshot!);
     } else if (result is PortalClosed) {
+      // Includes the 401 PORTAL_SESSION_EXPIRED mapping: a session that
+      // expires while the page is open must move to the closed state,
+      // not leave a stale snapshot on screen.
       _close(result);
+    } else if (result is PortalInvalid) {
+      _close(const PortalClosed(variant: PortalClosedVariant.invalid));
     } else if (!state.hasValue) {
       final message = result is PortalFailure
           ? result.message

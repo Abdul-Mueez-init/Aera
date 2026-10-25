@@ -28,6 +28,9 @@ export const textbeeSmsAdapter: SmsPort = {
     }
 
     const response = await fetch(TEXTBEE_API_URL, {
+      // Bounded: the notification queue drains serially, so one hung
+      // provider call would otherwise stall every queued notification.
+      signal: AbortSignal.timeout(10_000),
       method: "POST",
       headers: {
         "x-api-key": env.TEXTBEE_API_KEY,

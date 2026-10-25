@@ -81,7 +81,17 @@ const presignPhotoSchema = z.object({
 });
 const partSchema = z.object({
   name: z.string().trim().min(1).max(160),
-  quantity: z.number().positive().max(10_000),
+  // JobPart.quantity is Decimal(10,2): reject finer precision here
+  // instead of letting Postgres silently round it (which corrupts the
+  // part total the invoice is later generated from).
+  quantity: z
+    .number()
+    .positive()
+    .max(10_000)
+    .refine(
+      (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-9,
+      "Quantity must have at most 2 decimal places",
+    ),
   unitPriceMinor: z.number().int().nonnegative().max(100_000_000),
   currency: z.string().regex(/^[A-Za-z]{3}$/),
 });

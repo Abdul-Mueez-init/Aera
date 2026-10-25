@@ -3,20 +3,31 @@ import type { AuthContext } from "../../common/auth/auth.types.js";
 import { prisma } from "../../db/prisma.js";
 import { notificationPublisher } from "../notifications/notification.port.js";
 import { getJob } from "../jobs/job.service.js";
+import {
+  dayBoundsInTimezone,
+  getCompanyTimezone,
+} from "../ai/tools/timezone.util.js";
 
 export interface ScheduleInput {
   scheduledStart: Date;
   scheduledEnd: Date;
 }
 
-function dayBounds(date: string): { start: Date; end: Date } {
-  const start = new Date(`${date}T00:00:00.000Z`);
-  if (Number.isNaN(start.getTime())) {
+/**
+ * Day bounds in the COMPANY's timezone — the same convention the
+ * dashboard and AI tools already use. The old UTC-midnight bounds put
+ * jobs scheduled in the first hours of the local day (e.g. 00:00–05:00
+ * in UTC+5) on the wrong day's board.
+ */
+async function dayBounds(
+  companyId: string,
+  date: string,
+): Promise<{ start: Date; end: Date }> {
+  try {
+    return dayBoundsInTimezone(date, await getCompanyTimezone(companyId));
+  } catch {
     throw new AppError("VALIDATION_FAILED", "Invalid schedule date", 422);
   }
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 1);
-  return { start, end };
 }
 
 function assertScheduleRange(input: ScheduleInput) {
@@ -128,14 +139,24 @@ export async function scheduleJob(
           ? "SCHEDULED"
           : job.status;
 
-      await transaction.job.update({
-        where: { id: jobId },
+      // Guard the write with the status we validated: if the job was
+      // cancelled/completed between the read and this update, the write
+      // must not resurrect it.
+      const updated = await transaction.job.updateMany({
+        where: { id: jobId, companyId: context.companyId, status: job.status },
         data: {
           scheduledStart: input.scheduledStart,
           scheduledEnd: input.scheduledEnd,
           status: nextStatus,
         },
       });
+      if (updated.count !== 1) {
+        throw new AppError(
+          "JOB_STATE_CHANGED",
+          "Job changed while it was being scheduled; please retry",
+          409,
+        );
+      }
       if (nextStatus !== job.status) {
         await transaction.jobStatusHistory.create({
           data: {
@@ -178,7 +199,7 @@ export async function scheduleJob(
 }
 
 export async function getDaySchedule(context: AuthContext, date: string) {
-  const { start, end } = dayBounds(date);
+  const { start, end } = await dayBounds(context.companyId, date);
   const jobs = await prisma.job.findMany({
     where: {
       companyId: context.companyId,
@@ -189,7 +210,8 @@ export async function getDaySchedule(context: AuthContext, date: string) {
       status: { not: "CANCELLED" },
     },
     orderBy: { scheduledStart: "asc" },
-    take: 100, // Add pagination to prevent unbounded loading
+    // No take cap: the dispatch board must show EVERY job that day.
+    // A silent cap drops real jobs from the board with no signal.
     select: {
       id: true,
       jobNumber: true,
@@ -213,7 +235,7 @@ export async function getTechnicianWorkload(
   context: AuthContext,
   date: string,
 ) {
-  const { start, end } = dayBounds(date);
+  const { start, end } = await dayBounds(context.companyId, date);
   const technicians = await prisma.companyMember.findMany({
     where: {
       companyId: context.companyId,

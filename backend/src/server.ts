@@ -3,6 +3,8 @@ import { env } from "./config/env.js";
 import { logger } from "./common/logger.js";
 import { startInvoiceReminderScheduler } from "./modules/invoices/invoice-reminder.service.js";
 import { startPortalSweepScheduler } from "./modules/portal/portal-sweep.service.js";
+import { startPaymentOperationScheduler } from "./modules/payments/payment-operation.service.js";
+import { inProcessQueue } from "./queue/in-process-queue.adapter.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -10,6 +12,7 @@ const app = buildApp();
 
 let stopInvoiceReminders: (() => void) | undefined;
 let stopPortalSweep: (() => void) | undefined;
+let stopPaymentOperations: (() => void) | undefined;
 
 const server = app.listen(env.PORT, env.HOST, () => {
   logger.info(
@@ -24,6 +27,10 @@ const server = app.listen(env.PORT, env.HOST, () => {
 
   if (env.PORTAL_SWEEP_ENABLED) {
     stopPortalSweep = startPortalSweepScheduler();
+  }
+
+  if (env.PAYMENT_OPERATIONS_ENABLED) {
+    stopPaymentOperations = startPaymentOperationScheduler();
   }
 });
 
@@ -54,6 +61,7 @@ const shutdown = async (signal: string): Promise<void> => {
 
   stopInvoiceReminders?.();
   stopPortalSweep?.();
+  stopPaymentOperations?.();
 
   // Stop accepting new connections. server.close() only resolves once every
   // connection ends, and idle keep-alive sockets would otherwise hold it open
@@ -69,6 +77,21 @@ const shutdown = async (signal: string): Promise<void> => {
     });
     server.closeIdleConnections();
   });
+
+  // Give the in-process queue a bounded chance to finish work already
+  // accepted (handshake codes, password resets, notifications) instead
+  // of dropping it mid-flight. The queue is non-durable by design
+  // (ADR-009), so anything still queued after the bound is lost either
+  // way — this only rescues work that is about to complete.
+  try {
+    await Promise.race([
+      inProcessQueue.onIdle(),
+      new Promise((resolve) => setTimeout(resolve, 3000)),
+    ]);
+    logger.info("Notification queue drained");
+  } catch (error) {
+    logger.warn({ err: error }, "Notification queue drain failed");
+  }
 
   // Flush pending Sentry events (2 second timeout)
   try {

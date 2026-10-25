@@ -28,8 +28,9 @@ class PresignedPhotoUpload {
         objectKey: json['objectKey'] as String? ?? '',
         uploadUrl: json['uploadUrl'] as String? ?? '',
         expiresAt:
-            DateTime.tryParse(json['expiresAt'] as String? ?? '') ??
-            DateTime.now(),
+            (DateTime.tryParse(json['expiresAt'] as String? ?? '') ??
+                    DateTime.now())
+                .toLocal(),
       );
 }
 

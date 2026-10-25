@@ -4,6 +4,29 @@ import type { AuthContext } from "../../common/auth/auth.types.js";
 import { prisma } from "../../db/prisma.js";
 import { generateToken, hashToken } from "./portal.tokens.js";
 
+type PrismaLike = typeof prisma | Parameters<
+  Parameters<typeof prisma.$transaction>[0]
+>[0];
+
+/**
+ * Per-job issuance cap: at most 5 grants created per job per hour.
+ * issueGrant enforced this from the start; reissueGrant did not, which
+ * let a staff session mint fresh links (each one revoking the customer's
+ * live session and triggering SMS/email delivery) without bound.
+ */
+async function assertIssuanceCap(db: PrismaLike, jobId: string) {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const recentGrants = await db.portalAccessGrant.count({
+    where: {
+      jobId,
+      createdAt: { gte: oneHourAgo },
+    },
+  });
+  if (recentGrants >= 5) {
+    throw new AppError("RATE_LIMITED", "Too many portal access issuances", 429);
+  }
+}
+
 /**
  * Issue a new portal access grant for a job.
  * Returns the grant and the plaintext link token (only once).
@@ -42,18 +65,9 @@ export async function issueGrant(
     );
   }
 
-  // Abuse limit: max 5 issuances per job per hour
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const recentGrants = await prisma.portalAccessGrant.count({
-    where: {
-      jobId,
-      createdAt: { gte: oneHourAgo },
-    },
-  });
-
-  if (recentGrants >= 5) {
-    throw new AppError("RATE_LIMITED", "Too many portal access issuances", 429);
-  }
+  // Abuse limit: max 5 issuances per job per hour (shared with reissue —
+  // see assertIssuanceCap).
+  await assertIssuanceCap(prisma, jobId);
 
   // Generate grant
   const linkToken = generateToken();
@@ -139,6 +153,9 @@ export async function reissueGrant(
 
   // Transaction: deactivate current ACTIVE grant + revoke sessions + create new grant
   const result = await prisma.$transaction(async (tx) => {
+    // Same per-job issuance cap as issueGrant.
+    await assertIssuanceCap(tx, jobId);
+
     // Find current ACTIVE grant
     const currentGrant = await tx.portalAccessGrant.findFirst({
       where: { jobId, status: "ACTIVE" },
@@ -197,6 +214,21 @@ export async function reissueGrant(
         linkExpiresAt: true,
       },
     });
+
+    if (!currentGrant) {
+      // Reissue used as a first issuance (no ACTIVE grant existed): the
+      // issuance itself must still land in the audit trail.
+      await tx.portalAuditEvent.create({
+        data: {
+          companyId: context.companyId,
+          jobId,
+          customerId: job.customerId,
+          grantId: newGrant.id,
+          actorUserId: context.userId,
+          action: "PORTAL_LINK_ISSUED",
+        },
+      });
+    }
 
     // Build link
     const link = `${env.PORTAL_PUBLIC_BASE_URL}/open#t=${linkToken}`;

@@ -14,6 +14,7 @@ import 'data/jobs_repository.dart';
 import 'providers/jobs_provider.dart';
 
 const _priorityOptions = <String, String>{
+  'Urgent': 'URGENT',
   'High': 'HIGH',
   'Normal': 'NORMAL',
   'Low': 'LOW',
@@ -114,7 +115,9 @@ class _CreateJobScreenState extends ConsumerState<CreateJobScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final customersAsync = ref.watch(customersListProvider);
+    // Dedicated picker provider — NOT the shared customersListProvider,
+    // whose search/page state belongs to the Customers tab.
+    final customersAsync = ref.watch(pickerCustomersProvider);
     final customerId = _customerId;
 
     return Scaffold(
@@ -152,6 +155,14 @@ class _CreateJobScreenState extends ConsumerState<CreateJobScreen> {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 12),
+                  AeraTextField(
+                    label: 'Search customers',
+                    hintText: 'Type a name to filter…',
+                    onChanged: (value) =>
+                        ref.read(pickerCustomersSearchProvider.notifier).state =
+                            value.trim(),
                   ),
                   const SizedBox(height: 12),
                   customersAsync.when(

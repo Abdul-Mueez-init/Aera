@@ -123,24 +123,46 @@ export async function startJobWithCode(
   );
 
   if (!timingSafeCompare(code, expectedCode)) {
-    const attempts = job.handshakeFailedAttempts + 1;
+    // Atomic increment guarded by the validated state: the old
+    // read-modify-write let parallel wrong codes snapshot the same
+    // counter and all write the same value, delaying the lockout.
+    await prisma.job.updateMany({
+      where: {
+        id: jobId,
+        companyId: context.companyId,
+        status: "EN_ROUTE",
+        handshakeVersion: job.handshakeVersion,
+        assignedTechnicianId: context.userId,
+      },
+      data: { handshakeFailedAttempts: { increment: 1 } },
+    });
+    const fresh = await prisma.job.findUnique({
+      where: { id: jobId },
+      select: { handshakeFailedAttempts: true, handshakeLockedUntil: true },
+    });
+    const attempts =
+      fresh?.handshakeFailedAttempts ?? job.handshakeFailedAttempts + 1;
     const attemptsRemaining = Math.max(
       0,
       env.HANDSHAKE_MAX_ATTEMPTS - attempts,
     );
-    const locksNow = attempts >= env.HANDSHAKE_MAX_ATTEMPTS;
+    const locksNow =
+      attempts >= env.HANDSHAKE_MAX_ATTEMPTS &&
+      !(fresh?.handshakeLockedUntil && fresh.handshakeLockedUntil > now);
     const lockedUntil = locksNow
       ? new Date(now.getTime() + env.HANDSHAKE_LOCK_MINUTES * 60 * 1000)
       : null;
 
     // Own committed statement: never inside a transaction that then throws.
-    await prisma.job.update({
-      where: { id: jobId },
-      data: {
-        handshakeFailedAttempts: attempts,
-        ...(locksNow ? { handshakeLockedUntil: lockedUntil } : {}),
-      },
-    });
+    if (locksNow) {
+      await prisma.job.updateMany({
+        where: {
+          id: jobId,
+          OR: [{ handshakeLockedUntil: null }, { handshakeLockedUntil: { lte: now } }],
+        },
+        data: { handshakeLockedUntil: lockedUntil },
+      });
+    }
     await prisma.portalAuditEvent.create({
       data: {
         companyId: context.companyId,
@@ -324,12 +346,8 @@ export async function regenerateHandshake(context: AuthContext, jobId: string) {
     );
   }
 
-  const newVersion = await prisma.$transaction(async (transaction) => {
+  await prisma.$transaction(async (transaction) => {
     await prepareHandshakeOnEnRoute(transaction, job);
-    const updated = await transaction.job.findUniqueOrThrow({
-      where: { id: jobId },
-      select: { handshakeVersion: true },
-    });
     await transaction.portalAuditEvent.create({
       data: {
         companyId: context.companyId,
@@ -337,15 +355,17 @@ export async function regenerateHandshake(context: AuthContext, jobId: string) {
         customerId: job.customerId,
         actorUserId: context.userId,
         action: "HANDSHAKE_REGENERATED",
-        metadata: { newVersion: updated.handshakeVersion },
+        // No version in the audit metadata or the response: staff-facing
+        // surfaces carry the handshake STATE only, never the derived
+        // version (a leaked secret + a known version yields the code).
+        metadata: {},
       },
     });
-    return updated.handshakeVersion;
   });
 
   queueHandshakeCodeDelivery(jobId);
 
-  return { success: true, newVersion };
+  return { success: true };
 }
 
 /**

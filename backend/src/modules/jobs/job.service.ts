@@ -17,6 +17,10 @@ import {
   queueHandshakeCodeDelivery,
 } from "./handshake.service.js";
 import { closePortalIfDone } from "../portal/portal.grants.js";
+import {
+  dayBoundsInTimezone,
+  getCompanyTimezone,
+} from "../ai/tools/timezone.util.js";
 
 export type JobStatusValue =
   | "NEW"
@@ -424,8 +428,30 @@ export async function updateJob(
     });
   }
 
+  // Changing the customer once financial/portal records exist would
+  // orphan them: quotes, the invoice and portal grants all carry their
+  // own customerId and point at the original customer.
+  if (input.customerId && input.customerId !== current.customerId) {
+    const [quoteCount, invoiceCount, grantCount] = await Promise.all([
+      prisma.quote.count({ where: { jobId, companyId: context.companyId } }),
+      prisma.invoice.count({ where: { jobId, companyId: context.companyId } }),
+      prisma.portalAccessGrant.count({
+        where: { jobId, companyId: context.companyId },
+      }),
+    ]);
+    if (quoteCount > 0 || invoiceCount > 0 || grantCount > 0) {
+      throw new AppError(
+        "JOB_CUSTOMER_LOCKED",
+        "This job already has quotes, an invoice or portal access linked to its customer and cannot be moved to another customer",
+        409,
+      );
+    }
+  }
+
+  // Guard with the status validated above: a concurrent complete/cancel
+  // between the read and this write must win, not be overwritten.
   const result = await prisma.job.updateMany({
-    where: { id: jobId, companyId: context.companyId },
+    where: { id: jobId, companyId: context.companyId, status: current.status },
     data: {
       ...(input.customerId ? { customerId } : {}),
       ...(input.serviceAddressId ? { serviceAddressId } : {}),
@@ -437,7 +463,11 @@ export async function updateJob(
     },
   });
   if (result.count !== 1) {
-    throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+    throw new AppError(
+      "JOB_STATE_CHANGED",
+      "Job changed while it was being edited; please retry",
+      409,
+    );
   }
   return getJob(context, jobId);
 }
@@ -557,6 +587,7 @@ export async function transitionJob(
       companyId: true,
       status: true,
       assignedTechnicianId: true,
+      startedAt: true,
     },
   });
   if (!job) {
@@ -612,7 +643,11 @@ export async function transitionJob(
       where: { id: jobId, status: job.status },
       data: {
         status: toStatus,
-        ...(toStatus === "IN_PROGRESS" ? { startedAt: now } : {}),
+        // startedAt records the FIRST start only: a WAITING_PARTS ->
+        // IN_PROGRESS return must not rewrite the original start time.
+        ...(toStatus === "IN_PROGRESS" && !job.startedAt
+          ? { startedAt: now }
+          : {}),
       },
     });
     if (result.count !== 1) {
@@ -655,12 +690,18 @@ export async function transitionJob(
 }
 
 export async function listTechnicianToday(context: AuthContext, date: string) {
-  const start = new Date(`${date}T00:00:00.000Z`);
-  if (Number.isNaN(start.getTime())) {
+  // Company-local day bounds (same convention as dashboard/AI): the old
+  // UTC-midnight window hid early-morning local jobs from "today".
+  let start: Date;
+  let end: Date;
+  try {
+    ({ start, end } = dayBoundsInTimezone(
+      date,
+      await getCompanyTimezone(context.companyId),
+    ));
+  } catch {
     throw new AppError("VALIDATION_FAILED", "Invalid date", 422);
   }
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 1);
 
   const jobs = await prisma.job.findMany({
     where: {
@@ -668,7 +709,10 @@ export async function listTechnicianToday(context: AuthContext, date: string) {
       scheduledStart: { gte: start, lt: end },
       status: { not: "CANCELLED" },
     },
-    select: jobSelect(),
+    // Technicians get the redacted select here too (customer email/phone
+    // withheld), matching listJobs/getJob — /today used the full select.
+    select:
+      context.role === "TECHNICIAN" ? technicianJobSelect() : jobSelect(),
     orderBy: { scheduledStart: "asc" },
   });
   return { date, jobs };
@@ -765,11 +809,14 @@ export async function addJobPhoto(
     );
   }
 
-  // Verify the object exists in storage before the transaction
+  // Verify the ACTUAL uploaded object before the transaction. The
+  // client-supplied sizeBytes is only a claim: verification HEADs the
+  // object and returns its real size and content type, and those
+  // measured values are what get enforced and stored.
   const verification = await supabaseStorageAdapter.verifyUpload({
     objectKey: input.objectKey.trim(),
     expectedMimeType: presignedUpload.mimeType,
-    expectedMaxSizeBytes: input.sizeBytes,
+    expectedMaxSizeBytes: 10_000_000,
   });
 
   if (!verification.exists) {
@@ -789,8 +836,26 @@ export async function addJobPhoto(
     );
   }
 
-  // Verify size is within acceptable limits
-  if (input.sizeBytes > 10_000_000) {
+  // The bytes in storage must be the type that was presigned: a client
+  // can PUT any content to the signed URL, so the claim checks above
+  // are not enough on their own.
+  if (verification.mimeType !== presignedUpload.mimeType) {
+    throw new AppError(
+      "MIME_TYPE_MISMATCH",
+      "The uploaded file's actual type does not match the authorized type",
+      422,
+    );
+  }
+
+  // Enforce the size limit on the measured size, never the claim.
+  if (verification.sizeBytes <= 0) {
+    throw new AppError(
+      "UPLOAD_INVALID",
+      "The uploaded file is empty or its size could not be verified",
+      422,
+    );
+  }
+  if (verification.sizeBytes > 10_000_000) {
     throw new AppError(
       "FILE_TOO_LARGE",
       "Photo size exceeds the 10MB limit",
@@ -820,15 +885,15 @@ export async function addJobPhoto(
       );
     }
 
-    // Create the photo record
+    // Create the photo record with the MEASURED mime type and size.
     return await tx.jobPhoto.create({
       data: {
         companyId: context.companyId,
         jobId,
         uploadedBy: context.userId,
         objectKey: input.objectKey.trim(),
-        mimeType: input.mimeType,
-        sizeBytes: BigInt(input.sizeBytes),
+        mimeType: verification.mimeType,
+        sizeBytes: BigInt(verification.sizeBytes),
         kind: input.kind,
         caption: input.caption?.trim() || undefined,
       },
@@ -898,6 +963,12 @@ export async function completeJob(
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
 
+  // Authorization FIRST: the already-COMPLETED branch below can create an
+  // invoice (a manager-only financial side effect). Running it before
+  // this check let any unassigned technician trigger invoice creation on
+  // a completed job by re-"completing" it with autoInvoice set.
+  assertCanExecuteJobWork(context, existingJob);
+
   // Idempotent completion: if already completed, optionally ensure autoInvoice and return job
   if (existingJob.status === "COMPLETED") {
     if (options?.autoInvoice) {
@@ -907,8 +978,6 @@ export async function completeJob(
     }
     return getJob(context, jobId);
   }
-
-  assertCanExecuteJobWork(context, existingJob);
   if (
     existingJob.status !== "IN_PROGRESS" &&
     existingJob.status !== "WAITING_PARTS"
@@ -980,12 +1049,28 @@ export async function addJobNote(
 ) {
   const job = await prisma.job.findFirst({
     where: { id: jobId, companyId: context.companyId },
-    select: { id: true, companyId: true, assignedTechnicianId: true },
+    select: {
+      id: true,
+      companyId: true,
+      assignedTechnicianId: true,
+      status: true,
+    },
   });
   if (!job) {
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
   assertCanAddJobNote(context, job, visibility);
+  // Notes are part of the job record: final jobs are immutable (photos
+  // and parts already enforce this via assertExecutableJob). A note —
+  // including a CUSTOMER-visible one — must not be appendable after
+  // completion, invoicing and portal closure.
+  if (job.status === "COMPLETED" || job.status === "CANCELLED") {
+    throw new AppError(
+      "JOB_IMMUTABLE",
+      "Notes cannot be added to a completed or cancelled job",
+      409,
+    );
+  }
 
   return prisma.jobNote.create({
     data: {

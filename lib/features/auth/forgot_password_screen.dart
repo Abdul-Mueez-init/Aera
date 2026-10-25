@@ -1,24 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_text_field.dart';
+import 'data/auth_repository.dart';
 
-class ForgotPasswordScreen extends StatefulWidget {
+class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() =>
+      _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
-  final _emailController = TextEditingController(
-    text: 'marcus@apexheating.com',
-  );
+class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
+  final _emailController = TextEditingController();
   bool _codeDispatched = false;
+  bool _sending = false;
+  String? _error;
 
   @override
   void dispose() {
@@ -26,13 +30,34 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     super.dispose();
   }
 
-  void _sendCode() {
-    setState(() => _codeDispatched = true);
-    Future.delayed(const Duration(milliseconds: 900), () {
-      if (mounted) {
-        context.push('/reset-password');
-      }
+  Future<void> _sendCode() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() => _error = 'Enter the work email for your account.');
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
     });
+    try {
+      await ref.read(authRepositoryProvider).requestPasswordReset(email);
+      if (!mounted) return;
+      setState(() => _codeDispatched = true);
+      // Carry the entered email to the reset screen so the code can be
+      // submitted against the same address.
+      context.push('/reset-password?email=${Uri.encodeComponent(email)}');
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = 'Could not send the code. Check your connection.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   @override
@@ -108,6 +133,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       ),
                     ],
                   ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _error!,
+                      style: AeraTypography.bodySm.copyWith(
+                        color: AeraColors.danger,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 22),
                   AeraButton(
                     text: 'Send Verification Code',
@@ -116,7 +150,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       size: 18,
                       color: Colors.white,
                     ),
-                    onPressed: _sendCode,
+                    isLoading: _sending,
+                    onPressed: _sending ? null : _sendCode,
                   ),
                 ],
               ),

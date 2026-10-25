@@ -163,13 +163,24 @@ export async function register(input: RegisterInput): Promise<AuthResult> {
   }
 }
 
+// A throwaway hash verified against when the account does not exist
+// (or has no password yet), so a login attempt costs one scrypt either
+// way and response timing cannot enumerate registered emails. Lazily
+// created once per process.
+let dummyHashPromise: Promise<string> | undefined;
+function dummyPasswordHash(): Promise<string> {
+  dummyHashPromise ??= hashPassword("timing-equalization-dummy");
+  return dummyHashPromise;
+}
+
 export async function login(input: LoginInput): Promise<AuthResult> {
   const user = await prisma.user.findUnique({
     where: { email: normalizeEmail(input.email) },
   });
-  const passwordMatches = user?.passwordHash
-    ? await verifyPassword(input.password, user.passwordHash)
-    : false;
+  const passwordMatches = await verifyPassword(
+    input.password,
+    user?.passwordHash ?? (await dummyPasswordHash()),
+  );
 
   if (!user || !passwordMatches || !user.isActive) {
     throw new AppError(
@@ -378,8 +389,9 @@ export async function revokeSessionById(sessionId: string): Promise<void> {
 export async function acceptInvitationAndLogin(
   token: string,
   password: string,
+  email: string,
 ): Promise<AuthResult> {
-  const { userId, companyId } = await acceptInvitation(token, password);
+  const { userId, companyId } = await acceptInvitation(token, password, email);
 
   const [user, membership] = await Promise.all([
     prisma.user.findUniqueOrThrow({ where: { id: userId } }),

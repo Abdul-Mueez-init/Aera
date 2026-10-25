@@ -28,6 +28,9 @@ export const resendEmailAdapter: EmailPort = {
     }
 
     const response = await fetch(RESEND_API_URL, {
+      // Bounded: the notification queue drains serially, so one hung
+      // provider call would otherwise stall every queued notification.
+      signal: AbortSignal.timeout(10_000),
       method: "POST",
       headers: {
         Authorization: `Bearer ${env.RESEND_API_KEY}`,

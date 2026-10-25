@@ -249,6 +249,25 @@ export async function generateInvoiceFromJob(
   const totalMinor =
     quote?.totalMinor ?? subtotalMinor - discountMinor + taxMinor;
 
+  // Money invariant: an invoice must never be persisted with negative or
+  // internally inconsistent totals. Quote totals are normally recomputed
+  // at quote-write time, but this is the last line of defence before a
+  // corrupt total becomes a customer-facing balance.
+  if (
+    subtotalMinor < 0n ||
+    discountMinor < 0n ||
+    taxMinor < 0n ||
+    totalMinor < 0n ||
+    totalMinor !== subtotalMinor - discountMinor + taxMinor ||
+    items.some((item) => item.totalMinor < 0n || item.unitPriceMinor < 0n)
+  ) {
+    throw new AppError(
+      "INVOICE_INVALID_TOTALS",
+      "Invoice totals are inconsistent (total must equal subtotal - discount + tax, with no negative amounts)",
+      422,
+    );
+  }
+
   if (totalMinor === BigInt(0) && !options.allowZeroAmount) {
     throw new AppError(
       "INVOICE_ZERO_AMOUNT",
@@ -323,14 +342,35 @@ export async function generateInvoiceFromJob(
 export async function listInvoices(
   context: AuthContext,
   status?: InvoiceStatusValue,
+  page = 1,
+  pageSize = 20,
 ) {
-  const invoices = await prisma.invoice.findMany({
-    where: { companyId: context.companyId, ...(status ? { status } : {}) },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    select: invoiceSelect,
-  });
-  return jsonSafe(invoices);
+  // Same pagination contract as listJobs: { items, meta }. The old
+  // silent `take: 100` truncated the list while the client presented
+  // totals computed from it as if they were complete.
+  const where = {
+    companyId: context.companyId,
+    ...(status ? { status } : {}),
+  };
+  const [items, total] = await prisma.$transaction([
+    prisma.invoice.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: invoiceSelect,
+    }),
+    prisma.invoice.count({ where }),
+  ]);
+  return {
+    items: jsonSafe(items),
+    meta: {
+      page,
+      pageSize,
+      total,
+      pageCount: Math.ceil(total / pageSize),
+    },
+  };
 }
 
 export async function getInvoice(context: AuthContext, invoiceId: string) {
@@ -377,8 +417,11 @@ export async function issueInvoice(context: AuthContext, invoiceId: string) {
     throw new AppError("INVOICE_NOT_ISSUABLE", "Invoice cannot be issued", 409);
   }
   const issuedAt = new Date();
-  await prisma.invoice.update({
-    where: { id: invoiceId },
+  // Status-guarded claim: only the caller that actually flips DRAFT ->
+  // ISSUED publishes the notification, so two concurrent issue calls
+  // cannot both notify the customer.
+  const claimed = await prisma.invoice.updateMany({
+    where: { id: invoiceId, companyId: context.companyId, status: "DRAFT" },
     data: {
       status: "ISSUED",
       issuedAt,
@@ -389,6 +432,23 @@ export async function issueInvoice(context: AuthContext, invoiceId: string) {
         ),
     },
   });
+  if (claimed.count !== 1) {
+    // Lost the race: another caller issued it first. Stay idempotent and
+    // do not publish a duplicate notification.
+    const current = await prisma.invoice.findFirst({
+      where: { id: invoiceId, companyId: context.companyId },
+      select: { status: true },
+    });
+    if (
+      current &&
+      (current.status === "ISSUED" ||
+        current.status === "PARTIALLY_PAID" ||
+        current.status === "PAID")
+    ) {
+      return getInvoice(context, invoiceId);
+    }
+    throw new AppError("INVOICE_NOT_ISSUABLE", "Invoice cannot be issued", 409);
+  }
   void notificationPublisher.publish({
     type: "INVOICE_ISSUED",
     companyId: context.companyId,
@@ -411,8 +471,25 @@ export async function recordPayment(
         idempotencyKey: input.idempotencyKey,
       },
     },
-    select: { invoiceId: true, status: true },
+    select: {
+      id: true,
+      invoiceId: true,
+      status: true,
+      amountMinor: true,
+      currency: true,
+      method: true,
+      providerPaymentId: true,
+      retryCount: true,
+    },
   });
+
+  // An operation left behind by an earlier attempt with the same key is
+  // RESUMED, not rejected: PROVIDER_ACCEPTED means the provider already
+  // took the money and only the ledger commit is missing; FAILED without
+  // a provider payment id never reached the provider and can safely run
+  // again. Only genuinely terminal states are errors.
+  let resumeOperationId: string | undefined;
+  let providerAlreadyAccepted = false;
 
   if (existingOperation) {
     if (existingOperation.invoiceId !== invoiceId) {
@@ -426,19 +503,50 @@ export async function recordPayment(
     if (existingOperation.status === "COMPLETED") {
       return getInvoice(context, invoiceId);
     }
-    if (existingOperation.status === "FAILED") {
+    if (existingOperation.status === "PROCESSING") {
+      throw new AppError(
+        "PAYMENT_OPERATION_PENDING",
+        "Payment operation is still being processed",
+        409,
+      );
+    }
+    if (
+      existingOperation.status === "FAILED" &&
+      existingOperation.providerPaymentId
+    ) {
+      // The provider accepted money for this key but the ledger commit
+      // failed permanently. Never silently re-run or re-commit it.
+      throw new AppError(
+        "PAYMENT_OPERATION_RECONCILIATION_REQUIRED",
+        "This payment was accepted by the provider but could not be recorded; it requires manual reconciliation",
+        409,
+      );
+    }
+    if (
+      existingOperation.status === "FAILED" &&
+      existingOperation.retryCount >= 3
+    ) {
       throw new AppError(
         "PAYMENT_OPERATION_FAILED",
         "Previous payment operation failed",
         500,
       );
     }
-    // Operation is still processing
-    throw new AppError(
-      "PAYMENT_OPERATION_PENDING",
-      "Payment operation is still being processed",
-      409,
-    );
+    // The retry must carry the same payment the key was created for.
+    if (
+      existingOperation.amountMinor !== BigInt(input.amountMinor) ||
+      existingOperation.currency !== input.currency.toUpperCase() ||
+      existingOperation.method !== input.method
+    ) {
+      throw new AppError(
+        "PAYMENT_IDEMPOTENCY_CONFLICT",
+        "Idempotency key was used with a different payment amount, currency or method",
+        409,
+      );
+    }
+    resumeOperationId = existingOperation.id;
+    providerAlreadyAccepted =
+      existingOperation.status === "PROVIDER_ACCEPTED";
   }
 
   if (input.amountMinor < 0) {
@@ -466,42 +574,116 @@ export async function recordPayment(
       422,
     );
   }
-
-  // Create payment operation record (outbox pattern)
-  const paymentOperation = await createPaymentOperation(
-    context.companyId,
-    invoiceId,
-    context.userId,
-    BigInt(input.amountMinor),
-    input.currency.toUpperCase(),
-    input.method,
-    provider.name,
-    input.reference?.trim(),
-    input.idempotencyKey,
-  );
-
-  // Process the payment operation (external provider call)
-  // This happens OUTSIDE the database transaction
-  try {
-    await processPaymentOperation(paymentOperation.id, provider);
-  } catch (providerError) {
-    // Provider failed - operation is marked as FAILED and will be retried
-    // We don't update the invoice balance until provider succeeds
-    logger.error(
-      { paymentOperationId: paymentOperation.id, error: providerError },
-      "Payment provider call failed",
-    );
+  // Reject impossible amounts BEFORE any operation is created or the
+  // provider is called, so a bad attempt never strands an operation or
+  // burns the idempotency key. A zero payment is only meaningful as the
+  // settlement of a zero-balance invoice (marks it PAID).
+  if (input.amountMinor === 0 && invoice.balanceDueMinor > 0n) {
     throw new AppError(
-      "PAYMENT_PROVIDER_ERROR",
-      "Payment provider failed to process payment",
-      502,
+      "PAYMENT_INVALID_AMOUNT",
+      "Payment amount must be greater than zero while the invoice has a balance due",
+      422,
     );
   }
+  if (BigInt(input.amountMinor) > invoice.balanceDueMinor) {
+    throw new AppError(
+      invoice.balanceDueMinor === 0n
+        ? "INVOICE_ALREADY_PAID"
+        : "PAYMENT_EXCEEDS_BALANCE_DUE",
+      invoice.balanceDueMinor === 0n
+        ? "Invoice is already paid in full"
+        : "Payment amount exceeds the invoice balance due",
+      422,
+    );
+  }
+
+  // Create the payment operation record (outbox pattern), unless this
+  // call is resuming one an earlier attempt left behind.
+  let paymentOperationId = resumeOperationId;
+  if (!paymentOperationId) {
+    try {
+      const created = await createPaymentOperation(
+        context.companyId,
+        invoiceId,
+        context.userId,
+        BigInt(input.amountMinor),
+        input.currency.toUpperCase(),
+        input.method,
+        provider.name,
+        input.reference?.trim(),
+        input.idempotencyKey,
+      );
+      paymentOperationId = created.id;
+    } catch (error) {
+      // A concurrent request with the same key won the create race. Its
+      // operation decides the outcome: replay it if it already finished,
+      // otherwise report the payment as in flight — never a raw 500.
+      if (!isUniqueConstraintError(error)) throw error;
+      const raced = await prisma.paymentOperation.findUnique({
+        where: {
+          companyId_idempotencyKey: {
+            companyId: context.companyId,
+            idempotencyKey: input.idempotencyKey,
+          },
+        },
+        select: { status: true },
+      });
+      if (raced?.status === "COMPLETED") {
+        return getInvoice(context, invoiceId);
+      }
+      throw new AppError(
+        "PAYMENT_OPERATION_PENDING",
+        "Payment operation is still being processed",
+        409,
+      );
+    }
+  }
+
+  // Process the payment operation (external provider call), unless the
+  // provider already accepted this operation on an earlier attempt.
+  // This happens OUTSIDE the database transaction.
+  if (!providerAlreadyAccepted) {
+    try {
+      await processPaymentOperation(paymentOperationId, provider);
+    } catch (providerError) {
+      // Provider failed - operation is marked as FAILED and will be retried
+      // We don't update the invoice balance until provider succeeds
+      logger.error(
+        { paymentOperationId, error: providerError },
+        "Payment provider call failed",
+      );
+      throw new AppError(
+        "PAYMENT_PROVIDER_ERROR",
+        "Payment provider failed to process payment",
+        502,
+      );
+    }
+  }
+  const paymentOperation = { id: paymentOperationId };
 
   // Provider succeeded - now update invoice balance and create payment record in transaction
   try {
     await prisma.$transaction(async (transaction) => {
-      // First, atomically update the invoice balance and get the post-update state
+      // Claim the operation for this commit. The recovery sweep can race
+      // us for the same PROVIDER_ACCEPTED operation; exactly one
+      // committer may proceed, or the invoice would be credited twice.
+      const claimed = await transaction.paymentOperation.updateMany({
+        where: {
+          id: paymentOperation.id,
+          status: "PROVIDER_ACCEPTED",
+          ledgerPaymentId: null,
+        },
+        data: { status: "PROCESSING" },
+      });
+      if (claimed.count !== 1) {
+        throw new AppError(
+          "PAYMENT_OPERATION_CLAIM_LOST",
+          "Payment operation was claimed by another process",
+          409,
+        );
+      }
+
+      // Atomically update the invoice balance and get the post-update state
       const updatedInvoice = await transaction.invoice.update({
         where: {
           id: invoiceId,
@@ -573,16 +755,59 @@ export async function recordPayment(
     if (isUniqueConstraintError(error)) {
       return getInvoice(context, invoiceId);
     }
-    // Handle case where invoice is already paid (status check failed)
+    if (error instanceof AppError && error.code === "PAYMENT_OPERATION_CLAIM_LOST") {
+      // The recovery sweep won the commit race. If it completed the
+      // operation, this payment is recorded — replay success; if it is
+      // still mid-commit, report the payment as in flight.
+      const current = await prisma.paymentOperation.findUnique({
+        where: { id: paymentOperation.id },
+        select: { status: true },
+      });
+      if (current?.status === "COMPLETED") {
+        return getInvoice(context, invoiceId);
+      }
+      throw new AppError(
+        "PAYMENT_OPERATION_PENDING",
+        "Payment operation is still being processed",
+        409,
+      );
+    }
+    // The conditional invoice update matched nothing: another payment
+    // consumed the balance (or settled the invoice) after this one was
+    // validated. The provider DID accept this payment, so park the
+    // operation with its provider id retained — the reconciliation
+    // state — instead of reporting it as a plain failure.
     if (
       typeof error === "object" &&
       error !== null &&
       "code" in error &&
       error.code === "P2025"
     ) {
+      await prisma.paymentOperation.updateMany({
+        where: { id: paymentOperation.id, status: "PROVIDER_ACCEPTED" },
+        data: {
+          status: "FAILED",
+          errorMessage:
+            "Provider accepted the payment but the invoice balance/status no longer accepts it; manual reconciliation required",
+        },
+      });
+      const current = await prisma.invoice.findFirst({
+        where: { id: invoiceId, companyId: context.companyId },
+        select: { status: true, balanceDueMinor: true },
+      });
+      if (
+        current &&
+        (current.status === "PAID" || current.balanceDueMinor === 0n)
+      ) {
+        throw new AppError(
+          "INVOICE_ALREADY_PAID",
+          "Invoice is already paid in full",
+          422,
+        );
+      }
       throw new AppError(
-        "INVOICE_ALREADY_PAID",
-        "Invoice is already paid in full",
+        "PAYMENT_EXCEEDS_BALANCE_DUE",
+        "Payment amount exceeds the invoice balance due",
         422,
       );
     }

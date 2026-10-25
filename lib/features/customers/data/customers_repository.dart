@@ -208,17 +208,18 @@ class CustomerJob {
       priority: json['priority'] as String? ?? 'NORMAL',
       status: json['status'] as String? ?? 'NEW',
       scheduledStart: json['scheduledStart'] != null
-          ? DateTime.tryParse(json['scheduledStart'] as String)
+          ? DateTime.tryParse(json['scheduledStart'] as String)?.toLocal()
           : null,
       scheduledEnd: json['scheduledEnd'] != null
-          ? DateTime.tryParse(json['scheduledEnd'] as String)
+          ? DateTime.tryParse(json['scheduledEnd'] as String)?.toLocal()
           : null,
       completedAt: json['completedAt'] != null
-          ? DateTime.tryParse(json['completedAt'] as String)
+          ? DateTime.tryParse(json['completedAt'] as String)?.toLocal()
           : null,
       createdAt:
-          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
-          DateTime.now(),
+          (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                  DateTime.now())
+              .toLocal(),
       technicianName: (techName == null || techName.isEmpty) ? null : techName,
     );
   }
@@ -451,7 +452,8 @@ class PortalActivityEvent {
         action: json['action'] as String? ?? '',
         metadata: json['metadata'] as Map<String, dynamic>?,
         createdAt:
-            DateTime.tryParse(json['createdAt'] as String? ?? '') ??
-            DateTime.now(),
+            (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                    DateTime.now())
+                .toLocal(),
       );
 }

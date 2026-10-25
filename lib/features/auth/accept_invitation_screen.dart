@@ -30,6 +30,7 @@ class _AcceptInvitationScreenState
   static const int _minPasswordLength = 12;
 
   late final TextEditingController _tokenController;
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
   bool _obscure = true;
@@ -44,6 +45,7 @@ class _AcceptInvitationScreenState
   @override
   void dispose() {
     _tokenController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
@@ -58,8 +60,9 @@ class _AcceptInvitationScreenState
   String _messageFor(Object error) {
     if (error is ApiException) {
       if (error.code == 'INVITATION_INVALID_OR_EXPIRED') {
-        return 'This invitation code is invalid, already used, or has expired. '
-            'Ask your manager for a new one.';
+        return 'This invitation code is invalid, already used, or has expired, '
+            'or the email does not match the invitation. Ask your manager for '
+            'a new one.';
       }
       if (error.statusCode == 429) {
         return 'Too many attempts. Please wait a few minutes and try again.';
@@ -71,11 +74,16 @@ class _AcceptInvitationScreenState
 
   Future<void> _handleAccept() async {
     final token = _tokenController.text.trim();
+    final email = _emailController.text.trim();
     final password = _passwordController.text;
     final confirm = _confirmController.text;
 
     if (token.isEmpty) {
       _showError('Please enter your invitation code');
+      return;
+    }
+    if (email.isEmpty || !email.contains('@')) {
+      _showError('Please enter the email address your invitation was sent to');
       return;
     }
     if (password.length < _minPasswordLength) {
@@ -91,7 +99,7 @@ class _AcceptInvitationScreenState
     try {
       await ref
           .read(authNotifierProvider.notifier)
-          .acceptInvitation(token: token, password: password);
+          .acceptInvitation(token: token, password: password, email: email);
       // No navigation here: once the session exists the router redirects to
       // the Dashboard (owner/dispatcher) or Technician Home (technician).
       if (mounted) setState(() => _isLoading = false);
@@ -134,6 +142,14 @@ class _AcceptInvitationScreenState
                     controller: _tokenController,
                     keyboardType: TextInputType.text,
                     prefixIcon: const Icon(Icons.vpn_key_outlined, size: 20),
+                  ),
+                  const SizedBox(height: 16),
+                  AeraTextField(
+                    label: 'Your email',
+                    hintText: 'The email your invitation was sent to',
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    prefixIcon: const Icon(Icons.mail_outline, size: 20),
                   ),
                   const SizedBox(height: 16),
                   AeraTextField(

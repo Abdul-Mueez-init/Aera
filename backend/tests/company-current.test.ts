@@ -122,6 +122,7 @@ describe("PATCH /api/v1/companies/current", () => {
       .send({
         token: dispatcherRes.body.data.invitationToken,
         password: "correct-horse-battery-staple",
+        email: `dispatcher-${suffix}@example.com`,
       });
     expect(dispatcherAuth.status).toBe(200);
 

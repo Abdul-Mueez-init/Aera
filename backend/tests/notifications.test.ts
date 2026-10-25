@@ -36,6 +36,7 @@ async function inviteAndAcceptTechnician(ownerAuth: { Authorization: string }) {
     .send({
       token: invite.body.data.invitationToken,
       password: "a-brand-new-password-123",
+      email: `tech-${suffix}@example.com`,
     });
   expect(accept.status).toBe(200);
   return accept.body.data as { accessToken: string; userId?: string };
