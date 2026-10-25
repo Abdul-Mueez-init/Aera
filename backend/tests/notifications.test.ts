@@ -135,12 +135,23 @@ describe("Notifications", () => {
       Authorization: `Bearer ${technician.accessToken}`,
     };
 
-    const { customerId } = await createCustomerWithAddress(ownerAuth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(ownerAuth);
+    // D4: sending a quote requires a linked job (QUOTE_REQUIRES_JOB).
+    const job = await request(app).post("/api/v1/jobs").set(ownerAuth).send({
+      customerId,
+      serviceAddressId,
+      serviceType: "AC Repair",
+      problemDescription: "Unit not cooling",
+    });
+    expect(job.status).toBe(201);
+
     const quote = await request(app)
       .post("/api/v1/quotes")
       .set(ownerAuth)
       .send({
         customerId,
+        jobId: job.body.data.id,
         currency: "USD",
         items: [
           {

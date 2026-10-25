@@ -105,15 +105,12 @@ async function createCustomer(firstName: string) {
 }
 
 async function createJob(customerId: string, serviceAddressId: string) {
-  const res = await request(app)
-    .post("/api/v1/jobs")
-    .set(owner.auth)
-    .send({
-      customerId,
-      serviceAddressId,
-      serviceType: "REPAIR",
-      problemDescription: "AC not cooling",
-    });
+  const res = await request(app).post("/api/v1/jobs").set(owner.auth).send({
+    customerId,
+    serviceAddressId,
+    serviceType: "REPAIR",
+    problemDescription: "AC not cooling",
+  });
   expect(res.status).toBe(201);
   return res.body.data.id as string;
 }
@@ -174,6 +171,7 @@ describe("Portal E2E acceptance (handoff section 10)", () => {
     // Device 1 opens the link.
     const first = await request(app)
       .post("/api/v1/portal/exchange")
+      .set("X-Aera-Portal", "1")
       .set("x-aera-portal", "1")
       .send({ token: tokenA });
     expect(first.status).toBe(200);
@@ -188,6 +186,7 @@ describe("Portal E2E acceptance (handoff section 10)", () => {
     // Device 2 opens the SAME link -> already used.
     const second = await request(app)
       .post("/api/v1/portal/exchange")
+      .set("X-Aera-Portal", "1")
       .set("x-aera-portal", "1")
       .send({ token: tokenA });
     expect(second.status).toBe(409);
@@ -209,6 +208,7 @@ describe("Portal E2E acceptance (handoff section 10)", () => {
     expect(noSession.status).toBe(401);
     const bogus = await request(app)
       .post("/api/v1/portal/exchange")
+      .set("X-Aera-Portal", "1")
       .set("x-aera-portal", "1")
       .send({ token: "A".repeat(43) });
     expect(bogus.status).toBe(401);
@@ -499,6 +499,7 @@ describe("Portal E2E acceptance (handoff section 10)", () => {
 
     const exchange = await request(app)
       .post("/api/v1/portal/exchange")
+      .set("X-Aera-Portal", "1")
       .set("x-aera-portal", "1")
       .send({ token: newToken });
     expect(exchange.status).toBe(200);

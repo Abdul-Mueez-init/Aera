@@ -195,17 +195,21 @@ class PortalJobAddress {
 }
 
 class PortalTechnicianRef {
-  const PortalTechnicianRef({required this.firstName, required this.lastName});
+  const PortalTechnicianRef({required this.firstName, required this.lastInitial});
 
   final String firstName;
-  final String lastName;
 
-  String get fullName => '$firstName $lastName'.trim();
+  /// Single-letter last initial. The backend deliberately never sends the
+  /// technician's full surname to the customer portal.
+  final String lastInitial;
+
+  String get fullName =>
+      lastInitial.isEmpty ? firstName : '$firstName $lastInitial.';
 
   factory PortalTechnicianRef.fromJson(Map<String, dynamic> json) =>
       PortalTechnicianRef(
         firstName: json['firstName'] as String? ?? '',
-        lastName: json['lastName'] as String? ?? '',
+        lastInitial: json['lastInitial'] as String? ?? '',
       );
 }
 

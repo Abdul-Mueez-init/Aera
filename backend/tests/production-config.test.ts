@@ -3,42 +3,27 @@
  *
  * These tests ensure that critical production settings are present and valid.
  * The goal is to fail closed if required configuration is missing or insecure.
+ *
+ * The production/staging enforcement tests are REAL: they stub process.env,
+ * reset the module registry and dynamically re-import src/config/env.ts, so
+ * the Zod schema (including its production superRefine) actually runs against
+ * the stubbed environment. (The previous versions wrapped their assertions in
+ * `if (process.env.NODE_ENV === "production")`, which never executes under
+ * `NODE_ENV=test`, so they asserted nothing.)
  */
 
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { env } from "../src/config/env.js";
 
 describe("Production Configuration Validation", () => {
-  beforeAll(() => {
-    // Skip these tests in production environments since they would fail
-    // if we actually tried to start the app without proper config
-    if (process.env.NODE_ENV === "production") {
-      // In a real CI pipeline, you might want to run these against actual
-      // production config values injected from environment variables
-    }
-  });
-
   describe("CORS Configuration", () => {
-    it("should require CORS_ORIGINS in production", () => {
-      // In production, CORS_ORIGINS must be set to restrict origins
-      // This test documents the requirement; actual enforcement is in app.ts
-      if (process.env.NODE_ENV === "production") {
-        expect(env.CORS_ORIGINS).toBeDefined();
-        expect(env.CORS_ORIGINS?.length).toBeGreaterThan(0);
-        expect(
-          env.CORS_ORIGINS?.every((origin) => origin.startsWith("https://")),
-        ).toBe(true);
-      }
-    });
-
     it("should allow unset CORS_ORIGINS in development/test", () => {
-      // Development and test environments can use open CORS for convenience
-      if (
-        process.env.NODE_ENV === "development" ||
-        process.env.NODE_ENV === "test"
-      ) {
-        expect(env.CORS_ORIGINS).toBeUndefined();
-      }
+      // Development and test environments can use open CORS for convenience.
+      // (Boot-time enforcement for production/staging is covered by the
+      // dynamic-import suite below.)
+      expect(
+        env.CORS_ORIGINS === undefined || Array.isArray(env.CORS_ORIGINS),
+      ).toBe(true);
     });
   });
 
@@ -51,12 +36,6 @@ describe("Production Configuration Validation", () => {
     it("should have DIRECT_URL set", () => {
       expect(env.DIRECT_URL).toBeDefined();
       expect(env.DIRECT_URL).toMatch(/^(postgresql|https?):\/\//);
-    });
-
-    it("should use TLS/SSL in production", () => {
-      if (process.env.NODE_ENV === "production") {
-        expect(env.DATABASE_URL).toMatch(/sslgmode|sslmode/i);
-      }
     });
   });
 
@@ -110,12 +89,6 @@ describe("Production Configuration Validation", () => {
         expect(key === undefined || typeof key === "string").toBe(true);
       });
     });
-
-    it("should require HTTPS for Sentry DSN in production", () => {
-      if (process.env.NODE_ENV === "production" && env.SENTRY_DSN) {
-        expect(env.SENTRY_DSN).toMatch(/^https:\/\/!/);
-      }
-    });
   });
 
   describe("AI Configuration", () => {
@@ -149,22 +122,6 @@ describe("Production Configuration Validation", () => {
   });
 
   describe("Portal Configuration", () => {
-    it("should require PORTAL_PUBLIC_BASE_URL in production", () => {
-      if (process.env.NODE_ENV === "production") {
-        expect(env.PORTAL_PUBLIC_BASE_URL).toBeDefined();
-        expect(env.PORTAL_PUBLIC_BASE_URL).toMatch(/^https:\/\//);
-      }
-    });
-
-    it("should require PORTAL_CODE_SECRET in production", () => {
-      if (process.env.NODE_ENV === "production") {
-        expect(env.PORTAL_CODE_SECRET).toBeDefined();
-        if (env.PORTAL_CODE_SECRET) {
-          expect(env.PORTAL_CODE_SECRET.length).toBeGreaterThanOrEqual(32);
-        }
-      }
-    });
-
     it("should have portal configuration set", () => {
       expect(env.PORTAL_LINK_UNUSED_TTL_HOURS).toBeGreaterThan(0);
       expect(env.PORTAL_SESSION_IDLE_DAYS).toBeGreaterThan(0);
@@ -174,5 +131,141 @@ describe("Production Configuration Validation", () => {
       expect(env.HANDSHAKE_MAX_ATTEMPTS).toBeGreaterThan(0);
       expect(env.HANDSHAKE_LOCK_MINUTES).toBeGreaterThan(0);
     });
+  });
+});
+
+/**
+ * Boot-time enforcement: re-import env.ts with a fully stubbed environment.
+ * The base record below satisfies every always-required variable, so the
+ * ONLY reason a load can fail is the variable under test.
+ */
+// Dummy secrets are built with String.repeat so no credential-shaped
+// literal ever lands in the repo.
+const VALID_DEPLOY_ENV: Record<string, string> = {
+  DATABASE_URL: "postgresql://user:pass@localhost:5432/aera",
+  DIRECT_URL: "postgresql://user:pass@localhost:5432/aera",
+  JWT_SECRET: "j".repeat(40),
+  SUPABASE_URL: "https://example.supabase.co",
+  SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key-0000000000",
+  PORTAL_PUBLIC_BASE_URL: "https://portal.quantixlabs.live",
+  PORTAL_CODE_SECRET: "p".repeat(40),
+  CORS_ORIGINS: "https://portal.quantixlabs.live",
+};
+
+async function loadEnvWith(
+  overrides: Record<string, string | undefined>,
+): Promise<typeof env> {
+  const saved = { ...process.env };
+  vi.resetModules();
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+  try {
+    const mod = await import("../src/config/env.js");
+    return mod.env;
+  } finally {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in saved)) delete process.env[key];
+    }
+    Object.assign(process.env, saved);
+    vi.resetModules();
+  }
+}
+
+describe("Production/staging boot-time env enforcement", () => {
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeAll(() => {
+    // env.ts console.errors the validation failure before throwing; keep the
+    // test output readable.
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterAll(() => {
+    errorSpy.mockRestore();
+  });
+
+  for (const nodeEnv of ["production", "staging"] as const) {
+    describe(`NODE_ENV=${nodeEnv}`, () => {
+      const base = { ...VALID_DEPLOY_ENV, NODE_ENV: nodeEnv };
+
+      it("boots when PORTAL_PUBLIC_BASE_URL, PORTAL_CODE_SECRET and CORS_ORIGINS are all set", async () => {
+        const loaded = await loadEnvWith(base);
+        expect(loaded.PORTAL_PUBLIC_BASE_URL).toBe(
+          "https://portal.quantixlabs.live",
+        );
+        expect(loaded.PORTAL_CODE_SECRET).toBe(
+          VALID_DEPLOY_ENV.PORTAL_CODE_SECRET,
+        );
+        expect(loaded.CORS_ORIGINS).toEqual([
+          "https://portal.quantixlabs.live",
+        ]);
+      });
+
+      it("fails to boot without PORTAL_PUBLIC_BASE_URL", async () => {
+        await expect(
+          loadEnvWith({ ...base, PORTAL_PUBLIC_BASE_URL: undefined }),
+        ).rejects.toThrow("Invalid environment configuration");
+      });
+
+      it("fails to boot when PORTAL_PUBLIC_BASE_URL is not https", async () => {
+        await expect(
+          loadEnvWith({
+            ...base,
+            PORTAL_PUBLIC_BASE_URL: "http://portal.quantixlabs.live",
+          }),
+        ).rejects.toThrow("Invalid environment configuration");
+      });
+
+      it("fails to boot without PORTAL_CODE_SECRET", async () => {
+        await expect(
+          loadEnvWith({ ...base, PORTAL_CODE_SECRET: undefined }),
+        ).rejects.toThrow("Invalid environment configuration");
+      });
+
+      it("fails to boot when PORTAL_CODE_SECRET is shorter than 32 chars", async () => {
+        await expect(
+          loadEnvWith({ ...base, PORTAL_CODE_SECRET: "too-short-secret" }),
+        ).rejects.toThrow("Invalid environment configuration");
+      });
+
+      it("fails to boot when PORTAL_CODE_SECRET equals JWT_SECRET", async () => {
+        await expect(
+          loadEnvWith({
+            ...base,
+            PORTAL_CODE_SECRET: VALID_DEPLOY_ENV.JWT_SECRET,
+          }),
+        ).rejects.toThrow("Invalid environment configuration");
+      });
+
+      it("fails to boot without CORS_ORIGINS", async () => {
+        await expect(
+          loadEnvWith({ ...base, CORS_ORIGINS: undefined }),
+        ).rejects.toThrow("Invalid environment configuration");
+      });
+
+      it("fails to boot when CORS_ORIGINS is empty", async () => {
+        await expect(
+          loadEnvWith({ ...base, CORS_ORIGINS: "" }),
+        ).rejects.toThrow("Invalid environment configuration");
+      });
+    });
+  }
+
+  it("stays permissive in test env: portal vars may be unset", async () => {
+    const loaded = await loadEnvWith({
+      ...VALID_DEPLOY_ENV,
+      NODE_ENV: "test",
+      PORTAL_PUBLIC_BASE_URL: undefined,
+      PORTAL_CODE_SECRET: undefined,
+      CORS_ORIGINS: undefined,
+    });
+    expect(loaded.PORTAL_PUBLIC_BASE_URL).toBeUndefined();
+    expect(loaded.PORTAL_CODE_SECRET).toBeUndefined();
+    expect(loaded.CORS_ORIGINS).toBeUndefined();
   });
 });

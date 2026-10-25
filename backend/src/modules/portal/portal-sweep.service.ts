@@ -86,19 +86,10 @@ export async function runPortalSweep(
           return false;
         }
 
-        // Spec 5.8: max-age closure applies only when the job's invoice is
-        // paid or there is no invoice — an unpaid invoice keeps the portal
-        // open so the customer can still view and pay it.
-        const unpaidInvoice = await tx.invoice.findFirst({
-          where: {
-            jobId: grant.jobId,
-            status: { in: ["DRAFT", "ISSUED", "PARTIALLY_PAID", "OVERDUE"] },
-          },
-          select: { id: true },
-        });
-        if (unpaidInvoice) {
-          return false;
-        }
+        // Spec 5.8 + D3 decision (Moiz, 2026-10-26): the max-age close is
+        // unconditional — at PORTAL_POST_COMPLETION_MAX_DAYS the portal
+        // closes even when the job's invoice is still unpaid. Staff can
+        // reissue a link if the customer needs access again.
 
         // Deactivate grant
         await tx.portalAccessGrant.update({

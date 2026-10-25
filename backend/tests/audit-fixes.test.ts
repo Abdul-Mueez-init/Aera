@@ -287,8 +287,12 @@ describe("Audit fixes: job customer lock and final-job notes", () => {
 
 describe("Audit fixes: last-owner invariant", () => {
   async function ownMemberId(accessToken: string, companyId: string) {
+    // The caller's own membership is the ACTIVE one. Filtering on status
+    // matters: an INVITED owner row also matches role=OWNER, and an
+    // unordered findMany may return it first (row order differs across
+    // Postgres builds), which would silently demote the wrong member.
     const members = await prisma.companyMember.findMany({
-      where: { companyId, role: "OWNER" },
+      where: { companyId, role: "OWNER", status: "ACTIVE" },
     });
     return members;
   }

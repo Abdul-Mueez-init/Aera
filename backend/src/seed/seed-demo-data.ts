@@ -266,6 +266,7 @@ async function seedDemoData() {
     // `role` lives on CompanyMember, not User — spreading it into
     // user.create was schema drift that made the seed throw.
     const { role: _seedRole, ...userFields } = userData;
+    void _seedRole; // intentionally discarded (see comment above)
     const user = await prisma.user.create({
       data: {
         ...userFields,

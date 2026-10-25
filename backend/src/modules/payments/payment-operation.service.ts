@@ -365,7 +365,6 @@ const PAYMENT_SWEEP_INITIAL_DELAY_MS = 30_000;
 export function startPaymentOperationScheduler(): () => void {
   let stopped = false;
   let running = false;
-  let timer: NodeJS.Timeout | undefined;
 
   const tick = async () => {
     if (stopped || running) return;
@@ -385,7 +384,7 @@ export function startPaymentOperationScheduler(): () => void {
   }, PAYMENT_SWEEP_INITIAL_DELAY_MS);
   initialTimer.unref();
 
-  timer = setInterval(() => {
+  const timer = setInterval(() => {
     void tick();
   }, env.PAYMENT_OPERATION_SWEEP_MINUTES * 60_000);
   timer.unref();
@@ -398,7 +397,7 @@ export function startPaymentOperationScheduler(): () => void {
   return () => {
     stopped = true;
     clearTimeout(initialTimer);
-    if (timer) clearInterval(timer);
+    clearInterval(timer);
   };
 }
 

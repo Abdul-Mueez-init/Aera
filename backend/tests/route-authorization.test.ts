@@ -595,6 +595,7 @@ describe("Phase B2: Route Authorization Matrix & Function-Level Policies", () =>
     // Exchange token for session
     const exchangeRes = await request(app)
       .post("/api/v1/portal/exchange")
+      .set("X-Aera-Portal", "1")
       .send({ token });
     expect(exchangeRes.status).toBe(200);
 

@@ -36,6 +36,9 @@ router.use(noStoreHeaders);
 router.post(
   "/exchange",
   portalExchangeRateLimiter,
+  // The exchange sets a session cookie, so it takes the same CSRF guard as
+  // every other portal POST (custom header forces a CORS preflight).
+  portalCsrfGuard,
   async (request: Request, response: Response) => {
     const parsed = z
       .object({
@@ -54,7 +57,10 @@ router.post(
       return;
     }
 
-    const { sessionToken } = await exchangeToken(parsed.data.token);
+    const { sessionToken } = await exchangeToken(
+      parsed.data.token,
+      request.headers["user-agent"],
+    );
 
     // deliver:"bearer" is for the mobile app (Android App Link flow): the
     // session token goes in the body and the app stores it in secure storage.

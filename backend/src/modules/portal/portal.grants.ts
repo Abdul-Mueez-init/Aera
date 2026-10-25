@@ -4,9 +4,8 @@ import type { AuthContext } from "../../common/auth/auth.types.js";
 import { prisma } from "../../db/prisma.js";
 import { generateToken, hashToken } from "./portal.tokens.js";
 
-type PrismaLike = typeof prisma | Parameters<
-  Parameters<typeof prisma.$transaction>[0]
->[0];
+type PrismaLike =
+  typeof prisma | Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 /**
  * Per-job issuance cap: at most 5 grants created per job per hour.
@@ -28,26 +27,34 @@ async function assertIssuanceCap(db: PrismaLike, jobId: string) {
 }
 
 /**
- * Issue a new portal access grant for a job.
- * Returns the grant and the plaintext link token (only once).
+ * Load a job scoped to the caller's company, in the query itself.
+ * A job in another company is indistinguishable from a missing job:
+ * both are 404 RESOURCE_NOT_FOUND (a 403 would confirm the id exists).
  */
-export async function issueGrant(
-  context: AuthContext,
+async function loadJobInCompany(
+  db: PrismaLike,
+  companyId: string,
   jobId: string,
 ) {
-  // Verify job belongs to caller's company
-  const job = await prisma.job.findUnique({
-    where: { id: jobId },
-    select: { companyId: true, customerId: true },
+  const job = await db.job.findFirst({
+    where: { id: jobId, companyId },
+    select: { id: true, customerId: true, jobNumber: true },
   });
 
   if (!job) {
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
 
-  if (job.companyId !== context.companyId) {
-    throw new AppError("TENANT_ACCESS_DENIED", "Access denied", 403);
-  }
+  return job;
+}
+
+/**
+ * Issue a new portal access grant for a job.
+ * Returns the grant, the customerId (from the same company-scoped query)
+ * and the plaintext link token (only once).
+ */
+export async function issueGrant(context: AuthContext, jobId: string) {
+  const job = await loadJobInCompany(prisma, context.companyId, jobId);
 
   // Check if an ACTIVE grant already exists
   const existingGrant = await prisma.portalAccessGrant.findFirst({
@@ -65,10 +72,6 @@ export async function issueGrant(
     );
   }
 
-  // Abuse limit: max 5 issuances per job per hour (shared with reissue —
-  // see assertIssuanceCap).
-  await assertIssuanceCap(prisma, jobId);
-
   // Generate grant
   const linkToken = generateToken();
   const linkTokenHash = hashToken(linkToken);
@@ -76,22 +79,43 @@ export async function issueGrant(
     Date.now() + env.PORTAL_LINK_UNUSED_TTL_HOURS * 60 * 60 * 1000,
   );
 
+  // The issuance cap check, the grant and its audit event commit together:
+  // a grant must never exist without its PORTAL_LINK_ISSUED trail.
   let grant: { id: string; linkExpiresAt: Date };
   try {
-    grant = await prisma.portalAccessGrant.create({
-      data: {
-        companyId: context.companyId,
-        customerId: job.customerId,
-        jobId,
-        issuedBy: context.userId,
-        linkTokenHash,
-        linkExpiresAt,
-        status: "ACTIVE",
-      },
-      select: {
-        id: true,
-        linkExpiresAt: true,
-      },
+    grant = await prisma.$transaction(async (tx) => {
+      // Abuse limit: max 5 issuances per job per hour (shared with
+      // reissue — see assertIssuanceCap).
+      await assertIssuanceCap(tx, jobId);
+
+      const created = await tx.portalAccessGrant.create({
+        data: {
+          companyId: context.companyId,
+          customerId: job.customerId,
+          jobId,
+          issuedBy: context.userId,
+          linkTokenHash,
+          linkExpiresAt,
+          status: "ACTIVE",
+        },
+        select: {
+          id: true,
+          linkExpiresAt: true,
+        },
+      });
+
+      await tx.portalAuditEvent.create({
+        data: {
+          companyId: context.companyId,
+          jobId,
+          customerId: job.customerId,
+          grantId: created.id,
+          actorUserId: context.userId,
+          action: "PORTAL_LINK_ISSUED",
+        },
+      });
+
+      return created;
     });
   } catch (error) {
     // Lost a concurrent-issue race: the partial unique index
@@ -111,45 +135,18 @@ export async function issueGrant(
     throw error;
   }
 
-  // Audit the issuance
-  await prisma.portalAuditEvent.create({
-    data: {
-      companyId: context.companyId,
-      jobId,
-      customerId: job.customerId,
-      grantId: grant.id,
-      actorUserId: context.userId,
-      action: "PORTAL_LINK_ISSUED",
-    },
-  });
-
   // Build link
   const link = `${env.PORTAL_PUBLIC_BASE_URL}/open#t=${linkToken}`;
 
-  return { grant, link };
+  return { grant, link, customerId: job.customerId, jobNumber: job.jobNumber };
 }
 
 /**
  * Reissue a portal access grant (deactivate old, create new).
  * Works on COMPLETED jobs for "reactivation".
  */
-export async function reissueGrant(
-  context: AuthContext,
-  jobId: string,
-) {
-  // Verify job belongs to caller's company
-  const job = await prisma.job.findUnique({
-    where: { id: jobId },
-    select: { companyId: true, customerId: true },
-  });
-
-  if (!job) {
-    throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
-  }
-
-  if (job.companyId !== context.companyId) {
-    throw new AppError("TENANT_ACCESS_DENIED", "Access denied", 403);
-  }
+export async function reissueGrant(context: AuthContext, jobId: string) {
+  const job = await loadJobInCompany(prisma, context.companyId, jobId);
 
   // Transaction: deactivate current ACTIVE grant + revoke sessions + create new grant
   const result = await prisma.$transaction(async (tx) => {
@@ -236,7 +233,7 @@ export async function reissueGrant(
     return { grant: newGrant, link };
   });
 
-  return result;
+  return { ...result, customerId: job.customerId, jobNumber: job.jobNumber };
 }
 
 /**
@@ -245,20 +242,9 @@ export async function reissueGrant(
 export async function deactivateGrant(
   context: AuthContext,
   jobId: string,
+  reason?: string,
 ) {
-  // Verify job belongs to caller's company
-  const job = await prisma.job.findUnique({
-    where: { id: jobId },
-    select: { companyId: true },
-  });
-
-  if (!job) {
-    throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
-  }
-
-  if (job.companyId !== context.companyId) {
-    throw new AppError("TENANT_ACCESS_DENIED", "Access denied", 403);
-  }
+  await loadJobInCompany(prisma, context.companyId, jobId);
 
   // Find ACTIVE grant
   const grant = await prisma.portalAccessGrant.findFirst({
@@ -296,7 +282,10 @@ export async function deactivateGrant(
         grantId: grant.id,
         actorUserId: context.userId,
         action: "PORTAL_DEACTIVATED",
-        metadata: { reason: "MANUAL" },
+        metadata: {
+          reason: "MANUAL",
+          ...(reason ? { note: reason } : {}),
+        },
       },
     });
   });
@@ -306,19 +295,7 @@ export async function deactivateGrant(
  * Get portal access status for a job.
  */
 export async function getGrantStatus(context: AuthContext, jobId: string) {
-  // Verify job belongs to caller's company
-  const job = await prisma.job.findUnique({
-    where: { id: jobId },
-    select: { companyId: true },
-  });
-
-  if (!job) {
-    throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
-  }
-
-  if (job.companyId !== context.companyId) {
-    throw new AppError("TENANT_ACCESS_DENIED", "Access denied", 403);
-  }
+  await loadJobInCompany(prisma, context.companyId, jobId);
 
   const grant = await prisma.portalAccessGrant.findFirst({
     where: { jobId },
@@ -344,6 +321,21 @@ export async function getGrantStatus(context: AuthContext, jobId: string) {
     select: { lastSeenAt: true },
   });
 
+  // Last 20 audit events for this job (staff-side portal activity trail).
+  const recentEvents = await prisma.portalAuditEvent.findMany({
+    where: { companyId: context.companyId, jobId },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    select: {
+      id: true,
+      grantId: true,
+      actorUserId: true,
+      action: true,
+      metadata: true,
+      createdAt: true,
+    },
+  });
+
   return {
     status: grant.status,
     createdAt: grant.createdAt,
@@ -351,6 +343,7 @@ export async function getGrantStatus(context: AuthContext, jobId: string) {
     lastSeenAt: session?.lastSeenAt || null,
     deactivatedAt: grant.deactivatedAt,
     deactivatedReason: grant.deactivatedReason,
+    recentEvents,
   };
 }
 
@@ -370,7 +363,7 @@ export async function closePortalIfDone(
   const db = tx ?? prisma;
 
   // Get job and ACTIVE grant in one query
-  const job = await db.job.findUnique({
+  const job = await db.job.findFirst({
     where: { id: jobId },
     select: {
       id: true,

@@ -1,1 +1,1 @@
-[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.example.aera","sha256_cert_fingerprints":["PENDING_RELEASE_SHA256_FROM_MOIZ"]}}]
+[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.example.aera","sha256_cert_fingerprints":["72:63:68:63:6D:FA:80:69:C6:76:A2:FC:18:9D:87:6A:4E:7D:4C:23:38:FC:97:C8:75:20:52:48:BC:D8:0D:D1"]}}]

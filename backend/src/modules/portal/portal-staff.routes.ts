@@ -1,17 +1,68 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../../common/auth/auth.middleware.js";
-import { prisma } from "../../db/prisma.js";
-import { issueGrant, reissueGrant, deactivateGrant, getGrantStatus } from "./portal.grants.js";
+import {
+  issueGrant,
+  reissueGrant,
+  deactivateGrant,
+  getGrantStatus,
+} from "./portal.grants.js";
 import { sendPortalLink } from "./portal-delivery.service.js";
-import { regenerateHandshake } from "../jobs/handshake.service.js";
 import { portalWriteRateLimiter } from "../../common/rateLimit.js";
 
-const router = Router();
+// mergeParams: this router is mounted at /jobs/:jobId in job.routes.ts, so
+// the jobId lives on the parent router's params.
+const router = Router({ mergeParams: true });
 
-// All routes require authentication and OWNER/DISPATCHER role
-router.use(requireAuth);
-router.use(requireRole("OWNER", "DISPATCHER"));
+// Auth + role are applied PER ROUTE, not router-wide: a router-level
+// requireRole would also run for unmatched /jobs/:jobId/* paths and answer
+// 403 where the correct response is 404.
+const staffOnly = [requireAuth, requireRole("OWNER", "DISPATCHER")] as const;
+
+const channelsSchema = z.object({
+  channels: z
+    .array(z.enum(["SMS", "EMAIL"]))
+    .min(1)
+    .default(["SMS", "EMAIL"]),
+});
+
+const deactivateSchema = z.object({
+  reason: z.string().trim().max(300).optional(),
+});
+
+const jobIdSchema = z.string().uuid();
+
+function parseJobId(request: Request, response: Response): string | null {
+  const parsed = jobIdSchema.safeParse(request.params.jobId);
+  if (!parsed.success) {
+    response.status(422).json({
+      error: {
+        code: "VALIDATION_FAILED",
+        message: "jobId must be a UUID",
+      },
+    });
+    return null;
+  }
+  return parsed.data;
+}
+
+function parseBody<T>(
+  schema: z.ZodType<T>,
+  request: Request,
+  response: Response,
+): T | null {
+  const parsed = schema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    response.status(422).json({
+      error: {
+        code: "VALIDATION_FAILED",
+        message: parsed.error.issues.map((issue) => issue.message).join(", "),
+      },
+    });
+    return null;
+  }
+  return parsed.data;
+}
 
 /**
  * POST /api/v1/jobs/:jobId/portal-access
@@ -19,69 +70,30 @@ router.use(requireRole("OWNER", "DISPATCHER"));
  */
 router.post(
   "/portal-access",
+  ...staffOnly,
   portalWriteRateLimiter,
   async (request, response) => {
-    // Extract jobId from original URL since params is stripped by sub-router mounting
-    const jobIdMatch = request.originalUrl?.match(/\/jobs\/([^/]+)\/portal-access/);
-    const jobId = jobIdMatch ? jobIdMatch[1] : (request.params as { jobId?: string }).jobId;
+    const jobId = parseJobId(request, response);
+    if (!jobId) return;
 
-    if (!jobId) {
-      response.status(400).json({
-        error: {
-          code: "INVALID_REQUEST",
-          message: "Job ID is required",
-        },
-      });
-      return;
-    }
+    const parsed = parseBody(channelsSchema, request, response);
+    if (!parsed) return;
 
-    const parsed = z
-      .object({
-        channels: z
-          .array(z.enum(["SMS", "EMAIL"]))
-          .min(1)
-          .default(["SMS", "EMAIL"]),
-      })
-      .safeParse(request.body);
-
-    if (!parsed.success) {
-      response.status(422).json({
-        error: {
-          code: "VALIDATION_FAILED",
-          message: parsed.error.issues.map((issue) => issue.message).join(", "),
-        },
-      });
-      return;
-    }
-
-    const { grant, link } = await issueGrant(
+    const { grant, link, customerId, jobNumber } = await issueGrant(
       request.auth!,
       jobId,
     );
 
-    // Fetch job to get customerId
-    const job = await prisma.job.findUnique({
-      where: { id: jobId },
-      select: { customerId: true },
-    });
-
-    if (!job) {
-      response.status(404).json({
-        error: {
-          code: "RESOURCE_NOT_FOUND",
-          message: "Job not found",
-        },
-      });
-      return;
-    }
-
-    // Send link via selected channels
-    const deliveries = await sendPortalLink(
-      request.auth!.companyId,
-      job.customerId,
+    // Queue link delivery via selected channels (never fails issuance)
+    const deliveries = await sendPortalLink({
+      companyId: request.auth!.companyId,
+      customerId,
+      jobId,
+      grantId: grant.id,
+      jobNumber,
       link,
-      parsed.data.channels,
-    );
+      channels: parsed.channels,
+    });
 
     response.status(201).json({
       data: {
@@ -100,68 +112,30 @@ router.post(
  */
 router.post(
   "/portal-access/reissue",
+  ...staffOnly,
   portalWriteRateLimiter,
   async (request, response) => {
-    const jobIdMatch = request.originalUrl?.match(/\/jobs\/([^/]+)\/portal-access/);
-    const jobId = jobIdMatch ? jobIdMatch[1] : (request.params as { jobId?: string }).jobId;
+    const jobId = parseJobId(request, response);
+    if (!jobId) return;
 
-    if (!jobId) {
-      response.status(400).json({
-        error: {
-          code: "INVALID_REQUEST",
-          message: "Job ID is required",
-        },
-      });
-      return;
-    }
+    const parsed = parseBody(channelsSchema, request, response);
+    if (!parsed) return;
 
-    const parsed = z
-      .object({
-        channels: z
-          .array(z.enum(["SMS", "EMAIL"]))
-          .min(1)
-          .default(["SMS", "EMAIL"]),
-      })
-      .safeParse(request.body);
-
-    if (!parsed.success) {
-      response.status(422).json({
-        error: {
-          code: "VALIDATION_FAILED",
-          message: parsed.error.issues.map((issue) => issue.message).join(", "),
-        },
-      });
-      return;
-    }
-
-    const { grant, link } = await reissueGrant(
+    const { grant, link, customerId, jobNumber } = await reissueGrant(
       request.auth!,
       jobId,
     );
 
-    // Fetch job to get customerId
-    const job = await prisma.job.findUnique({
-      where: { id: jobId },
-      select: { customerId: true },
-    });
-
-    if (!job) {
-      response.status(404).json({
-        error: {
-          code: "RESOURCE_NOT_FOUND",
-          message: "Job not found",
-        },
-      });
-      return;
-    }
-
-    // Send link via selected channels
-    const deliveries = await sendPortalLink(
-      request.auth!.companyId,
-      job.customerId,
+    // Queue link delivery via selected channels (never fails reissue)
+    const deliveries = await sendPortalLink({
+      companyId: request.auth!.companyId,
+      customerId,
+      jobId,
+      grantId: grant.id,
+      jobNumber,
       link,
-      parsed.data.channels,
-    );
+      channels: parsed.channels,
+    });
 
     response.status(201).json({
       data: {
@@ -176,38 +150,21 @@ router.post(
 
 /**
  * POST /api/v1/jobs/:jobId/portal-access/deactivate
- * Deactivate a portal access grant manually.
+ * Deactivate a portal access grant manually. An optional free-text reason
+ * (≤300 chars) is stored on the audit event.
  */
 router.post(
   "/portal-access/deactivate",
+  ...staffOnly,
   portalWriteRateLimiter,
   async (request, response) => {
-    const jobIdMatch = request.originalUrl?.match(/\/jobs\/([^/]+)\/portal-access/);
-    const jobId = jobIdMatch ? jobIdMatch[1] : (request.params as { jobId?: string }).jobId;
+    const jobId = parseJobId(request, response);
+    if (!jobId) return;
 
-    if (!jobId) {
-      response.status(400).json({
-        error: {
-          code: "INVALID_REQUEST",
-          message: "Job ID is required",
-        },
-      });
-      return;
-    }
+    const parsed = parseBody(deactivateSchema, request, response);
+    if (!parsed) return;
 
-    const parsed = z.object({}).safeParse(request.body);
-
-    if (!parsed.success) {
-      response.status(422).json({
-        error: {
-          code: "VALIDATION_FAILED",
-          message: parsed.error.issues.map((issue) => issue.message).join(", "),
-        },
-      });
-      return;
-    }
-
-    await deactivateGrant(request.auth!, jobId);
+    await deactivateGrant(request.auth!, jobId, parsed.reason);
 
     response.status(200).json({
       data: { success: true },
@@ -217,21 +174,11 @@ router.post(
 
 /**
  * GET /api/v1/jobs/:jobId/portal-access
- * Get portal access status for a job.
+ * Get portal access status for a job (includes the last 20 audit events).
  */
-router.get("/portal-access", async (request, response) => {
-  const jobIdMatch = request.originalUrl?.match(/\/jobs\/([^/]+)\/portal-access/);
-  const jobId = jobIdMatch ? jobIdMatch[1] : (request.params as { jobId?: string }).jobId;
-
-  if (!jobId) {
-    response.status(400).json({
-      error: {
-        code: "INVALID_REQUEST",
-        message: "Job ID is required",
-      },
-    });
-    return;
-  }
+router.get("/portal-access", ...staffOnly, async (request, response) => {
+  const jobId = parseJobId(request, response);
+  if (!jobId) return;
 
   const status = await getGrantStatus(request.auth!, jobId);
 
@@ -247,29 +194,7 @@ router.get("/portal-access", async (request, response) => {
   });
 });
 
-/**
- * POST /api/v1/jobs/:jobId/handshake/regenerate
- * Regenerate handshake code (staff-only). Bumps the handshake version,
- * which changes the derived code, and re-delivers it to the customer.
- * The staff start override lives at POST /jobs/:jobId/start/override.
- */
-router.post("/handshake/regenerate", portalWriteRateLimiter, async (request, response) => {
-  const jobIdMatch = request.originalUrl?.match(/\/jobs\/([^/]+)\/handshake/);
-  const jobId = jobIdMatch ? jobIdMatch[1] : (request.params as { jobId?: string }).jobId;
-
-  if (!jobId) {
-    response.status(400).json({
-      error: {
-        code: "INVALID_REQUEST",
-        message: "Job ID is required",
-      },
-    });
-    return;
-  }
-
-  const data = await regenerateHandshake(request.auth!, jobId);
-
-  response.status(200).json({ data });
-});
+// No handshake/regenerate route: D1 decision (Moiz, 2026-10-26) removed it.
+// The staff start override lives at POST /jobs/:jobId/start/override.
 
 export { router as portalStaffRouter };

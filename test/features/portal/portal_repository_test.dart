@@ -294,7 +294,7 @@ void main() {
                 'region': 'TX',
                 'postalCode': '78701',
               },
-              'technician': {'firstName': 'Mike', 'lastName': 'Tech'},
+              'technician': {'firstName': 'Mike', 'lastInitial': 'T'},
               'handshake': {'code': '483920', 'technicianName': 'Mike'},
             },
             'quotes': [
@@ -339,7 +339,7 @@ void main() {
       expect(snapshot.job.jobNumber, 1042);
       expect(snapshot.job.status, 'EN_ROUTE');
       expect(snapshot.job.address!.city, 'Austin');
-      expect(snapshot.job.technician!.fullName, 'Mike Tech');
+      expect(snapshot.job.technician!.fullName, 'Mike T.');
       expect(snapshot.job.handshake!.code, '483920');
       expect(snapshot.quotes.single.totalMinor, 10800);
       expect(snapshot.quotes.single.items.single.totalMinor, 10000);

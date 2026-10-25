@@ -276,6 +276,15 @@ export async function sendQuote(context: AuthContext, quoteId: string) {
       409,
     );
   }
+  // D4 decision (Moiz, 2026-10-26): the customer portal is job-scoped, so a
+  // quote with no job could never be shown to the customer. Block the send.
+  if (!quote.jobId) {
+    throw new AppError(
+      "QUOTE_REQUIRES_JOB",
+      "Connect this quote to a job first",
+      422,
+    );
+  }
   if (quote.expiresAt && quote.expiresAt.getTime() <= Date.now()) {
     throw new AppError(
       "QUOTE_EXPIRED",

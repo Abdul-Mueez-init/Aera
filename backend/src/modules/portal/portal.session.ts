@@ -66,19 +66,25 @@ export function clearPortalSessionCookie(response: Response): void {
   });
 }
 
+type PrismaLike =
+  typeof prisma | Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
 /**
  * Create a new portal session.
  * Returns the plaintext session token (for immediate use) and the session record.
+ * Pass a transaction client as `db` to create the session atomically with
+ * the caller's other writes (the exchange flow relies on this: if session
+ * creation fails, the link burn rolls back with it).
  */
 export async function createPortalSession(
   grantId: string,
-  request?: Request,
+  userAgent?: string,
+  db: PrismaLike = prisma,
 ) {
   const sessionToken = generateToken();
   const sessionTokenHash = hashToken(sessionToken);
 
   // Hash user agent for device fingerprinting (optional, for security analysis)
-  const userAgent = request?.headers["user-agent"];
   const userAgentHash = userAgent ? hashToken(userAgent) : null;
 
   const now = new Date();
@@ -87,7 +93,7 @@ export async function createPortalSession(
   );
 
   // First, get the grant to fetch companyId, customerId, jobId
-  const grant = await prisma.portalAccessGrant.findUnique({
+  const grant = await db.portalAccessGrant.findFirst({
     where: { id: grantId },
     select: { companyId: true, customerId: true, jobId: true },
   });
@@ -96,7 +102,7 @@ export async function createPortalSession(
     throw new Error("Grant not found");
   }
 
-  const session = await prisma.portalSession.create({
+  const session = await db.portalSession.create({
     data: {
       grantId,
       companyId: grant.companyId,
@@ -123,9 +129,7 @@ export async function createPortalSession(
  * Validate a portal session and load its associated grant.
  * Throws if the session is invalid, expired, revoked, or the grant is deactivated.
  */
-export async function validatePortalSession(
-  sessionToken: string,
-): Promise<{
+export async function validatePortalSession(sessionToken: string): Promise<{
   sessionId: string;
   grantId: string;
   companyId: string;
@@ -153,11 +157,7 @@ export async function validatePortalSession(
   });
 
   if (!session) {
-    throw new AppError(
-      "PORTAL_SESSION_INVALID",
-      "Invalid portal session",
-      401,
-    );
+    throw new AppError("PORTAL_SESSION_INVALID", "Invalid portal session", 401);
   }
 
   if (session.revokedAt || session.grant.status === "DEACTIVATED") {
@@ -174,8 +174,8 @@ export async function validatePortalSession(
   // but a session must also die here if the customer is no longer
   // ACTIVE for any other reason (e.g. archived before that cleanup
   // existed, or archived through a different path).
-  const customer = await prisma.customer.findUnique({
-    where: { id: session.grant.customerId },
+  const customer = await prisma.customer.findFirst({
+    where: { id: session.customerId, companyId: session.companyId },
     select: { status: true },
   });
   if (!customer || customer.status !== "ACTIVE") {
@@ -190,10 +190,17 @@ export async function validatePortalSession(
 
   const now = new Date();
   if (session.expiresAt < now) {
+    // The expired-session response carries the company contact payload so
+    // the closed screen can show the customer who to contact.
+    const contacts = await getCompanyContacts(session.companyId);
     throw new AppError(
       "PORTAL_SESSION_EXPIRED",
       "Portal session has expired",
       401,
+      {
+        state: "EXPIRED",
+        ...contacts,
+      },
     );
   }
 
@@ -201,10 +208,12 @@ export async function validatePortalSession(
   const idleMs = now.getTime() - session.lastSeenAt.getTime();
   const idleDays = idleMs / (24 * 60 * 60 * 1000);
   if (idleDays > env.PORTAL_SESSION_IDLE_DAYS) {
+    const contacts = await getCompanyContacts(session.companyId);
     throw new AppError(
       "PORTAL_SESSION_EXPIRED",
       "Portal session has expired due to inactivity",
       401,
+      { state: "EXPIRED", ...contacts },
     );
   }
 

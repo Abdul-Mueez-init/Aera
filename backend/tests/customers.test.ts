@@ -315,15 +315,12 @@ describe("customer portal access", () => {
       });
     expect(address.status).toBe(201);
 
-    const job = await request(app)
-      .post("/api/v1/jobs")
-      .set(auth)
-      .send({
-        customerId,
-        serviceAddressId: address.body.data.id,
-        serviceType: "AC Service",
-        problemDescription: "Annual maintenance visit",
-      });
+    const job = await request(app).post("/api/v1/jobs").set(auth).send({
+      customerId,
+      serviceAddressId: address.body.data.id,
+      serviceType: "AC Service",
+      problemDescription: "Annual maintenance visit",
+    });
     expect(job.status).toBe(201);
 
     return { customerId, job: job.body.data };
@@ -343,9 +340,9 @@ describe("customer portal access", () => {
     expect(typeof portal.body.data.grantId).toBe("string");
     expect(typeof portal.body.data.link).toBe("string");
     expect(portal.body.data.link).toContain("#t=");
-    expect(
-      new Date(portal.body.data.linkExpiresAt).getTime(),
-    ).toBeGreaterThan(Date.now());
+    expect(new Date(portal.body.data.linkExpiresAt).getTime()).toBeGreaterThan(
+      Date.now(),
+    );
 
     // The plaintext token travels only in the link fragment.
     const token = (portal.body.data.link as string).split("#t=")[1];
@@ -354,6 +351,7 @@ describe("customer portal access", () => {
 
     const exchange = await request(app)
       .post("/api/v1/portal/exchange")
+      .set("X-Aera-Portal", "1")
       .send({ token });
     expect(exchange.status).toBe(200);
     expect(exchange.body.data.state).toBe("ACTIVE");
@@ -377,17 +375,15 @@ describe("customer portal access", () => {
     const authA = { Authorization: `Bearer ${companyA.accessToken}` };
     const authB = { Authorization: `Bearer ${companyB.accessToken}` };
 
-    const { job: jobB } = await createCustomerWithJob(
-      authB,
-      "Cross",
-      "Tenant",
-    );
+    const { job: jobB } = await createCustomerWithJob(authB, "Cross", "Tenant");
 
     const portal = await request(app)
       .post(`/api/v1/jobs/${jobB.id}/portal-access`)
       .set(authA)
       .send({});
-    expect(portal.status).toBe(403);
-    expect(portal.body.error.code).toBe("TENANT_ACCESS_DENIED");
+    // Another company's job is indistinguishable from a missing job:
+    // 404 (a 403 would confirm the job id exists).
+    expect(portal.status).toBe(404);
+    expect(portal.body.error.code).toBe("RESOURCE_NOT_FOUND");
   });
 });

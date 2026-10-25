@@ -200,6 +200,27 @@ describe("Handshake (handoff 5.7)", () => {
     expect(updated.handshakeVerifiedAt).toBeNull();
   });
 
+  it("staff and technician job responses never contain the code or its version (D2)", async () => {
+    const job = await seedJob({ status: "EN_ROUTE" });
+    const code = codeFor(job.id, 1);
+
+    for (const auth of [owner.auth, technician.auth]) {
+      const detail = await request(app)
+        .get(`/api/v1/jobs/${job.id}`)
+        .set(auth);
+      expect(detail.status).toBe(200);
+      const serialized = JSON.stringify(detail.body);
+      expect(serialized).not.toContain(`"code":"${code}"`);
+      expect(serialized).not.toContain("handshakeVersion");
+      // Only the handshake STATE is exposed to staff surfaces.
+      expect(detail.body.data.handshake.state).toBe("AWAITING_CODE");
+    }
+
+    const list = await request(app).get(`/api/v1/jobs`).set(owner.auth);
+    expect(list.status).toBe(200);
+    expect(JSON.stringify(list.body)).not.toContain("handshakeVersion");
+  });
+
   it("start with correct code moves EN_ROUTE to IN_PROGRESS and writes history + audit", async () => {
     const job = await seedJob({ status: "EN_ROUTE" });
     const code = codeFor(job.id, 1);
@@ -288,6 +309,69 @@ describe("Handshake (handoff 5.7)", () => {
       .send({ code: codeFor(job.id, 1) });
     expect(duringLock.status).toBe(423);
     expect(duringLock.body.error.code).toBe("HANDSHAKE_LOCKED");
+  });
+
+  it("20 parallel wrong codes lock the job and the counter reaches the max", async () => {
+    const job = await seedJob({ status: "EN_ROUTE" });
+    const wrong = wrongCodeFor(job.id, 1);
+
+    const responses = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        request(app)
+          .post(`/api/v1/jobs/${job.id}/start`)
+          .set(technician.auth)
+          .send({ code: wrong }),
+      ),
+    );
+
+    // Every attempt is rejected: 422 while counting, 423 once locked.
+    for (const response of responses) {
+      expect([422, 423]).toContain(response.status);
+    }
+
+    const updated = await prisma.job.findUniqueOrThrow({
+      where: { id: job.id },
+    });
+    // The atomic increment must not lose counts under concurrency: the
+    // counter reaches at least HANDSHAKE_MAX_ATTEMPTS and the lock is set.
+    expect(updated.handshakeFailedAttempts).toBeGreaterThanOrEqual(5);
+    expect(updated.handshakeLockedUntil).not.toBeNull();
+    expect(updated.handshakeLockedUntil!.getTime()).toBeGreaterThan(Date.now());
+    expect(updated.status).toBe("EN_ROUTE");
+  });
+
+  it("an expired lock resets the failure counter instead of re-locking on one typo", async () => {
+    const job = await seedJob({
+      status: "EN_ROUTE",
+      handshakeFailedAttempts: 5,
+      handshakeLockedUntil: new Date(Date.now() - 60 * 1000),
+    });
+    const wrong = wrongCodeFor(job.id, 1);
+
+    const response = await request(app)
+      .post(`/api/v1/jobs/${job.id}/start`)
+      .set(technician.auth)
+      .send({ code: wrong });
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe("HANDSHAKE_INVALID");
+
+    const updated = await prisma.job.findUniqueOrThrow({
+      where: { id: job.id },
+    });
+    // Counter restarted from zero: this typo is attempt #1, not #6,
+    // and no new lock was set.
+    expect(updated.handshakeFailedAttempts).toBe(1);
+    expect(
+      updated.handshakeLockedUntil === null ||
+        updated.handshakeLockedUntil.getTime() <= Date.now(),
+    ).toBe(true);
+
+    // And the correct code still works right after.
+    const ok = await request(app)
+      .post(`/api/v1/jobs/${job.id}/start`)
+      .set(technician.auth)
+      .send({ code: codeFor(job.id, 1) });
+    expect(ok.status).toBe(200);
   });
 
   it("POST /jobs/:id/status cannot move EN_ROUTE to IN_PROGRESS (422 HANDSHAKE_REQUIRED) for any role", async () => {

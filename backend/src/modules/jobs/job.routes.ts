@@ -354,8 +354,8 @@ router.get("/:jobId/history", requireAuth, async (request, response) => {
 });
 
 // Mount portal staff routes under /jobs/:jobId — the staff router itself
-// defines /portal-access, /portal-access/reissue, /portal-access/deactivate
-// and /handshake/regenerate, so the composed paths match the API contract.
+// defines /portal-access, /portal-access/reissue and /portal-access/deactivate,
+// so the composed paths match the API contract.
 router.use("/:jobId", portalStaffRouter);
 
 export { router as jobRouter };

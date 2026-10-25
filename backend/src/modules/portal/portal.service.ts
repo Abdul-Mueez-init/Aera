@@ -2,10 +2,7 @@ import { AppError } from "../../common/errors.js";
 import { env } from "../../config/env.js";
 import { prisma } from "../../db/prisma.js";
 import { getCompanyContacts } from "./portal.contacts.js";
-import {
-  createPortalSession,
-  revokePortalSession,
-} from "./portal.session.js";
+import { createPortalSession, revokePortalSession } from "./portal.session.js";
 import { hashToken } from "./portal.tokens.js";
 import { closePortalIfDone } from "./portal.grants.js";
 import { processQuoteResponse } from "../quotes/quote.service.js";
@@ -23,7 +20,7 @@ function jsonSafe<T>(value: T): T {
  * Exchange a link token for a session.
  * Single-use, atomic burn.
  */
-export async function exchangeToken(token: string) {
+export async function exchangeToken(token: string, userAgent?: string) {
   const tokenHash = hashToken(token);
 
   // Find grant by hash
@@ -40,11 +37,7 @@ export async function exchangeToken(token: string) {
   });
 
   if (!grant) {
-    throw new AppError(
-      "PORTAL_LINK_INVALID",
-      "Invalid portal link",
-      401,
-    );
+    throw new AppError("PORTAL_LINK_INVALID", "Invalid portal link", 401);
   }
 
   // Check if deactivated
@@ -61,8 +54,8 @@ export async function exchangeToken(token: string) {
   // An archived customer must not be able to open a fresh session even
   // if a grant somehow remained ACTIVE (defence in depth alongside the
   // archive-time deactivation in archiveCustomer).
-  const grantCustomer = await prisma.customer.findUnique({
-    where: { id: grant.customerId },
+  const grantCustomer = await prisma.customer.findFirst({
+    where: { id: grant.customerId, companyId: grant.companyId },
     select: { status: true },
   });
   if (!grantCustomer || grantCustomer.status !== "ACTIVE") {
@@ -75,51 +68,74 @@ export async function exchangeToken(token: string) {
     );
   }
 
-  // Check if already used
+  // Check if already used — the response carries the company contact
+  // payload so the "already used" screen can show who to ask for a new link.
   if (grant.linkConsumedAt) {
+    const contacts = await getCompanyContacts(grant.companyId);
     throw new AppError(
       "PORTAL_LINK_ALREADY_USED",
       "This link was already opened on another device — ask your service provider to send a new one",
       409,
+      { state: "ALREADY_USED", ...contacts },
     );
   }
 
   // Check if expired
   if (grant.linkExpiresAt < new Date()) {
     const contacts = await getCompanyContacts(grant.companyId);
-    throw new AppError(
-      "PORTAL_LINK_EXPIRED",
-      "Portal link has expired",
-      410,
-      { state: "DEACTIVATED", ...contacts },
-    );
+    throw new AppError("PORTAL_LINK_EXPIRED", "Portal link has expired", 410, {
+      state: "DEACTIVATED",
+      ...contacts,
+    });
   }
 
-  // Atomic burn: updateMany ensures only one concurrent request succeeds
+  // Burn + session + audit commit in ONE transaction: if session creation
+  // fails, the burn rolls back and the link stays usable. The guarded
+  // updateMany is the single-use guarantee under concurrency — exactly one
+  // concurrent exchange can win it.
   const now = new Date();
-  const burnResult = await prisma.portalAccessGrant.updateMany({
-    where: {
-      id: grant.id,
-      status: "ACTIVE",
-      linkConsumedAt: null,
-      linkExpiresAt: { gt: now },
-    },
-    data: { linkConsumedAt: now },
+  const exchanged = await prisma.$transaction(async (tx) => {
+    const burnResult = await tx.portalAccessGrant.updateMany({
+      where: {
+        id: grant.id,
+        status: "ACTIVE",
+        linkConsumedAt: null,
+        linkExpiresAt: { gt: now },
+      },
+      data: { linkConsumedAt: now },
+    });
+
+    if (burnResult.count !== 1) {
+      return null;
+    }
+
+    const { sessionToken } = await createPortalSession(grant.id, userAgent, tx);
+
+    await tx.portalAuditEvent.create({
+      data: {
+        companyId: grant.companyId,
+        jobId: grant.jobId,
+        customerId: grant.customerId,
+        grantId: grant.id,
+        action: "PORTAL_LINK_EXCHANGED",
+      },
+    });
+
+    return { sessionToken };
   });
 
-  if (burnResult.count !== 1) {
+  if (!exchanged) {
     // Lost the race - treat as already used
+    const contacts = await getCompanyContacts(grant.companyId);
     throw new AppError(
       "PORTAL_LINK_ALREADY_USED",
       "This link was already opened on another device — ask your service provider to send a new one",
       409,
+      { state: "ALREADY_USED", ...contacts },
     );
   }
 
-  // Create session
-  const { sessionToken } = await createPortalSession(grant.id);
-
-  return { sessionToken, grant };
+  return { sessionToken: exchanged.sessionToken, grant };
 }
 
 /**
@@ -175,6 +191,8 @@ export async function getPortalJob(
         where: {
           status: { in: ["SENT", "APPROVED", "DECLINED"] },
         },
+        take: 20,
+        orderBy: { createdAt: "desc" },
         select: {
           id: true,
           status: true,
@@ -243,7 +261,11 @@ export async function getPortalJob(
 
   // Derive handshake code if EN_ROUTE and not verified
   let handshake: { code: string; technicianName: string } | null = null;
-  if (job.status === "EN_ROUTE" && !job.handshakeVerifiedAt && job.assignedTechnician) {
+  if (
+    job.status === "EN_ROUTE" &&
+    !job.handshakeVerifiedAt &&
+    job.assignedTechnician
+  ) {
     // Derive code from handshakeVersion
     const { deriveHandshakeCode } = await import("./portal.tokens.js");
     const code = deriveHandshakeCode(
@@ -268,10 +290,12 @@ export async function getPortalJob(
       scheduledEnd: job.scheduledEnd,
       completedAt: job.completedAt,
       address: job.serviceAddress,
+      // Privacy: the customer sees first name + last initial only,
+      // never the technician's full surname.
       technician: job.assignedTechnician
         ? {
             firstName: job.assignedTechnician.firstName,
-            lastName: job.assignedTechnician.lastName,
+            lastInitial: job.assignedTechnician.lastName.charAt(0),
           }
         : null,
       handshake,
@@ -413,6 +437,16 @@ export async function submitReview(
         rating: true,
         comment: true,
         createdAt: true,
+      },
+    });
+
+    await prisma.portalAuditEvent.create({
+      data: {
+        companyId,
+        jobId,
+        customerId,
+        action: "PORTAL_REVIEW_SUBMITTED",
+        metadata: { reviewId: review.id, rating },
       },
     });
 

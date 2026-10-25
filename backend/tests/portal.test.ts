@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach } from "vitest";
 import request from "supertest";
 import { buildApp } from "../src/app.js";
 import { prisma } from "../src/db/prisma.js";
-import { generateToken, hashToken } from "../src/modules/portal/portal.tokens.js";
+import {
+  generateToken,
+  hashToken,
+} from "../src/modules/portal/portal.tokens.js";
 
 describe("Portal API", () => {
   let app: ReturnType<typeof buildApp>;
@@ -91,6 +94,7 @@ describe("Portal API", () => {
 
       const response = await request(app)
         .post("/api/v1/portal/exchange")
+        .set("X-Aera-Portal", "1")
         .send({ token: linkToken, deliver: "cookie" })
         .expect(200);
 
@@ -172,6 +176,7 @@ describe("Portal API", () => {
 
       const response = await request(app)
         .post("/api/v1/portal/exchange")
+        .set("X-Aera-Portal", "1")
         .send({ token: linkToken, deliver: "bearer" })
         .expect(200);
 
@@ -183,6 +188,7 @@ describe("Portal API", () => {
     it("should reject invalid token", async () => {
       const response = await request(app)
         .post("/api/v1/portal/exchange")
+        .set("X-Aera-Portal", "1")
         .send({ token: "invalid" })
         .expect(422);
 
@@ -194,6 +200,7 @@ describe("Portal API", () => {
 
       const response = await request(app)
         .post("/api/v1/portal/exchange")
+        .set("X-Aera-Portal", "1")
         .send({ token: linkToken })
         .expect(401);
 
@@ -262,6 +269,7 @@ describe("Portal API", () => {
 
       const response = await request(app)
         .post("/api/v1/portal/exchange")
+        .set("X-Aera-Portal", "1")
         .send({ token: linkToken })
         .expect(409);
 
@@ -329,6 +337,7 @@ describe("Portal API", () => {
 
       const response = await request(app)
         .post("/api/v1/portal/exchange")
+        .set("X-Aera-Portal", "1")
         .send({ token: linkToken })
         .expect(410);
 

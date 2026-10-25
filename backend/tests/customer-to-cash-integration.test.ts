@@ -718,17 +718,23 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     await prisma.company.deleteMany({ where: { id: owner2.companyId } });
   });
 
-  it("validates customer-to-quote-to-approval flow without job dependency", async () => {
+  it("validates customer-to-quote-to-approval flow", async () => {
     const owner = await registerOwner("c2c-quote-flow");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
+    // D4 (Moiz, 2026-10-26): sending a quote requires a linked job, so
+    // this flow attaches one. The job-less send block itself is pinned
+    // by the QUOTE_REQUIRES_JOB test in quote-lifecycle.test.ts.
+    const jobId = await createJob(auth, customerId, serviceAddressId);
 
-    // STEP 1: Create standalone quote (not linked to job)
+    // STEP 1: Create the quote linked to the job
     const quote = await request(app)
       .post("/api/v1/quotes")
       .set(auth)
       .send({
         customerId,
+        jobId,
         currency: "USD",
         expiresAt: new Date(Date.now() + 86400 * 1000),
         items: [
@@ -770,9 +776,7 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     expect(sentQuote.status).toBe("SENT");
     expect(sentQuote.shareToken).toBeUndefined();
 
-    // STEP 3: Approve the quote via the staff respond command (the
-    // customer portal is job-scoped, so a job-less quote is decided
-    // through the staff path).
+    // STEP 3: Approve the quote via the staff respond command.
     const approveRes = await request(app)
       .post(`/api/v1/quotes/${quote.body.data.id}/respond`)
       .set(auth)
@@ -835,8 +839,9 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     expect(ourQuote).toBeDefined();
     expect(ourQuote.status).toBe("APPROVED");
 
-    // Clean up
+    // Clean up (jobs before customers: jobs hold a customer FK)
     await prisma.quote.deleteMany({ where: { companyId: owner.companyId } });
+    await prisma.job.deleteMany({ where: { companyId: owner.companyId } });
     await prisma.customer.deleteMany({ where: { companyId: owner.companyId } });
     await prisma.company.deleteMany({ where: { id: owner.companyId } });
     await prisma.company.deleteMany({ where: { id: owner2.companyId } });

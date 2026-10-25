@@ -96,7 +96,9 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     } catch (e) {
       if (mounted) {
         final message = e is ApiException
-            ? e.message
+            ? (e.code == 'QUOTE_REQUIRES_JOB'
+                  ? 'Connect this quote to a job first'
+                  : e.message)
             : 'Could not send quote. Please try again.';
         ScaffoldMessenger.of(
           context,

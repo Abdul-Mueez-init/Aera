@@ -15,160 +15,226 @@ const optionalUrl = z
   .optional()
   .or(z.literal("").transform(() => undefined));
 
-const envSchema = z.object({
-  NODE_ENV: z
-    .enum(["development", "test", "staging", "production"])
-    .default("development"),
-  HOST: z.string().default("127.0.0.1"),
-  PORT: z.coerce.number().int().positive().default(4000),
-  // Number of reverse-proxy hops in front of the API (Render/Railway/Fly = 1).
-  // 0 = no proxy. Without this, request.ip is the proxy's IP for every client,
-  // so IP-keyed rate limits would be shared across ALL users.
-  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
-  LOG_LEVEL: z.string().default("info"),
-  DATABASE_URL: z.string().url(),
-  DIRECT_URL: z.string().url(),
-  JWT_SECRET: z.string().min(32),
-  JWT_ISSUER: z.string().default("aera-api"),
-  ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
-  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
-  SUPABASE_URL: z.string().url(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
-  SUPABASE_JOB_PHOTOS_BUCKET: z.string().trim().min(1).default("job-photos"),
-  // OpenStreetMap configuration for geocoding and neighborhood discovery.
-  // No API keys required; these are public services with usage policies.
-  // OSM_USER_AGENT identifies the client to OSM services (required by policy).
-  OSM_USER_AGENT: z
-    .string()
-    .trim()
-    .min(1)
-    .default("AeraFieldService/1.0 (+https://quantixlabs.live)"),
-  // Nominatim base URL for geocoding (address ↔ coordinates).
-  NOMINATIM_BASE_URL: z
-    .string()
-    .url()
-    .default("https://nominatim.openstreetmap.org"),
-  // Overpass API base URL for neighborhood discovery.
-  OVERPASS_BASE_URL: z
-    .string()
-    .url()
-    .default("https://overpass-api.de/api/interpreter"),
-  // Phase 10 Slice D — email adapter (Resend: https://resend.com).
-  // Left unset in local/dev/test: resend-email.adapter.ts skips sending and
-  // logs a warning instead of failing, so no key is required to run the app
-  // or test suite. Set it to send real email.
-  RESEND_API_KEY: optionalNonEmptyString,
-  // Resend's shared sandbox sender works without domain verification; swap
-  // to a verified sending domain before relying on this in production.
-  RESEND_FROM_EMAIL: z
-    .string()
-    .trim()
-    .min(1)
-    .default("Aera <onboarding@resend.dev>"),
-  // Phase 10 Slice E — push adapter (Firebase Cloud Messaging, HTTP v1 API).
-  // All three come from one Firebase service-account JSON key. Left unset
-  // in local/dev/test: fcm-push.adapter.ts skips sending and logs a warning
-  // instead of failing, so no credentials are required to run the app or
-  // test suite. Set them to send real push notifications.
-  FIREBASE_PROJECT_ID: optionalNonEmptyString,
-  FIREBASE_CLIENT_EMAIL: optionalNonEmptyString,
-  // Keep the literal "\n" sequences from the downloaded JSON key when
-  // pasting this into .env — fcm-push.adapter.ts restores real newlines
-  // before using the key.
-  FIREBASE_PRIVATE_KEY: optionalNonEmptyString,
-  // Phase 10 Slice F — SMS adapter (textbee.dev — Android SMS gateway).
-  // Left unset in local/dev/test: textbee-sms.adapter.ts skips sending and
-  // logs a warning instead of failing, so no key is required to run the app
-  // or test suite. Set it to send real SMS. Requires a registered Android
-  // gateway device (the textbee app) to be online — the free tier is
-  // account-wide (one API key), not per-number.
-  TEXTBEE_API_KEY: optionalNonEmptyString,
-  // Phase 10 Slice G — scheduled invoice reminders (in-process scheduler).
-  INVOICE_REMINDERS_ENABLED: z
-    .enum(["true", "false"])
-    .default("true")
-    .transform((value) => value === "true"),
-  INVOICE_REMINDER_SWEEP_MINUTES: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(60),
-  // Minimum gap between two reminders for the same invoice.
-  INVOICE_REMINDER_INTERVAL_DAYS: z.coerce.number().int().positive().default(3),
-  // Used only for invoices with no dueAt: due = issuedAt + this many days.
-  INVOICE_PAYMENT_TERMS_DAYS: z.coerce.number().int().positive().default(14),
-  // Payment-operation recovery sweep: retries operations that never
-  // reached the provider and commits ledger entries for operations the
-  // provider already accepted (crash window between the two).
-  PAYMENT_OPERATIONS_ENABLED: z
-    .enum(["true", "false"])
-    .default("true")
-    .transform((value) => value === "true"),
-  PAYMENT_OPERATION_SWEEP_MINUTES: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(5),
-  // Phase 11 Slice D — AI gateway (Google Gemini, generativelanguage.googleapis.com).
-  // Left unset in local/dev/test: gemini.client.ts skips the model call and
-  // logs a warning instead of failing, so no key is required to run the app
-  // or test suite (the user message still gets saved; assistantMessage is
-  // null). Set it to get real AI replies.
-  // Get a free key at https://aistudio.google.com/apikey — no credit card.
-  GEMINI_API_KEY: optionalNonEmptyString,
-  // gemini-3.1-flash-lite has been the stable, free-tier-eligible Gemini 3
-  // model since 7 May 2026 (the Gemini 2.5 line — flash, flash-lite, pro —
-  // is scheduled for shutdown 16 October 2026, so it is deliberately not
-  // the default here). Override for a different model without a code change.
-  GEMINI_MODEL: z.string().trim().min(1).default("gemini-3.1-flash-lite"),
-  // Hard cap on tool-call round trips within a single AI turn (rules.md:
-  // "no endpoint returns unbounded collections" — this is the AI-turn
-  // analogue). Reaching the cap degrades to an honest "couldn't finish"
-  // message rather than looping forever against the model API.
-  AI_MAX_TOOL_ITERATIONS: z.coerce.number().int().positive().max(10).default(4),
-  // Phase 12 — crash/error reporting (Sentry). Left unset in local/dev/test:
-  // src/instrument.ts then skips initialisation and the SDK is a no-op, so no
-  // DSN is required to run the app or the test suite. The DSN is not a
-  // secret-grade credential, but keep it out of Git anyway.
-  SENTRY_DSN: optionalUrl,
-  // Defaults to NODE_ENV. Set to "staging" / "production" per deployment so
-  // issues are separated by environment inside one Sentry project.
-  SENTRY_ENVIRONMENT: optionalNonEmptyString,
-  // Ties issues to a deploy, e.g. the git commit SHA injected by CI/hosting.
-  SENTRY_RELEASE: optionalNonEmptyString,
-  // Fraction of requests that produce performance traces (0 to 1). Errors are
-  // always captured regardless of this value.
-  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.1),
-  // Phase 5 — CORS allowlist for customer-facing web build. Comma-separated
-  // list of allowed origins (e.g., "https://customer.example.com,http://localhost:3000").
-  // Required in production/staging to restrict origins. Falls back to open CORS
-  // in development only.
-  CORS_ORIGINS: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => {
-      if (!value || value === "") return undefined;
-      return value.split(",").map((origin) => origin.trim());
-    }),
-  // Phase 5 — Maximum queue size for in-memory queue. Default 1000.
-  // Should be replaced with durable queue (Redis/BullMQ) in production.
-  QUEUE_MAX_SIZE: z.coerce.number().min(1).max(10000).optional(),
-  // Customer portal configuration
-  PORTAL_PUBLIC_BASE_URL: z.string().url().optional(),
-  PORTAL_CODE_SECRET: z.string().min(32).optional(),
-  PORTAL_LINK_UNUSED_TTL_HOURS: z.coerce.number().int().positive().default(168),
-  PORTAL_SESSION_IDLE_DAYS: z.coerce.number().int().positive().default(7),
-  PORTAL_SESSION_MAX_DAYS: z.coerce.number().int().positive().default(45),
-  PORTAL_POST_COMPLETION_MAX_DAYS: z.coerce.number().int().positive().default(14),
-  PORTAL_SWEEP_ENABLED: z
-    .enum(["true", "false"])
-    .default("true")
-    .transform((value) => value === "true"),
-  PORTAL_SWEEP_MINUTES: z.coerce.number().int().positive().default(60),
-  HANDSHAKE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
-  HANDSHAKE_LOCK_MINUTES: z.coerce.number().int().positive().default(15),
-});
+const envSchema = z
+  .object({
+    NODE_ENV: z
+      .enum(["development", "test", "staging", "production"])
+      .default("development"),
+    HOST: z.string().default("127.0.0.1"),
+    PORT: z.coerce.number().int().positive().default(4000),
+    // Number of reverse-proxy hops in front of the API (Render/Railway/Fly = 1).
+    // 0 = no proxy. Without this, request.ip is the proxy's IP for every client,
+    // so IP-keyed rate limits would be shared across ALL users.
+    TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+    LOG_LEVEL: z.string().default("info"),
+    DATABASE_URL: z.string().url(),
+    DIRECT_URL: z.string().url(),
+    JWT_SECRET: z.string().min(32),
+    JWT_ISSUER: z.string().default("aera-api"),
+    ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+    REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
+    SUPABASE_URL: z.string().url(),
+    SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
+    SUPABASE_JOB_PHOTOS_BUCKET: z.string().trim().min(1).default("job-photos"),
+    // OpenStreetMap configuration for geocoding and neighborhood discovery.
+    // No API keys required; these are public services with usage policies.
+    // OSM_USER_AGENT identifies the client to OSM services (required by policy).
+    OSM_USER_AGENT: z
+      .string()
+      .trim()
+      .min(1)
+      .default("AeraFieldService/1.0 (+https://quantixlabs.live)"),
+    // Nominatim base URL for geocoding (address ↔ coordinates).
+    NOMINATIM_BASE_URL: z
+      .string()
+      .url()
+      .default("https://nominatim.openstreetmap.org"),
+    // Overpass API base URL for neighborhood discovery.
+    OVERPASS_BASE_URL: z
+      .string()
+      .url()
+      .default("https://overpass-api.de/api/interpreter"),
+    // Phase 10 Slice D — email adapter (Resend: https://resend.com).
+    // Left unset in local/dev/test: resend-email.adapter.ts skips sending and
+    // logs a warning instead of failing, so no key is required to run the app
+    // or test suite. Set it to send real email.
+    RESEND_API_KEY: optionalNonEmptyString,
+    // Resend's shared sandbox sender works without domain verification; swap
+    // to a verified sending domain before relying on this in production.
+    RESEND_FROM_EMAIL: z
+      .string()
+      .trim()
+      .min(1)
+      .default("Aera <onboarding@resend.dev>"),
+    // Phase 10 Slice E — push adapter (Firebase Cloud Messaging, HTTP v1 API).
+    // All three come from one Firebase service-account JSON key. Left unset
+    // in local/dev/test: fcm-push.adapter.ts skips sending and logs a warning
+    // instead of failing, so no credentials are required to run the app or
+    // test suite. Set them to send real push notifications.
+    FIREBASE_PROJECT_ID: optionalNonEmptyString,
+    FIREBASE_CLIENT_EMAIL: optionalNonEmptyString,
+    // Keep the literal "\n" sequences from the downloaded JSON key when
+    // pasting this into .env — fcm-push.adapter.ts restores real newlines
+    // before using the key.
+    FIREBASE_PRIVATE_KEY: optionalNonEmptyString,
+    // Phase 10 Slice F — SMS adapter (textbee.dev — Android SMS gateway).
+    // Left unset in local/dev/test: textbee-sms.adapter.ts skips sending and
+    // logs a warning instead of failing, so no key is required to run the app
+    // or test suite. Set it to send real SMS. Requires a registered Android
+    // gateway device (the textbee app) to be online — the free tier is
+    // account-wide (one API key), not per-number.
+    TEXTBEE_API_KEY: optionalNonEmptyString,
+    // Phase 10 Slice G — scheduled invoice reminders (in-process scheduler).
+    INVOICE_REMINDERS_ENABLED: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((value) => value === "true"),
+    INVOICE_REMINDER_SWEEP_MINUTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(60),
+    // Minimum gap between two reminders for the same invoice.
+    INVOICE_REMINDER_INTERVAL_DAYS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(3),
+    // Used only for invoices with no dueAt: due = issuedAt + this many days.
+    INVOICE_PAYMENT_TERMS_DAYS: z.coerce.number().int().positive().default(14),
+    // Payment-operation recovery sweep: retries operations that never
+    // reached the provider and commits ledger entries for operations the
+    // provider already accepted (crash window between the two).
+    PAYMENT_OPERATIONS_ENABLED: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((value) => value === "true"),
+    PAYMENT_OPERATION_SWEEP_MINUTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5),
+    // Phase 11 Slice D — AI gateway (Google Gemini, generativelanguage.googleapis.com).
+    // Left unset in local/dev/test: gemini.client.ts skips the model call and
+    // logs a warning instead of failing, so no key is required to run the app
+    // or test suite (the user message still gets saved; assistantMessage is
+    // null). Set it to get real AI replies.
+    // Get a free key at https://aistudio.google.com/apikey — no credit card.
+    GEMINI_API_KEY: optionalNonEmptyString,
+    // gemini-3.1-flash-lite has been the stable, free-tier-eligible Gemini 3
+    // model since 7 May 2026 (the Gemini 2.5 line — flash, flash-lite, pro —
+    // is scheduled for shutdown 16 October 2026, so it is deliberately not
+    // the default here). Override for a different model without a code change.
+    GEMINI_MODEL: z.string().trim().min(1).default("gemini-3.1-flash-lite"),
+    // Hard cap on tool-call round trips within a single AI turn (rules.md:
+    // "no endpoint returns unbounded collections" — this is the AI-turn
+    // analogue). Reaching the cap degrades to an honest "couldn't finish"
+    // message rather than looping forever against the model API.
+    AI_MAX_TOOL_ITERATIONS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(10)
+      .default(4),
+    // Phase 12 — crash/error reporting (Sentry). Left unset in local/dev/test:
+    // src/instrument.ts then skips initialisation and the SDK is a no-op, so no
+    // DSN is required to run the app or the test suite. The DSN is not a
+    // secret-grade credential, but keep it out of Git anyway.
+    SENTRY_DSN: optionalUrl,
+    // Defaults to NODE_ENV. Set to "staging" / "production" per deployment so
+    // issues are separated by environment inside one Sentry project.
+    SENTRY_ENVIRONMENT: optionalNonEmptyString,
+    // Ties issues to a deploy, e.g. the git commit SHA injected by CI/hosting.
+    SENTRY_RELEASE: optionalNonEmptyString,
+    // Fraction of requests that produce performance traces (0 to 1). Errors are
+    // always captured regardless of this value.
+    SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.1),
+    // Phase 5 — CORS allowlist for customer-facing web build. Comma-separated
+    // list of allowed origins (e.g., "https://customer.example.com,http://localhost:3000").
+    // Required in production/staging (enforced by the superRefine below).
+    // Falls back to open CORS in development only.
+    CORS_ORIGINS: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => {
+        if (!value || value === "") return undefined;
+        return value
+          .split(",")
+          .map((origin) => origin.trim())
+          .filter((origin) => origin.length > 0);
+      }),
+    // Phase 5 — Maximum queue size for in-memory queue. Default 1000.
+    // Should be replaced with durable queue (Redis/BullMQ) in production.
+    QUEUE_MAX_SIZE: z.coerce.number().min(1).max(10000).optional(),
+    // Customer portal configuration. PORTAL_PUBLIC_BASE_URL and
+    // PORTAL_CODE_SECRET are optional in development/test but REQUIRED in
+    // production/staging (enforced by the superRefine below).
+    PORTAL_PUBLIC_BASE_URL: z.string().url().optional(),
+    PORTAL_CODE_SECRET: z.string().min(32).optional(),
+    PORTAL_LINK_UNUSED_TTL_HOURS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(168),
+    PORTAL_SESSION_IDLE_DAYS: z.coerce.number().int().positive().default(7),
+    PORTAL_SESSION_MAX_DAYS: z.coerce.number().int().positive().default(45),
+    PORTAL_POST_COMPLETION_MAX_DAYS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(14),
+    PORTAL_SWEEP_ENABLED: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((value) => value === "true"),
+    PORTAL_SWEEP_MINUTES: z.coerce.number().int().positive().default(60),
+    HANDSHAKE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+    HANDSHAKE_LOCK_MINUTES: z.coerce.number().int().positive().default(15),
+  })
+  .superRefine((data, ctx) => {
+    // Production/staging must fail closed: without these values the portal
+    // builds links like "undefined/open#t=…" and handshake codes cannot be
+    // derived, so booting at all would serve a silently broken portal.
+    // Development and test stay permissive.
+    if (data.NODE_ENV !== "production" && data.NODE_ENV !== "staging") {
+      return;
+    }
+    if (!data.PORTAL_PUBLIC_BASE_URL) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PORTAL_PUBLIC_BASE_URL"],
+        message: "PORTAL_PUBLIC_BASE_URL is required in production/staging",
+      });
+    } else if (!data.PORTAL_PUBLIC_BASE_URL.startsWith("https://")) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PORTAL_PUBLIC_BASE_URL"],
+        message:
+          "PORTAL_PUBLIC_BASE_URL must be an https URL in production/staging",
+      });
+    }
+    if (!data.PORTAL_CODE_SECRET) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PORTAL_CODE_SECRET"],
+        message: "PORTAL_CODE_SECRET is required in production/staging",
+      });
+    } else if (data.PORTAL_CODE_SECRET === data.JWT_SECRET) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PORTAL_CODE_SECRET"],
+        message: "PORTAL_CODE_SECRET must differ from JWT_SECRET",
+      });
+    }
+    if (!data.CORS_ORIGINS || data.CORS_ORIGINS.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["CORS_ORIGINS"],
+        message: "CORS_ORIGINS is required in production/staging",
+      });
+    }
+  });
 
 const parsed = envSchema.safeParse(process.env);
 

@@ -118,6 +118,7 @@ async function openPortalSession(
 
   const exchange = await request(app)
     .post("/api/v1/portal/exchange")
+    .set("X-Aera-Portal", "1")
     .send({ token });
   expect(exchange.status).toBe(200);
   const setCookie = exchange.headers["set-cookie"] as unknown as string[];
@@ -220,9 +221,9 @@ describe("Phase C1 — Quote Expiry Enforcement (Portal and Lifecycle)", () => {
       .get("/api/v1/portal/job")
       .set("Cookie", cookie);
     expect(snapshot.status).toBe(200);
-    const visibleIds = (
-      snapshot.body.data.quotes as Array<{ id: string }>
-    ).map((q) => q.id);
+    const visibleIds = (snapshot.body.data.quotes as Array<{ id: string }>).map(
+      (q) => q.id,
+    );
     expect(visibleIds).not.toContain(quote.id);
   });
 
@@ -272,6 +273,26 @@ describe("Phase C1 — Quote Expiry Enforcement (Portal and Lifecycle)", () => {
       where: { id: quote.id },
     });
     expect(dbQuote.status).toBe("EXPIRED");
+  });
+
+  it("blocks sending a quote with no job: 422 QUOTE_REQUIRES_JOB (D4)", async () => {
+    const owner = await registerOwner("jobless-quote");
+    const auth = { Authorization: `Bearer ${owner.accessToken}` };
+    const { customerId } = await createCustomerWithAddress(auth);
+
+    const quote = await createQuote(auth, customerId, {});
+    expect(quote.jobId).toBeNull();
+
+    const res = await request(app)
+      .post(`/api/v1/quotes/${quote.id}/send`)
+      .set(auth);
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("QUOTE_REQUIRES_JOB");
+
+    const dbQuote = await prisma.quote.findUniqueOrThrow({
+      where: { id: quote.id },
+    });
+    expect(dbQuote.status).toBe("DRAFT");
   });
 
   it("permits portal read and approval before expiration timestamp", async () => {
@@ -334,14 +355,18 @@ describe("Phase C1 — Quote Expiry Enforcement (Portal and Lifecycle)", () => {
     // waiting ~3s of real time.
     const owner = await registerOwner("boundary-test");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
+    const jobId = await createJob(auth, customerId, serviceAddressId);
 
     const boundary = new Date(Date.now() + 3000);
     const beforeQuote = await createQuote(auth, customerId, {
+      jobId,
       expiresAt: boundary,
     });
     await sendQuote(auth, beforeQuote.id);
     const afterQuote = await createQuote(auth, customerId, {
+      jobId,
       expiresAt: boundary,
     });
     await sendQuote(auth, afterQuote.id);
@@ -379,7 +404,9 @@ describe("Phase C1 — Quote Expiry Enforcement (Portal and Lifecycle)", () => {
     // Real-time window for the same reason as the boundary test above.
     const owner = await registerOwner("timezone-test");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
+    const jobId = await createJob(auth, customerId, serviceAddressId);
 
     const instant = new Date(Date.now() + 3000);
     // The instant written at +05:00 and at -04:00
@@ -389,19 +416,23 @@ describe("Phase C1 — Quote Expiry Enforcement (Portal and Lifecycle)", () => {
     expect(new Date(isoMinusFour).getTime()).toBe(instant.getTime());
 
     const quoteA = await createQuote(auth, customerId, {
+      jobId,
       expiresAt: isoPlusFive,
     });
     await sendQuote(auth, quoteA.id);
     const quoteC = await createQuote(auth, customerId, {
+      jobId,
       expiresAt: isoPlusFive,
     });
     await sendQuote(auth, quoteC.id);
 
     const quoteB = await createQuote(auth, customerId, {
+      jobId,
       expiresAt: isoMinusFour,
     });
     await sendQuote(auth, quoteB.id);
     const quoteD = await createQuote(auth, customerId, {
+      jobId,
       expiresAt: isoMinusFour,
     });
     await sendQuote(auth, quoteD.id);
@@ -426,10 +457,15 @@ describe("Phase C1 — Quote Expiry Enforcement (Portal and Lifecycle)", () => {
   it("rejects sending a quote whose expiration date is already in the past", async () => {
     const owner = await registerOwner("send-past-expiry");
     const auth = { Authorization: `Bearer ${owner.accessToken}` };
-    const { customerId } = await createCustomerWithAddress(auth);
+    const { customerId, serviceAddressId } =
+      await createCustomerWithAddress(auth);
+    const jobId = await createJob(auth, customerId, serviceAddressId);
 
     const past = new Date(Date.now() - 60000);
-    const quote = await createQuote(auth, customerId, { expiresAt: past });
+    const quote = await createQuote(auth, customerId, {
+      jobId,
+      expiresAt: past,
+    });
 
     const sendRes = await request(app)
       .post(`/api/v1/quotes/${quote.id}/send`)

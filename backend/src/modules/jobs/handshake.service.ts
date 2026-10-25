@@ -35,9 +35,14 @@ interface HandshakeJobSnapshot {
   handshakeVerifiedAt: Date | null;
 }
 
-async function loadHandshakeJob(jobId: string): Promise<HandshakeJobSnapshot> {
+async function loadHandshakeJob(
+  companyId: string,
+  jobId: string,
+): Promise<HandshakeJobSnapshot> {
+  // Scoped by company in the query itself: a job in another company is
+  // indistinguishable from a missing job (404, never 403).
   const job = await prisma.job.findFirst({
-    where: { id: jobId },
+    where: { id: jobId, companyId },
     select: {
       id: true,
       companyId: true,
@@ -51,21 +56,10 @@ async function loadHandshakeJob(jobId: string): Promise<HandshakeJobSnapshot> {
     },
   });
 
-  // Tenant convention (job.policy.ts / job.service.ts): a job in another
-  // company is indistinguishable from a missing job.
   if (!job) {
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
   return job;
-}
-
-function assertJobInCompany(
-  context: AuthContext,
-  job: HandshakeJobSnapshot,
-): void {
-  if (job.companyId !== context.companyId) {
-    throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
-  }
 }
 
 /**
@@ -91,8 +85,7 @@ export async function startJobWithCode(
   jobId: string,
   code: string,
 ) {
-  const job = await loadHandshakeJob(jobId);
-  assertJobInCompany(context, job);
+  const job = await loadHandshakeJob(context.companyId, jobId);
 
   if (
     context.role !== "TECHNICIAN" ||
@@ -113,6 +106,23 @@ export async function startJobWithCode(
       `Too many failed attempts. Try again after ${job.handshakeLockedUntil.toISOString()}.`,
       423,
     );
+  }
+
+  if (job.handshakeLockedUntil) {
+    // The lock has expired: reset the failure counter, so a single typo
+    // after the lock window does not immediately re-lock the job. Guarded
+    // by the observed lock value so parallel requests reset at most once.
+    await prisma.job.updateMany({
+      where: {
+        id: jobId,
+        companyId: context.companyId,
+        status: "EN_ROUTE",
+        handshakeLockedUntil: job.handshakeLockedUntil,
+      },
+      data: { handshakeFailedAttempts: 0, handshakeLockedUntil: null },
+    });
+    job.handshakeFailedAttempts = 0;
+    job.handshakeLockedUntil = null;
   }
 
   const expectedCode = deriveHandshakeCode(
@@ -136,8 +146,8 @@ export async function startJobWithCode(
       },
       data: { handshakeFailedAttempts: { increment: 1 } },
     });
-    const fresh = await prisma.job.findUnique({
-      where: { id: jobId },
+    const fresh = await prisma.job.findFirst({
+      where: { id: jobId, companyId: context.companyId },
       select: { handshakeFailedAttempts: true, handshakeLockedUntil: true },
     });
     const attempts =
@@ -158,7 +168,10 @@ export async function startJobWithCode(
       await prisma.job.updateMany({
         where: {
           id: jobId,
-          OR: [{ handshakeLockedUntil: null }, { handshakeLockedUntil: { lte: now } }],
+          OR: [
+            { handshakeLockedUntil: null },
+            { handshakeLockedUntil: { lte: now } },
+          ],
         },
         data: { handshakeLockedUntil: lockedUntil },
       });
@@ -261,8 +274,7 @@ export async function overrideStartJob(
     );
   }
 
-  const job = await loadHandshakeJob(jobId);
-  assertJobInCompany(context, job);
+  const job = await loadHandshakeJob(context.companyId, jobId);
 
   if (job.status !== "EN_ROUTE") {
     throw new AppError(
@@ -321,54 +333,6 @@ export async function overrideStartJob(
 }
 
 /**
- * Regenerate the handshake code for an EN_ROUTE job (staff only).
- * Bumps handshakeVersion, which changes the derived code, resets the
- * attempt/lock/verified state, audits HANDSHAKE_REGENERATED, and
- * re-delivers the new code to the customer after commit.
- */
-export async function regenerateHandshake(context: AuthContext, jobId: string) {
-  if (context.role !== "OWNER" && context.role !== "DISPATCHER") {
-    throw new AppError(
-      "AUTH_FORBIDDEN",
-      "Only owners and dispatchers can regenerate a handshake code",
-      403,
-    );
-  }
-
-  const job = await loadHandshakeJob(jobId);
-  assertJobInCompany(context, job);
-
-  if (job.status !== "EN_ROUTE") {
-    throw new AppError(
-      "HANDSHAKE_NOT_AVAILABLE",
-      "Handshake code regeneration is only available while the job is en route",
-      409,
-    );
-  }
-
-  await prisma.$transaction(async (transaction) => {
-    await prepareHandshakeOnEnRoute(transaction, job);
-    await transaction.portalAuditEvent.create({
-      data: {
-        companyId: context.companyId,
-        jobId,
-        customerId: job.customerId,
-        actorUserId: context.userId,
-        action: "HANDSHAKE_REGENERATED",
-        // No version in the audit metadata or the response: staff-facing
-        // surfaces carry the handshake STATE only, never the derived
-        // version (a leaked secret + a known version yields the code).
-        metadata: {},
-      },
-    });
-  });
-
-  queueHandshakeCodeDelivery(jobId);
-
-  return { success: true };
-}
-
-/**
  * Prepare a fresh handshake for a job entering (or re-entering) EN_ROUTE.
  * Must run inside the caller's transaction: bumps handshakeVersion (which
  * changes the derived code) and clears attempts, lock and verification.
@@ -402,7 +366,7 @@ async function processHandshakeCodeDelivery(
   payload: HandshakeCodeDeliveryJob,
 ): Promise<void> {
   try {
-    const job = await prisma.job.findUnique({
+    const job = await prisma.job.findFirst({
       where: { id: payload.jobId },
       select: {
         id: true,

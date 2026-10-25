@@ -33,15 +33,29 @@ describe("Phase G4 — API Contract Tests", () => {
     const testCompanyIds = testCompanies.map((c) => c.id);
 
     if (testCompanyIds.length > 0) {
-      await prisma.job.deleteMany({ where: { companyId: { in: testCompanyIds } } });
-      await prisma.serviceAddress.deleteMany({ where: { companyId: { in: testCompanyIds } } });
-      await prisma.customer.deleteMany({ where: { companyId: { in: testCompanyIds } } });
-      await prisma.refreshSession.deleteMany({ where: { companyId: { in: testCompanyIds } } });
-      await prisma.companyMember.deleteMany({ where: { companyId: { in: testCompanyIds } } });
+      await prisma.job.deleteMany({
+        where: { companyId: { in: testCompanyIds } },
+      });
+      await prisma.serviceAddress.deleteMany({
+        where: { companyId: { in: testCompanyIds } },
+      });
+      await prisma.customer.deleteMany({
+        where: { companyId: { in: testCompanyIds } },
+      });
+      await prisma.refreshSession.deleteMany({
+        where: { companyId: { in: testCompanyIds } },
+      });
+      await prisma.companyMember.deleteMany({
+        where: { companyId: { in: testCompanyIds } },
+      });
     }
 
-    await prisma.company.deleteMany({ where: { slug: { startsWith: "contract-test-company" } } });
-    await prisma.user.deleteMany({ where: { email: { startsWith: "contract-test-" } } });
+    await prisma.company.deleteMany({
+      where: { slug: { startsWith: "contract-test-company" } },
+    });
+    await prisma.user.deleteMany({
+      where: { email: { startsWith: "contract-test-" } },
+    });
 
     // Create company first (RefreshSession depends on it)
     const company = await prisma.company.create({
@@ -926,11 +940,9 @@ describe("Phase G4 — API Contract Tests", () => {
     });
 
     it("POST /api/v1/portal/reviews - validation error on invalid rating", async () => {
-      const response = await request(app)
-        .post("/api/v1/portal/reviews")
-        .send({
-          rating: 6, // Invalid: rating must be 1-5
-        });
+      const response = await request(app).post("/api/v1/portal/reviews").send({
+        rating: 6, // Invalid: rating must be 1-5
+      });
       expect([422, 401]).toContain(response.status);
     });
   });
@@ -1102,6 +1114,7 @@ describe("Phase G4 — API Contract Tests", () => {
     it("POST /api/v1/portal/exchange - correct HTTP method and URL path", async () => {
       const response = await request(app)
         .post("/api/v1/portal/exchange")
+        .set("X-Aera-Portal", "1")
         .send({ token: "invalid" });
       expect([401, 422]).toContain(response.status);
     });
@@ -1109,6 +1122,7 @@ describe("Phase G4 — API Contract Tests", () => {
     it("POST /api/v1/portal/exchange - correct request body shape", async () => {
       const response = await request(app)
         .post("/api/v1/portal/exchange")
+        .set("X-Aera-Portal", "1")
         .send({ token: "a".repeat(43) });
       expect([401, 422]).toContain(response.status);
     });
@@ -1116,6 +1130,7 @@ describe("Phase G4 — API Contract Tests", () => {
     it("POST /api/v1/portal/exchange - validation error on invalid body", async () => {
       const response = await request(app)
         .post("/api/v1/portal/exchange")
+        .set("X-Aera-Portal", "1")
         .send({ token: "short" });
       expect([422, 401]).toContain(response.status);
       if (response.status === 422) {
