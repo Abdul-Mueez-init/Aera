@@ -55,3 +55,12 @@ final customerJobsProvider =
       final repo = ref.watch(customersRepositoryProvider);
       return repo.getCustomerJobs(customerId);
     });
+
+/// Staff-side portal audit feed for one customer (link issued/opened,
+/// handshake events, deactivations). Auto-disposed: it is a "what just
+/// happened" view, so stale data is worse than a refetch.
+final customerPortalActivityProvider = FutureProvider.autoDispose
+    .family<List<PortalActivityEvent>, String>((ref, customerId) async {
+      final repo = ref.watch(customersRepositoryProvider);
+      return repo.fetchPortalActivity(customerId);
+    });

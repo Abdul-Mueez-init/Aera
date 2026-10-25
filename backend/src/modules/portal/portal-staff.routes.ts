@@ -4,10 +4,7 @@ import { requireAuth, requireRole } from "../../common/auth/auth.middleware.js";
 import { prisma } from "../../db/prisma.js";
 import { issueGrant, reissueGrant, deactivateGrant, getGrantStatus } from "./portal.grants.js";
 import { sendPortalLink } from "./portal-delivery.service.js";
-import {
-  overrideHandshake,
-  regenerateHandshakeCode,
-} from "./portal-handshake.service.js";
+import { regenerateHandshake } from "../jobs/handshake.service.js";
 import { portalWriteRateLimiter } from "../../common/rateLimit.js";
 
 const router = Router();
@@ -251,47 +248,10 @@ router.get("/portal-access", async (request, response) => {
 });
 
 /**
- * POST /api/v1/jobs/:jobId/handshake/override
- * Override handshake verification (staff-only).
- */
-router.post("/handshake/override", async (request, response) => {
-  const jobIdMatch = request.originalUrl?.match(/\/jobs\/([^/]+)\/handshake/);
-  const jobId = jobIdMatch ? jobIdMatch[1] : (request.params as { jobId?: string }).jobId;
-
-  if (!jobId) {
-    response.status(400).json({
-      error: {
-        code: "INVALID_REQUEST",
-        message: "Job ID is required",
-      },
-    });
-    return;
-  }
-
-  const parsed = z
-    .object({
-      reason: z.string().trim().max(500).optional(),
-    })
-    .safeParse(request.body);
-
-  if (!parsed.success) {
-    response.status(422).json({
-      error: {
-        code: "VALIDATION_FAILED",
-        message: parsed.error.issues.map((issue) => issue.message).join(", "),
-      },
-    });
-    return;
-  }
-
-  const data = await overrideHandshake(request.auth!, jobId, parsed.data.reason);
-
-  response.status(200).json({ data });
-});
-
-/**
  * POST /api/v1/jobs/:jobId/handshake/regenerate
- * Regenerate handshake code (staff-only).
+ * Regenerate handshake code (staff-only). Bumps the handshake version,
+ * which changes the derived code, and re-delivers it to the customer.
+ * The staff start override lives at POST /jobs/:jobId/start/override.
  */
 router.post("/handshake/regenerate", async (request, response) => {
   const jobIdMatch = request.originalUrl?.match(/\/jobs\/([^/]+)\/handshake/);
@@ -307,7 +267,7 @@ router.post("/handshake/regenerate", async (request, response) => {
     return;
   }
 
-  const data = await regenerateHandshakeCode(request.auth!, jobId);
+  const data = await regenerateHandshake(request.auth!, jobId);
 
   response.status(200).json({ data });
 });

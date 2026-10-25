@@ -1,31 +1,168 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/network/api_response.dart';
+import '../../../core/network/portal_client_factory.dart';
+import 'portal_session_store.dart';
 
-/// The public customer portal is reached through a bearer-less link
-/// (`/api/v1/portal/:token`) issued by staff via
-/// `POST /customers/:customerId/portal-access`. It is never the staff JWT
-/// session, so this repository deliberately does NOT use [ApiClient]'s
-/// `setAccessToken`/refresh machinery — there is no logged-in user on the
-/// other end, only a long-lived opaque token embedded in a link. We still
-/// borrow [ApiClient.baseUrl] (same host detection for web/Android/iOS) so
-/// the platform base-URL logic isn't duplicated, but requests never carry
-/// an `Authorization` header.
+/// Session-based customer portal repository (handoff 6.2) — the rewrite of
+/// the old long-lived-token repository.
+///
+/// The portal link is exchanged exactly once (`POST /portal/exchange`) for a
+/// server-side session; every later call is authorized by that session:
+///
+/// - Web: `deliver: "cookie"` — the browser keeps the HttpOnly session
+///   cookie (the client from [createPortalClient] sends it automatically).
+/// - Mobile: `deliver: "bearer"` — the returned `sessionToken` is kept in
+///   [PortalSessionStore] (secure storage) and attached as
+///   `Authorization: Bearer` on later calls.
+///
+/// Every call carries `X-Aera-Portal: 1` (the backend's CSRF guard requires
+/// it). The link token itself is never stored, logged, or put in a route.
 final portalRepositoryProvider = Provider<PortalRepository>((ref) {
   final baseUrl = ref.watch(apiClientProvider).baseUrl;
-  return PortalRepository(baseUrl: baseUrl);
+  return PortalRepository(
+    baseUrl: baseUrl,
+    client: createPortalClient(),
+    store: PortalSessionStore(),
+  );
 });
 
-/// A customer's own service address, as returned at the top level of the
-/// portal snapshot (`customer.serviceAddresses`).
-class PortalServiceAddress {
-  const PortalServiceAddress({
-    required this.id,
-    required this.label,
+/// Variants of [PortalClosed], named after the situations the customer can
+/// be in when their portal access is gone.
+abstract final class PortalClosedVariant {
+  /// The grant was deactivated (job done, staff deactivated, or swept).
+  static const String deactivated = 'deactivated';
+
+  /// The link was already opened on another device (single-use).
+  static const String alreadyUsed = 'alreadyUsed';
+
+  /// The link was never opened and its expiry passed.
+  static const String expired = 'expired';
+
+  /// The link (or session) is not valid at all.
+  static const String invalid = 'invalid';
+}
+
+/// Result of a portal API call. Sealed so screens must handle every case:
+/// an active session, a closed portal (with the business's contact details
+/// so the customer can still reach them), an invalid link, or a plain
+/// failure worth retrying.
+sealed class PortalResult {
+  const PortalResult();
+}
+
+/// The session is alive. [snapshot] is set by `job()`; [quote] by
+/// `respondToQuote()`; [review] by `submitReview()`.
+final class PortalSessionActive extends PortalResult {
+  const PortalSessionActive({this.snapshot, this.quote, this.review});
+
+  final PortalSnapshot? snapshot;
+  final PortalQuote? quote;
+  final PortalReview? review;
+}
+
+/// The portal is closed for this customer. [variant] is one of
+/// [PortalClosedVariant]; [contact] carries the company + owner/dispatcher
+/// contact payload the backend sends with 410 responses (when present).
+final class PortalClosed extends PortalResult {
+  const PortalClosed({required this.variant, this.contact});
+
+  final String variant;
+  final CompanyContactInfo? contact;
+}
+
+/// The link token is unknown/invalid (`401 PORTAL_LINK_INVALID`).
+final class PortalInvalid extends PortalResult {
+  const PortalInvalid();
+}
+
+/// Anything else went wrong (network, 5xx, unexpected payload).
+final class PortalFailure extends PortalResult {
+  const PortalFailure(this.message);
+
+  final String message;
+}
+
+/// Extracts the one-time token from a portal link fragment.
+///
+/// Fragments look like `t=<token>` (the part after `#` in
+/// `https://portal…/open#t=…`). Returns null when there is no usable `t`
+/// parameter. Pure and unit-testable; the token is only ever handed to
+/// [PortalRepository.exchange] — never stored in a provider or a route.
+String? parsePortalFragment(String fragment) {
+  var value = fragment.trim();
+  if (value.startsWith('#')) value = value.substring(1);
+  if (value.isEmpty) return null;
+  for (final part in value.split('&')) {
+    final eq = part.indexOf('=');
+    if (eq <= 0) continue;
+    if (part.substring(0, eq) != 't') continue;
+    final token = Uri.decodeComponent(part.substring(eq + 1)).trim();
+    return token.isEmpty ? null : token;
+  }
+  return null;
+}
+
+/// One owner/dispatcher contact from the closed-portal payload.
+class PortalContact {
+  const PortalContact({
+    required this.role,
+    required this.name,
+    this.phone,
+    this.email,
+  });
+
+  final String role; // 'OWNER' | 'DISPATCHER'
+  final String name;
+  final String? phone;
+  final String? email;
+
+  factory PortalContact.fromJson(Map<String, dynamic> json) => PortalContact(
+    role: json['role'] as String? ?? 'OWNER',
+    name: json['name'] as String? ?? '',
+    phone: json['phone'] as String?,
+    email: json['email'] as String?,
+  );
+}
+
+/// The `{company, contacts}` payload the backend attaches to 410 portal
+/// responses, so a customer whose access ended can still call the business.
+class CompanyContactInfo {
+  const CompanyContactInfo({
+    required this.companyName,
+    this.companyPhone,
+    this.contacts = const [],
+  });
+
+  final String companyName;
+  final String? companyPhone;
+  final List<PortalContact> contacts;
+
+  static CompanyContactInfo? tryParse(Map<String, dynamic> data) {
+    final company = data['company'];
+    if (company is! Map<String, dynamic>) return null;
+    final name = company['name'] as String?;
+    if (name == null || name.isEmpty) return null;
+    return CompanyContactInfo(
+      companyName: name,
+      companyPhone: company['phone'] as String?,
+      contacts:
+          (data['contacts'] as List<dynamic>?)
+              ?.map((c) => PortalContact.fromJson(c as Map<String, dynamic>))
+              .toList() ??
+          const [],
+    );
+  }
+}
+
+/// The job's address as exposed in the portal snapshot.
+class PortalJobAddress {
+  const PortalJobAddress({
     required this.line1,
     required this.city,
     this.line2,
@@ -33,8 +170,6 @@ class PortalServiceAddress {
     this.postalCode,
   });
 
-  final String id;
-  final String label;
   final String line1;
   final String? line2;
   final String city;
@@ -46,46 +181,16 @@ class PortalServiceAddress {
     if (line2 != null && line2!.isNotEmpty) line2,
     city,
     if (region != null && region!.isNotEmpty) region,
-  ].join(', ');
-
-  factory PortalServiceAddress.fromJson(Map<String, dynamic> json) =>
-      PortalServiceAddress(
-        id: json['id'] as String,
-        label: json['label'] as String? ?? '',
-        line1: json['line1'] as String? ?? '',
-        line2: json['line2'] as String?,
-        city: json['city'] as String? ?? '',
-        region: json['region'] as String?,
-        postalCode: json['postalCode'] as String?,
-      );
-}
-
-/// The narrow `{line1, city, region}` shape `getPublicPortal` actually
-/// selects for a job's address — deliberately not the full
-/// [PortalServiceAddress], same "too narrow to reuse" call made for
-/// `QuoteJobRef` in `quotes_repository.dart`.
-class PortalJobAddress {
-  const PortalJobAddress({
-    required this.line1,
-    required this.city,
-    this.region,
-  });
-
-  final String line1;
-  final String city;
-  final String? region;
-
-  String get formatted => [
-    line1,
-    city,
-    if (region != null && region!.isNotEmpty) region,
+    if (postalCode != null && postalCode!.isNotEmpty) postalCode,
   ].join(', ');
 
   factory PortalJobAddress.fromJson(Map<String, dynamic> json) =>
       PortalJobAddress(
         line1: json['line1'] as String? ?? '',
+        line2: json['line2'] as String?,
         city: json['city'] as String? ?? '',
         region: json['region'] as String?,
+        postalCode: json['postalCode'] as String?,
       );
 }
 
@@ -104,32 +209,25 @@ class PortalTechnicianRef {
       );
 }
 
-/// The narrow `{id, rating, comment}` shape returned inline on a job
-/// (`take: 1`) — just enough to know whether/how the customer already
-/// reviewed this job. Not the same as [PortalReview], which is the result
-/// of actually submitting a review.
-class PortalJobReviewRef {
-  const PortalJobReviewRef({
-    required this.id,
-    required this.rating,
-    this.comment,
-  });
+/// The on-site handshake code, present in the snapshot only while the
+/// technician is en route. Shown to the customer only — the technician must
+/// ask for it and type it in (handoff 6.3).
+class PortalHandshake {
+  const PortalHandshake({required this.code, this.technicianName});
 
-  final String id;
-  final int rating;
-  final String? comment;
+  final String code;
+  final String? technicianName;
 
-  factory PortalJobReviewRef.fromJson(Map<String, dynamic> json) =>
-      PortalJobReviewRef(
-        id: json['id'] as String,
-        rating: json['rating'] as int? ?? 0,
-        comment: json['comment'] as String?,
+  factory PortalHandshake.fromJson(Map<String, dynamic> json) =>
+      PortalHandshake(
+        code: json['code']?.toString() ?? '',
+        technicianName: json['technicianName'] as String?,
       );
 }
 
+/// The one job this portal session is scoped to (`data.job`).
 class PortalJob {
   const PortalJob({
-    required this.id,
     required this.jobNumber,
     required this.serviceType,
     required this.problemDescription,
@@ -139,10 +237,9 @@ class PortalJob {
     this.completedAt,
     this.address,
     this.technician,
-    this.reviews = const [],
+    this.handshake,
   });
 
-  final String id;
   final int jobNumber;
   final String serviceType;
   final String problemDescription;
@@ -152,14 +249,10 @@ class PortalJob {
   final DateTime? completedAt;
   final PortalJobAddress? address;
   final PortalTechnicianRef? technician;
-  final List<PortalJobReviewRef> reviews;
-
-  bool get hasReview => reviews.isNotEmpty;
+  final PortalHandshake? handshake;
 
   factory PortalJob.fromJson(Map<String, dynamic> json) => PortalJob(
-    id: json['id'] as String,
-    // jobNumber is a plain Prisma Int, unlike the BigInt money fields below
-    // — never string-encoded. Same convention as `QuoteJobRef.jobNumber`.
+    // jobNumber is a plain Prisma Int — never string-encoded (money is).
     jobNumber: json['jobNumber'] as int? ?? 0,
     serviceType: json['serviceType'] as String? ?? '',
     problemDescription: json['problemDescription'] as String? ?? '',
@@ -173,40 +266,42 @@ class PortalJob {
     completedAt: json['completedAt'] != null
         ? DateTime.tryParse(json['completedAt'] as String)
         : null,
-    address: json['serviceAddress'] != null
-        ? PortalJobAddress.fromJson(
-            json['serviceAddress'] as Map<String, dynamic>,
-          )
+    address: json['address'] != null
+        ? PortalJobAddress.fromJson(json['address'] as Map<String, dynamic>)
         : null,
-    technician: json['assignedTechnician'] != null
+    technician: json['technician'] != null
         ? PortalTechnicianRef.fromJson(
-            json['assignedTechnician'] as Map<String, dynamic>,
+            json['technician'] as Map<String, dynamic>,
           )
         : null,
-    reviews:
-        (json['reviews'] as List<dynamic>?)
-            ?.map((r) => PortalJobReviewRef.fromJson(r as Map<String, dynamic>))
-            .toList() ??
-        const [],
+    handshake: json['handshake'] != null
+        ? PortalHandshake.fromJson(json['handshake'] as Map<String, dynamic>)
+        : null,
   );
 }
 
 class PortalLineItem {
   const PortalLineItem({
+    required this.id,
     required this.description,
     required this.quantity,
+    required this.unitPriceMinor,
     required this.totalMinor,
   });
 
+  final String id;
   final String description;
   final double quantity;
+  final int unitPriceMinor;
   final int totalMinor;
 
   factory PortalLineItem.fromJson(Map<String, dynamic> json) => PortalLineItem(
+    id: json['id'] as String? ?? '',
     description: json['description'] as String? ?? '',
-    // quantity is a Postgres Decimal, serialized by the backend as a JSON
-    // string (see `jsonSafe` in quote/invoice services) — never parse as num.
+    // quantity is a Postgres Decimal serialized as a JSON string; money is
+    // BigInt serialized as a JSON string. Never parse either as num.
     quantity: double.tryParse(json['quantity']?.toString() ?? '') ?? 0,
+    unitPriceMinor: int.tryParse(json['unitPriceMinor']?.toString() ?? '') ?? 0,
     totalMinor: int.tryParse(json['totalMinor']?.toString() ?? '') ?? 0,
   );
 }
@@ -218,9 +313,9 @@ class PortalQuote {
     required this.subtotalMinor,
     required this.discountMinor,
     required this.taxMinor,
+    required this.taxRateBps,
     required this.totalMinor,
     required this.currency,
-    this.shareToken,
     this.expiresAt,
     this.items = const [],
   });
@@ -230,23 +325,21 @@ class PortalQuote {
   final int subtotalMinor;
   final int discountMinor;
   final int taxMinor;
+  final int taxRateBps;
   final int totalMinor;
   final String currency;
-  final String? shareToken;
   final DateTime? expiresAt;
   final List<PortalLineItem> items;
 
   factory PortalQuote.fromJson(Map<String, dynamic> json) => PortalQuote(
     id: json['id'] as String,
     status: json['status'] as String? ?? 'SENT',
-    // subtotalMinor/discountMinor/taxMinor/totalMinor are Postgres BigInt,
-    // serialized as JSON strings.
     subtotalMinor: int.tryParse(json['subtotalMinor']?.toString() ?? '') ?? 0,
     discountMinor: int.tryParse(json['discountMinor']?.toString() ?? '') ?? 0,
     taxMinor: int.tryParse(json['taxMinor']?.toString() ?? '') ?? 0,
+    taxRateBps: json['taxRateBps'] as int? ?? 0,
     totalMinor: int.tryParse(json['totalMinor']?.toString() ?? '') ?? 0,
     currency: json['currency'] as String? ?? 'USD',
-    shareToken: json['shareToken'] as String?,
     expiresAt: json['expiresAt'] != null
         ? DateTime.tryParse(json['expiresAt'] as String)
         : null,
@@ -307,63 +400,53 @@ class PortalInvoice {
   );
 }
 
-/// The full snapshot returned by `GET /api/v1/portal/:token`. This is
-/// `portal.customer` on the backend (see `getPublicPortal` in
-/// `portal.service.ts`) — jobs are already filtered to non-cancelled and
-/// ordered by `scheduledStart` ascending, quotes/invoices are already
-/// filtered to customer-visible statuses and ordered newest-first.
-class PortalCustomer {
-  const PortalCustomer({
-    required this.id,
-    required this.firstName,
-    required this.lastName,
-    this.email,
-    this.phone,
-    this.serviceAddresses = const [],
-    this.jobs = const [],
-    this.quotes = const [],
-    this.invoices = const [],
-  });
+/// The customer's review for the session job, when one exists.
+class PortalReview {
+  const PortalReview({required this.id, required this.rating, this.comment});
 
   final String id;
-  final String firstName;
-  final String lastName;
-  final String? email;
-  final String? phone;
-  final List<PortalServiceAddress> serviceAddresses;
-  final List<PortalJob> jobs;
+  final int rating;
+  final String? comment;
+
+  factory PortalReview.fromJson(Map<String, dynamic> json) => PortalReview(
+    id: json['id'] as String,
+    rating: json['rating'] as int? ?? 0,
+    comment: json['comment'] as String?,
+  );
+}
+
+class PortalCompany {
+  const PortalCompany({required this.name});
+
+  final String name;
+
+  factory PortalCompany.fromJson(Map<String, dynamic> json) =>
+      PortalCompany(name: json['name'] as String? ?? '');
+}
+
+/// The full `GET /api/v1/portal/job` snapshot: exactly one job (the
+/// session's), its customer-visible quotes and invoices, the review if any,
+/// and the company name. No history, no other jobs (handoff G11).
+class PortalSnapshot {
+  const PortalSnapshot({
+    required this.job,
+    required this.company,
+    this.quotes = const [],
+    this.invoices = const [],
+    this.review,
+  });
+
+  final PortalJob job;
+  final PortalCompany company;
   final List<PortalQuote> quotes;
   final List<PortalInvoice> invoices;
+  final PortalReview? review;
 
-  String get fullName => '$firstName $lastName'.trim();
-
-  /// Non-completed jobs, already backend-sorted by `scheduledStart` asc.
-  List<PortalJob> get upcomingJobs =>
-      jobs.where((job) => job.status != 'COMPLETED').toList();
-
-  /// Completed jobs — service history, oldest-first (same ordering as
-  /// `jobs`; reverse in the UI if a newest-first list is wanted).
-  List<PortalJob> get serviceHistory =>
-      jobs.where((job) => job.status == 'COMPLETED').toList();
-
-  factory PortalCustomer.fromJson(Map<String, dynamic> json) => PortalCustomer(
-    id: json['id'] as String,
-    firstName: json['firstName'] as String? ?? '',
-    lastName: json['lastName'] as String? ?? '',
-    email: json['email'] as String?,
-    phone: json['phone'] as String?,
-    serviceAddresses:
-        (json['serviceAddresses'] as List<dynamic>?)
-            ?.map(
-              (a) => PortalServiceAddress.fromJson(a as Map<String, dynamic>),
-            )
-            .toList() ??
-        const [],
-    jobs:
-        (json['jobs'] as List<dynamic>?)
-            ?.map((j) => PortalJob.fromJson(j as Map<String, dynamic>))
-            .toList() ??
-        const [],
+  factory PortalSnapshot.fromJson(Map<String, dynamic> json) => PortalSnapshot(
+    job: PortalJob.fromJson(json['job'] as Map<String, dynamic>),
+    company: PortalCompany.fromJson(
+      (json['company'] as Map<String, dynamic>?) ?? const {},
+    ),
     quotes:
         (json['quotes'] as List<dynamic>?)
             ?.map((q) => PortalQuote.fromJson(q as Map<String, dynamic>))
@@ -374,38 +457,33 @@ class PortalCustomer {
             ?.map((i) => PortalInvoice.fromJson(i as Map<String, dynamic>))
             .toList() ??
         const [],
-  );
-}
-
-/// Result of `POST /api/v1/portal/:token/reviews`.
-class PortalReview {
-  const PortalReview({
-    required this.id,
-    required this.rating,
-    this.comment,
-    required this.createdAt,
-  });
-
-  final String id;
-  final int rating;
-  final String? comment;
-  final DateTime createdAt;
-
-  factory PortalReview.fromJson(Map<String, dynamic> json) => PortalReview(
-    id: json['id'] as String,
-    rating: json['rating'] as int? ?? 0,
-    comment: json['comment'] as String?,
-    createdAt:
-        DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+    review: json['review'] != null
+        ? PortalReview.fromJson(json['review'] as Map<String, dynamic>)
+        : null,
   );
 }
 
 class PortalRepository {
-  PortalRepository({required this.baseUrl, http.Client? client})
-    : _client = client ?? http.Client();
+  PortalRepository({
+    String? baseUrl,
+    http.Client? client,
+    PortalSessionStore? store,
+    bool? forceWebTransport,
+  }) : baseUrl = baseUrl ?? AppConfig.apiBaseUrl,
+       _client = client ?? http.Client(),
+       _store = store ?? PortalSessionStore(),
+       _webTransport = forceWebTransport ?? kIsWeb;
 
   final String baseUrl;
   final http.Client _client;
+  final PortalSessionStore _store;
+
+  /// True on web (cookie session), false on mobile (bearer session).
+  /// Overridable only so tests can exercise both transports on one platform.
+  final bool _webTransport;
+
+  String? _bearerToken;
+  bool _bearerLoaded = false;
 
   Uri _buildUri(String path) {
     final cleanPath = path.startsWith('/') ? path : '/$path';
@@ -415,82 +493,231 @@ class PortalRepository {
     );
   }
 
-  /// Deliberately no `Authorization` header — the portal token in the path
-  /// *is* the credential. Never attach the staff access token here.
-  Map<String, String> get _headers => const {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-  };
+  Future<String?> _bearer() async {
+    if (_webTransport) return null;
+    if (!_bearerLoaded) {
+      _bearerToken = await _store.read();
+      _bearerLoaded = true;
+    }
+    return _bearerToken;
+  }
 
-  dynamic _processResponse(http.Response response) {
+  Future<Map<String, String>> _headers() async {
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      // Required by the backend's portal CSRF guard on every call.
+      'X-Aera-Portal': '1',
+    };
+    final bearer = await _bearer();
+    if (bearer != null && bearer.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $bearer';
+    }
+    return headers;
+  }
+
+  /// Maps a non-2xx response to the sealed result types. The 410 bodies
+  /// carry `{data: {state, company, contacts}}` alongside the error, which
+  /// is where [PortalClosed.contact] comes from.
+  PortalResult _errorResult(http.Response response) {
     dynamic decoded;
     try {
       decoded = response.body.isNotEmpty ? jsonDecode(response.body) : null;
-    } catch (e) {
-      throw ApiException(
-        statusCode: response.statusCode,
-        code: 'INVALID_JSON_RESPONSE',
-        message: 'Could not parse response: ${response.body}',
+    } catch (_) {
+      decoded = null;
+    }
+    final error = decoded is Map<String, dynamic> ? decoded['error'] : null;
+    final code = error is Map<String, dynamic>
+        ? error['code']?.toString()
+        : null;
+    final message = error is Map<String, dynamic>
+        ? error['message']?.toString()
+        : null;
+    final data = decoded is Map<String, dynamic> ? decoded['data'] : null;
+    final contact = data is Map<String, dynamic>
+        ? CompanyContactInfo.tryParse(data)
+        : null;
+
+    if (response.statusCode == 410 && code == 'PORTAL_ACCESS_DEACTIVATED') {
+      return PortalClosed(
+        variant: PortalClosedVariant.deactivated,
+        contact: contact,
       );
     }
+    if (response.statusCode == 410 && code == 'PORTAL_LINK_EXPIRED') {
+      return PortalClosed(
+        variant: PortalClosedVariant.expired,
+        contact: contact,
+      );
+    }
+    if (response.statusCode == 409 && code == 'PORTAL_LINK_ALREADY_USED') {
+      return PortalClosed(
+        variant: PortalClosedVariant.alreadyUsed,
+        contact: contact,
+      );
+    }
+    if (response.statusCode == 401 && code == 'PORTAL_LINK_INVALID') {
+      return const PortalInvalid();
+    }
+    return PortalFailure(
+      message ?? 'Request failed with status ${response.statusCode}',
+    );
+  }
 
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      if (decoded is Map<String, dynamic> && decoded.containsKey('data')) {
-        return decoded['data'];
-      }
+  dynamic _dataOrNull(http.Response response) {
+    if (response.statusCode < 200 || response.statusCode >= 300) return null;
+    try {
+      final decoded = response.body.isNotEmpty
+          ? jsonDecode(response.body)
+          : null;
+      if (decoded is Map<String, dynamic>) return decoded['data'];
       return decoded;
+    } catch (_) {
+      return null;
     }
+  }
 
-    if (decoded is Map<String, dynamic> && decoded.containsKey('error')) {
-      final err = decoded['error'] as Map<String, dynamic>;
-      throw ApiException(
-        statusCode: response.statusCode,
-        code: err['code']?.toString() ?? 'ERROR',
-        message: err['message']?.toString() ?? 'Unknown error',
-        details: err['details'],
+  /// Burns the one-time link [token] and establishes the session.
+  /// Web asks for `deliver: "cookie"`; mobile for `deliver: "bearer"` and
+  /// keeps the returned session token in secure storage.
+  Future<PortalResult> exchange(String token) async {
+    final http.Response response;
+    try {
+      response = await _client.post(
+        _buildUri('/api/v1/portal/exchange'),
+        headers: await _headers(),
+        body: jsonEncode({
+          'token': token,
+          'deliver': _webTransport ? 'cookie' : 'bearer',
+        }),
       );
+    } catch (_) {
+      return const PortalFailure('Could not reach the server');
     }
-
-    throw ApiException(
-      statusCode: response.statusCode,
-      code: 'HTTP_${response.statusCode}',
-      message: 'Request failed with status ${response.statusCode}',
-    );
+    final data = _dataOrNull(response);
+    if (data == null) return _errorResult(response);
+    if (!_webTransport) {
+      final sessionToken = (data as Map<String, dynamic>)['sessionToken'];
+      if (sessionToken is String && sessionToken.isNotEmpty) {
+        _bearerToken = sessionToken;
+        _bearerLoaded = true;
+        await _store.write(sessionToken);
+      }
+    }
+    return const PortalSessionActive();
   }
 
-  /// Throws [ApiException] with `code: 'PORTAL_ACCESS_EXPIRED'` (HTTP 401)
-  /// if the token is unknown, revoked, or past its 30-day expiry.
-  Future<PortalCustomer> fetchPortal(String token) async {
-    final response = await _client.get(
-      _buildUri('/api/v1/portal/$token'),
-      headers: _headers,
-    );
-    final data = _processResponse(response);
-    return PortalCustomer.fromJson(data as Map<String, dynamic>);
+  /// Probes the existing session (cookie on web, stored bearer on mobile).
+  /// Any 401 here simply means "no live session" ([PortalInvalid]) — the
+  /// caller then falls back to exchanging the link token.
+  Future<PortalResult> session() async {
+    final http.Response response;
+    try {
+      response = await _client.get(
+        _buildUri('/api/v1/portal/session'),
+        headers: await _headers(),
+      );
+    } catch (_) {
+      return const PortalFailure('Could not reach the server');
+    }
+    if (_dataOrNull(response) == null) {
+      if (response.statusCode == 401) return const PortalInvalid();
+      return _errorResult(response);
+    }
+    return const PortalSessionActive();
   }
 
-  /// Throws [ApiException] with:
-  /// - `code: 'PORTAL_ACCESS_EXPIRED'` (401) — token invalid/expired.
-  /// - `code: 'REVIEW_JOB_NOT_ELIGIBLE'` (422) — job isn't this customer's
-  ///   completed job.
-  /// - `code: 'REVIEW_ALREADY_SUBMITTED'` (409) — one review per job.
-  Future<PortalReview> submitReview(
-    String token, {
-    required String jobId,
-    required int rating,
-    String? comment,
-  }) async {
-    final response = await _client.post(
-      _buildUri('/api/v1/portal/$token/reviews'),
-      headers: _headers,
-      body: jsonEncode({
-        'jobId': jobId,
-        'rating': rating,
-        if (comment != null && comment.trim().isNotEmpty)
-          'comment': comment.trim(),
-      }),
-    );
-    final data = _processResponse(response);
-    return PortalReview.fromJson(data as Map<String, dynamic>);
+  /// Loads the session job snapshot (`GET /api/v1/portal/job`).
+  Future<PortalResult> job() async {
+    final http.Response response;
+    try {
+      response = await _client.get(
+        _buildUri('/api/v1/portal/job'),
+        headers: await _headers(),
+      );
+    } catch (_) {
+      return const PortalFailure('Could not reach the server');
+    }
+    final data = _dataOrNull(response);
+    if (data == null) return _errorResult(response);
+    try {
+      return PortalSessionActive(
+        snapshot: PortalSnapshot.fromJson(data as Map<String, dynamic>),
+      );
+    } catch (_) {
+      return const PortalFailure('Received an unexpected response');
+    }
+  }
+
+  /// Approves or declines a quote in the snapshot. [action] is
+  /// `'APPROVED'` or `'DECLINED'`.
+  Future<PortalResult> respondToQuote(String quoteId, String action) async {
+    final http.Response response;
+    try {
+      response = await _client.post(
+        _buildUri('/api/v1/portal/quotes/$quoteId/respond'),
+        headers: await _headers(),
+        body: jsonEncode({'action': action}),
+      );
+    } catch (_) {
+      return const PortalFailure('Could not reach the server');
+    }
+    final data = _dataOrNull(response);
+    if (data == null) return _errorResult(response);
+    try {
+      final map = data as Map<String, dynamic>;
+      final quoteJson = map['quote'] is Map<String, dynamic>
+          ? map['quote'] as Map<String, dynamic>
+          : map;
+      return PortalSessionActive(quote: PortalQuote.fromJson(quoteJson));
+    } catch (_) {
+      return const PortalFailure('Received an unexpected response');
+    }
+  }
+
+  /// Submits the review for the session job (job is taken from the session
+  /// server-side, never from the body).
+  Future<PortalResult> submitReview(int rating, String? comment) async {
+    final http.Response response;
+    try {
+      response = await _client.post(
+        _buildUri('/api/v1/portal/reviews'),
+        headers: await _headers(),
+        body: jsonEncode({
+          'rating': rating,
+          if (comment != null && comment.trim().isNotEmpty)
+            'comment': comment.trim(),
+        }),
+      );
+    } catch (_) {
+      return const PortalFailure('Could not reach the server');
+    }
+    final data = _dataOrNull(response);
+    if (data == null) return _errorResult(response);
+    try {
+      final map = data as Map<String, dynamic>;
+      final reviewJson = map['review'] is Map<String, dynamic>
+          ? map['review'] as Map<String, dynamic>
+          : map;
+      return PortalSessionActive(review: PortalReview.fromJson(reviewJson));
+    } catch (_) {
+      return const PortalFailure('Received an unexpected response');
+    }
+  }
+
+  /// Revokes the session server-side and forgets the stored bearer token.
+  /// Best effort: local state is cleared even if the call fails.
+  Future<void> logout() async {
+    try {
+      await _client.post(
+        _buildUri('/api/v1/portal/logout'),
+        headers: await _headers(),
+      );
+    } catch (_) {
+      // The session may already be gone; local cleanup still applies.
+    }
+    _bearerToken = null;
+    _bearerLoaded = true;
+    await _store.clear();
   }
 }

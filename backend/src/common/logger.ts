@@ -18,6 +18,7 @@ export const logger = pino({
       "req.body.sessionToken",
       "req.body.linkToken",
       "req.body.shareToken",
+      "req.body.code",
     ],
     remove: true,
   },

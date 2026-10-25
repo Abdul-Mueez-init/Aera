@@ -365,13 +365,93 @@ class CustomersRepository {
     );
   }
 
-  /// Generate a portal access token for the customer.
-  /// Returns the token string which can be used to build a customer portal link.
-  Future<String> createPortalAccess(String customerId) async {
-    final res = await _client.post(
-      '/api/v1/customers/$customerId/portal-access',
+  /// Recent portal audit events for this customer's jobs
+  /// (`GET /customers/:customerId/portal-activity`), newest first.
+  Future<List<PortalActivityEvent>> fetchPortalActivity(
+    String customerId, {
+    int limit = 20,
+  }) async {
+    final res = await _client.get(
+      '/api/v1/customers/$customerId/portal-activity',
+      queryParameters: {'limit': limit.toString()},
     );
-    final data = res as Map<String, dynamic>;
-    return data['token'] as String;
+    final list = res as List<dynamic>? ?? const [];
+    return list
+        .map((e) => PortalActivityEvent.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
+}
+
+/// One row of the staff-side portal activity feed for a customer
+/// (backend `PortalAuditEvent`). Actions are raw audit strings;
+/// [label] maps the known ones to friendly copy.
+class PortalActivityEvent {
+  const PortalActivityEvent({
+    required this.id,
+    this.jobId,
+    required this.action,
+    this.metadata,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String? jobId;
+  final String action;
+  final Map<String, dynamic>? metadata;
+  final DateTime createdAt;
+
+  /// Job number when the audit metadata carries it, else null.
+  int? get jobNumber {
+    final value = metadata?['jobNumber'];
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  String get label {
+    switch (action) {
+      case 'PORTAL_LINK_ISSUED':
+        return 'Portal link created';
+      case 'PORTAL_LINK_SENT':
+        return 'Portal link sent';
+      case 'PORTAL_LINK_SEND_FAILED':
+        return 'Portal link delivery failed';
+      case 'PORTAL_LINK_EXCHANGED':
+        return 'Customer opened the portal';
+      case 'PORTAL_DEACTIVATED':
+        return 'Portal access deactivated';
+      case 'PORTAL_REISSUED':
+        return 'Portal link reissued';
+      case 'PORTAL_QUOTE_RESPONDED':
+        return 'Customer responded to a quote';
+      case 'PORTAL_REVIEW_SUBMITTED':
+        return 'Customer submitted a review';
+      case 'HANDSHAKE_CODE_SENT':
+        return 'Handshake code sent to customer';
+      case 'HANDSHAKE_VERIFIED':
+        return 'Handshake verified — job started';
+      case 'HANDSHAKE_FAILED':
+        return 'Wrong handshake code entered';
+      case 'HANDSHAKE_LOCKED':
+        return 'Handshake locked (too many attempts)';
+      case 'HANDSHAKE_OVERRIDDEN':
+        return 'Job started with staff override';
+      default:
+        return action
+            .replaceAll('_', ' ')
+            .toLowerCase()
+            .replaceFirstMapped(RegExp(r'^[a-z]'), (m) => m[0]!.toUpperCase());
+    }
+  }
+
+  factory PortalActivityEvent.fromJson(Map<String, dynamic> json) =>
+      PortalActivityEvent(
+        id: json['id'] as String,
+        jobId: json['jobId'] as String?,
+        action: json['action'] as String? ?? '',
+        metadata: json['metadata'] as Map<String, dynamic>?,
+        createdAt:
+            DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+            DateTime.now(),
+      );
 }

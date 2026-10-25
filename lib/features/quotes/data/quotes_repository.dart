@@ -129,7 +129,6 @@ class Quote {
     this.sentAt,
     this.approvedAt,
     this.declinedAt,
-    this.shareToken,
     required this.createdAt,
     required this.updatedAt,
     required this.customer,
@@ -152,7 +151,6 @@ class Quote {
   final DateTime? sentAt;
   final DateTime? approvedAt;
   final DateTime? declinedAt;
-  final String? shareToken;
   final DateTime createdAt;
   final DateTime updatedAt;
   final QuoteCustomer customer;
@@ -185,7 +183,6 @@ class Quote {
     declinedAt: json['declinedAt'] != null
         ? DateTime.tryParse(json['declinedAt'] as String)
         : null,
-    shareToken: json['shareToken'] as String?,
     createdAt:
         DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
     updatedAt:

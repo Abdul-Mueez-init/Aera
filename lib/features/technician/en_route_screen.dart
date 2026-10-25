@@ -12,9 +12,9 @@ import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_status_chip.dart';
-import '../jobs/data/jobs_repository.dart';
 import '../jobs/providers/jobs_provider.dart';
 import 'providers/technician_provider.dart';
+import 'widgets/handshake_code_sheet.dart';
 
 class EnRouteScreen extends ConsumerStatefulWidget {
   const EnRouteScreen({super.key, required this.jobId});
@@ -26,38 +26,36 @@ class EnRouteScreen extends ConsumerStatefulWidget {
 }
 
 class _EnRouteScreenState extends ConsumerState<EnRouteScreen> {
-  bool _busy = false;
-
   void _refreshEverywhere() {
     ref.invalidate(jobDetailProvider(widget.jobId));
     ref.invalidate(jobsListProvider);
     ref.invalidate(technicianTodayProvider);
   }
 
-  void _showError(Object error) {
+  void _showMessage(String message) {
     if (!mounted) return;
-    final message = error is ApiException
-        ? error.message
-        : 'Something went wrong. Please try again.';
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// Starting work requires the customer handshake code: the sheet
+  /// collects it and calls `POST /jobs/:jobId/start`. The generic
+  /// status transition EN_ROUTE → IN_PROGRESS is rejected by the
+  /// backend (422 HANDSHAKE_REQUIRED), so it is never attempted here.
   Future<void> _arrived() async {
-    setState(() => _busy = true);
-    try {
-      await ref
-          .read(jobsRepositoryProvider)
-          .transitionStatus(widget.jobId, 'IN_PROGRESS');
+    final result = await showModalBottomSheet<Object?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => HandshakeCodeSheet(jobId: widget.jobId),
+    );
+    if (!mounted) return;
+    if (result == true) {
       _refreshEverywhere();
-      if (mounted) {
-        context.push('/technician/jobs/${widget.jobId}/work');
-      }
-    } catch (e) {
-      _showError(e);
-    } finally {
-      if (mounted) setState(() => _busy = false);
+      context.push('/technician/jobs/${widget.jobId}/work');
+    } else if (result is String) {
+      _showMessage(result);
     }
   }
 
@@ -407,8 +405,7 @@ class _EnRouteScreenState extends ConsumerState<EnRouteScreen> {
                     size: 18,
                     color: Colors.white,
                   ),
-                  isLoading: _busy,
-                  onPressed: _busy ? null : _arrived,
+                  onPressed: _arrived,
                 ),
               ),
             ],

@@ -39,7 +39,9 @@ void main() {
           const environment = 'production';
           if (environment == 'production' || environment == 'staging') {
             if (!envBaseUrl.startsWith('https://')) {
-              throw StateError('API_BASE_URL must use HTTPS for production builds');
+              throw StateError(
+                'API_BASE_URL must use HTTPS for production builds',
+              );
             }
           }
         }, throwsA(isA<StateError>()));
@@ -51,38 +53,18 @@ void main() {
           const environment = 'production';
           if (environment == 'production' || environment == 'staging') {
             if (envBaseUrl.isEmpty) {
-              throw StateError('API_BASE_URL must be set for production builds');
+              throw StateError(
+                'API_BASE_URL must be set for production builds',
+              );
             }
           }
         }, throwsA(isA<StateError>()));
       });
     });
 
-    group('Customer web base URL validation', () {
-      test('customerWebBaseUrl can be empty in development', () {
-        TestWidgetsFlutterBinding.ensureInitialized();
-        // Development allows empty customer web base URL
-        expect(AppConfig.customerWebBaseUrl, isEmpty);
-      });
-
-      test('validatedCustomerWebBaseUrl returns empty string in development', () {
-        TestWidgetsFlutterBinding.ensureInitialized();
-        expect(AppConfig.validatedCustomerWebBaseUrl, isEmpty);
-      });
-
-      test('production/staging require CUSTOMER_WEB_BASE_URL', () {
-        // This documents the validation requirement
-        // In actual builds with --dart-define=ENVIRONMENT=production,
-        // validatedCustomerWebBaseUrl will throw StateError if not set
-        expect(() {
-          const customerWebBaseUrl = '';
-          const environment = 'production';
-          if (customerWebBaseUrl.isEmpty && (environment == 'production' || environment == 'staging')) {
-            throw StateError('CUSTOMER_WEB_BASE_URL must be set for production web builds');
-          }
-        }, throwsA(isA<StateError>()));
-      });
-    });
+    // The 'Customer web base URL validation' group was removed with
+    // AppConfig.customerWebBaseUrl: customer links are backend-minted
+    // now, so the app no longer needs CUSTOMER_WEB_BASE_URL.
 
     group('Sentry configuration', () {
       test('Sentry is disabled when DSN is empty', () {

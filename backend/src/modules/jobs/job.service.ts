@@ -12,7 +12,10 @@ import {
 } from "./job.policy.js";
 import { generateInvoiceFromJob } from "../invoices/invoice.service.js";
 import { getNextJobNumber } from "../../common/counters/counter.service.js";
-import { isHandshakeRequired } from "../portal/portal-handshake.service.js";
+import {
+  prepareHandshakeOnEnRoute,
+  queueHandshakeCodeDelivery,
+} from "./handshake.service.js";
 import { closePortalIfDone } from "../portal/portal.grants.js";
 
 export type JobStatusValue =
@@ -257,7 +260,14 @@ export async function createJob(context: AuthContext, input: JobInput) {
 export async function getJob(context: AuthContext, jobId: string) {
   const jobMeta = await prisma.job.findFirst({
     where: { id: jobId, companyId: context.companyId },
-    select: { id: true, companyId: true, assignedTechnicianId: true },
+    select: {
+      id: true,
+      companyId: true,
+      assignedTechnicianId: true,
+      status: true,
+      handshakeVerifiedAt: true,
+      handshakeLockedUntil: true,
+    },
   });
 
   if (!jobMeta) {
@@ -357,7 +367,30 @@ export async function getJob(context: AuthContext, jobId: string) {
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
 
-  return jsonSafe(job);
+  // Handshake exposure rule (handoff 5.7): staff/technician responses
+  // carry only the handshake STATE, never the code, the derived version,
+  // or the failed-attempt counters.
+  const now = new Date();
+  const isLocked =
+    jobMeta.status === "EN_ROUTE" &&
+    !jobMeta.handshakeVerifiedAt &&
+    jobMeta.handshakeLockedUntil !== null &&
+    jobMeta.handshakeLockedUntil > now;
+  const handshakeState = jobMeta.handshakeVerifiedAt
+    ? "VERIFIED"
+    : jobMeta.status !== "EN_ROUTE"
+      ? "NONE"
+      : isLocked
+        ? "LOCKED"
+        : "AWAITING_CODE";
+
+  return jsonSafe({
+    ...job,
+    handshake: {
+      state: handshakeState,
+      lockedUntil: isLocked ? jobMeta.handshakeLockedUntil : null,
+    },
+  });
 }
 
 export async function updateJob(
@@ -421,6 +454,7 @@ export async function assignJob(
         select: {
           id: true,
           status: true,
+          assignedTechnicianId: true,
           scheduledStart: true,
           scheduledEnd: true,
         },
@@ -474,12 +508,25 @@ export async function assignJob(
         data: { assignedTechnicianId: technicianId },
       });
 
+      // Reassignment while EN_ROUTE invalidates the previous handshake
+      // code: bump the version and reset the handshake state inside the
+      // same transaction; the new code is delivered after commit.
+      const handshakeChanged =
+        job.status === "EN_ROUTE" && technicianId !== job.assignedTechnicianId;
+      if (handshakeChanged) {
+        await prepareHandshakeOnEnRoute(transaction, job);
+      }
+
       return {
         conflicts,
         technicianId,
+        handshakeChanged,
       };
     })
-    .then(async ({ conflicts, technicianId }) => {
+    .then(async ({ conflicts, technicianId, handshakeChanged }) => {
+      if (handshakeChanged) {
+        queueHandshakeCodeDelivery(jobId);
+      }
       void notificationPublisher.publish({
         type: "JOB_ASSIGNED",
         companyId: context.companyId,
@@ -515,6 +562,20 @@ export async function transitionJob(
   if (!job) {
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
+
+  // EN_ROUTE → IN_PROGRESS is closed to the generic status command for
+  // every role (handoff 5.7). The only paths are POST /jobs/:jobId/start
+  // with the customer handshake code, or the audited staff override.
+  // This check runs before the role policy so the answer is the same
+  // 422 HANDSHAKE_REQUIRED for technicians and office staff alike.
+  if (job.status === "EN_ROUTE" && toStatus === "IN_PROGRESS") {
+    throw new AppError(
+      "HANDSHAKE_REQUIRED",
+      "Starting an en route job requires the customer handshake code",
+      422,
+    );
+  }
+
   assertCanTransitionJob(context, job, toStatus);
   if (toStatus === "COMPLETED") {
     throw new AppError(
@@ -529,18 +590,6 @@ export async function transitionJob(
       `Cannot transition job from ${job.status} to ${toStatus}`,
       422,
     );
-  }
-
-  // Enforce handshake verification for EN_ROUTE → IN_PROGRESS
-  if (job.status === "EN_ROUTE" && toStatus === "IN_PROGRESS") {
-    const handshakeRequired = await isHandshakeRequired(jobId);
-    if (handshakeRequired) {
-      throw new AppError(
-        "HANDSHAKE_REQUIRED",
-        "Customer handshake code must be verified before starting work",
-        422,
-      );
-    }
   }
 
   // Require technician assignment for active job states
@@ -584,11 +633,23 @@ export async function transitionJob(
       },
     });
 
+    // Entering EN_ROUTE issues a fresh handshake code (version bump +
+    // attempts/lock/verified reset) inside the same transaction.
+    if (toStatus === "EN_ROUTE") {
+      await prepareHandshakeOnEnRoute(transaction, job);
+    }
+
     // Close portal if job is cancelled
     if (toStatus === "CANCELLED") {
       await closePortalIfDone(jobId, transaction);
     }
   });
+
+  // Deliver the new handshake code to the customer after commit.
+  // Fire-and-forget: delivery failure never fails the transition.
+  if (toStatus === "EN_ROUTE") {
+    queueHandshakeCodeDelivery(jobId);
+  }
 
   return getJob(context, jobId);
 }

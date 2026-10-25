@@ -10,7 +10,6 @@ const INITIAL_DELAY_MS = 30_000;
 
 export interface PortalSweepOptions {
   postCompletionMaxDays?: number;
-  linkUnusedTtlHours?: number;
 }
 
 export interface PortalSweepResult {
@@ -34,15 +33,13 @@ export async function runPortalSweep(
 ): Promise<PortalSweepResult> {
   const postCompletionMaxDays =
     options.postCompletionMaxDays ?? env.PORTAL_POST_COMPLETION_MAX_DAYS;
-  const linkUnusedTtlHours =
-    options.linkUnusedTtlHours ?? env.PORTAL_LINK_UNUSED_TTL_HOURS;
 
   const completedBefore = new Date(
     now.getTime() - postCompletionMaxDays * DAY_MS,
   );
-  const linkExpiredAt = new Date(
-    now.getTime() - linkUnusedTtlHours * 60 * 60 * 1000,
-  );
+  // A never-opened link is stale once its own expiry has passed (spec 5.8:
+  // linkExpiresAt < now), not a full TTL after expiry.
+  const linkExpiredAt = now;
 
   let completedJobsClosed = 0;
   let neverOpenedLinksClosed = 0;
@@ -78,7 +75,7 @@ export async function runPortalSweep(
     cursor = page[page.length - 1].id;
 
     for (const grant of page) {
-      await prisma.$transaction(async (tx) => {
+      const closed = await prisma.$transaction(async (tx) => {
         // Re-check within transaction
         const current = await tx.portalAccessGrant.findUnique({
           where: { id: grant.id },
@@ -86,7 +83,21 @@ export async function runPortalSweep(
         });
 
         if (!current || current.status !== "ACTIVE") {
-          return;
+          return false;
+        }
+
+        // Spec 5.8: max-age closure applies only when the job's invoice is
+        // paid or there is no invoice — an unpaid invoice keeps the portal
+        // open so the customer can still view and pay it.
+        const unpaidInvoice = await tx.invoice.findFirst({
+          where: {
+            jobId: grant.jobId,
+            status: { in: ["DRAFT", "ISSUED", "PARTIALLY_PAID", "OVERDUE"] },
+          },
+          select: { id: true },
+        });
+        if (unpaidInvoice) {
+          return false;
         }
 
         // Deactivate grant
@@ -116,9 +127,12 @@ export async function runPortalSweep(
             metadata: { reason: "AUTO_MAX_AGE" },
           },
         });
+        return true;
       });
 
-      completedJobsClosed += 1;
+      if (closed) {
+        completedJobsClosed += 1;
+      }
     }
 
     if (page.length < PAGE_SIZE) break;

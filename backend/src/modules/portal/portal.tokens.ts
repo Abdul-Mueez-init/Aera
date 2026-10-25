@@ -1,4 +1,10 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
+import { AppError } from "../../common/errors.js";
 
 /**
  * Generate a 256-bit random token (43 chars, base64url).
@@ -30,8 +36,12 @@ export function timingSafeCompare(a: string, b: string): boolean {
 }
 
 /**
- * Derive a 6-digit handshake code from HMAC-SHA256.
- * Used for technician-customer verification.
+ * Derive a 6-digit handshake code from HMAC-SHA256 (handoff 5.7):
+ * code = HMAC_SHA256(secret, `${companyId}:${jobId}:${version}`)
+ *          .readUInt32BE(0) % 1_000_000, zero-padded to 6 digits.
+ * The code itself is never stored; it is re-derived on demand.
+ * The secret must be the configured PORTAL_CODE_SECRET. There is no
+ * fallback secret: an unset/empty secret is a server misconfiguration.
  */
 export function deriveHandshakeCode(
   secret: string,
@@ -39,11 +49,16 @@ export function deriveHandshakeCode(
   jobId: string,
   version: number,
 ): string {
-  const hmac = createHash("sha256");
-  hmac.update(`${companyId}:${jobId}:${version}`);
-  hmac.update(secret);
-  const hash = hmac.digest();
-  const hashAsNumber = hash.readUInt32BE(0);
-  const code = (hashAsNumber % 1_000_000).toString().padStart(6, "0");
+  if (!secret) {
+    throw new AppError(
+      "CONFIG_PORTAL_CODE_SECRET_MISSING",
+      "PORTAL_CODE_SECRET is not configured on the server",
+      500,
+    );
+  }
+  const digest = createHmac("sha256", secret)
+    .update(`${companyId}:${jobId}:${version}`)
+    .digest();
+  const code = (digest.readUInt32BE(0) % 1_000_000).toString().padStart(6, "0");
   return code;
 }

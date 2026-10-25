@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -8,7 +7,6 @@ import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
-import '../../core/utils/link_builder.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
@@ -29,7 +27,6 @@ class CustomerDetailScreen extends ConsumerStatefulWidget {
 
 class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
   bool _archiving = false;
-  bool _generatingPortalLink = false;
 
   Future<void> _confirmArchive(Customer customer) async {
     final confirmed = await showDialog<bool>(
@@ -98,106 +95,6 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
       }
     } finally {
       if (mounted) setState(() => _archiving = false);
-    }
-  }
-
-  Future<void> _generateAndSharePortalLink(String customerId) async {
-    setState(() => _generatingPortalLink = true);
-    try {
-      final token = await ref
-          .read(customersRepositoryProvider)
-          .createPortalAccess(customerId);
-
-      final link = LinkBuilder.customerPortal(token);
-
-      // Show dialog with share options
-      if (mounted) {
-        await showDialog<void>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            backgroundColor: AeraColors.surface,
-            shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
-            title: Text(
-              'Customer Portal Link',
-              style: AeraTypography.h3.copyWith(fontSize: 17),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Share this link with the customer to access their portal:',
-                  style: AeraTypography.bodySm,
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AeraColors.surfaceContainerLow,
-                    borderRadius: AeraRadii.borderMd,
-                  ),
-                  child: Text(
-                    link,
-                    style: AeraTypography.label.copyWith(
-                      fontSize: 11,
-                      color: AeraColors.accent,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton.icon(
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: link));
-                  Navigator.of(dialogContext).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Link copied to clipboard')),
-                  );
-                },
-                icon: const Icon(Icons.copy, size: 18),
-                label: const Text('Copy'),
-              ),
-              TextButton.icon(
-                onPressed: () async {
-                  final message = 'Your customer portal link: $link';
-                  final whatsappUrl = Uri.parse(
-                    'https://wa.me/?text=${Uri.encodeComponent(message)}',
-                  );
-                  if (await canLaunchUrl(whatsappUrl)) {
-                    await launchUrl(
-                      whatsappUrl,
-                      mode: LaunchMode.externalApplication,
-                    );
-                  }
-                },
-                icon: const Icon(Icons.message, size: 18),
-                label: const Text('WhatsApp'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-        );
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not build the customer link')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _generatingPortalLink = false);
     }
   }
 
@@ -271,6 +168,8 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
               _AddressesCard(customer: customer),
               const SizedBox(height: 14),
               _RecentJobsCard(customerId: customer.id),
+              const SizedBox(height: 14),
+              _PortalActivityCard(customerId: customer.id),
               if (customer.notes != null && customer.notes!.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 AeraCard(
@@ -293,18 +192,6 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                 text: 'Create New Job for ${customer.firstName}',
                 icon: const Icon(Icons.add_task, size: 18, color: Colors.white),
                 onPressed: () => context.push('/create-job'),
-              ),
-              const SizedBox(height: 10),
-              AeraButton(
-                text: _generatingPortalLink
-                    ? 'Generating Link...'
-                    : 'Customer Portal Link',
-                variant: AeraButtonVariant.secondary,
-                icon: const Icon(Icons.link, size: 18),
-                isLoading: _generatingPortalLink,
-                onPressed: _generatingPortalLink
-                    ? null
-                    : () => _generateAndSharePortalLink(customer.id),
               ),
               const SizedBox(height: 10),
               Row(
@@ -609,6 +496,97 @@ class _AddressesCard extends ConsumerWidget {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact portal audit feed: link issued/opened, handshake events,
+/// deactivations — the staff-side window into the customer portal.
+class _PortalActivityCard extends ConsumerWidget {
+  const _PortalActivityCard({required this.customerId});
+
+  final String customerId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activityAsync = ref.watch(customerPortalActivityProvider(customerId));
+
+    return AeraCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Portal activity',
+            style: AeraTypography.h3.copyWith(fontSize: 15),
+          ),
+          const SizedBox(height: 10),
+          activityAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+            error: (error, _) => Text(
+              error is ApiException
+                  ? error.message
+                  : 'Could not load portal activity',
+              style: AeraTypography.bodySm.copyWith(color: AeraColors.danger),
+            ),
+            data: (events) {
+              if (events.isEmpty) {
+                return Text(
+                  'No portal activity yet',
+                  style: AeraTypography.bodySm,
+                );
+              }
+              return Column(
+                children: events
+                    .map(
+                      (event) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.circle,
+                              size: 6,
+                              color: AeraColors.accent,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                event.jobNumber != null
+                                    ? '${event.label} · Job #${event.jobNumber}'
+                                    : event.label,
+                                style: AeraTypography.bodySm.copyWith(
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              DateFormat(
+                                'MMM d, h:mm a',
+                              ).format(event.createdAt),
+                              style: AeraTypography.label.copyWith(
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+              );
+            },
+          ),
         ],
       ),
     );

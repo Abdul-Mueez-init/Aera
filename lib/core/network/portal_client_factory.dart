@@ -1,33 +1,14 @@
-import 'package:http/http.dart' as http;
-
-/// Factory for creating HTTP clients for portal API calls.
+/// Platform-specific HTTP client for portal API calls (handoff 6.2).
 ///
-/// Phase 8: Different transport for web vs mobile:
-/// - Web: BrowserClient with credentials (cookies)
-/// - Mobile: Plain http.Client (bearer token from secure storage)
-abstract class PortalClientFactory {
-  static http.Client create() {
-    // Conditional import based on platform
-    final factory = _getClientFactory();
-    return factory.create();
-  }
+/// - Web: `BrowserClient` with credentials enabled, so the HttpOnly
+///   `__Host-aera_portal` session cookie is sent/stored by the browser.
+/// - Mobile/desktop (IO): a plain `http.Client`; the session token is kept
+///   in secure storage and attached as `Authorization: Bearer` by
+///   `PortalRepository` instead.
+///
+/// The conditional export below is resolved at compile time on
+/// `dart.library.js_interop` (true only for web builds).
+library;
 
-  static _ClientFactory _getClientFactory() {
-    // The conditional import will be resolved at compile time
-    // This file itself doesn't use conditional imports - the implementations do
-    return _ClientFactoryImpl();
-  }
-}
-
-abstract class _ClientFactory {
-  http.Client create();
-}
-
-class _ClientFactoryImpl implements _ClientFactory {
-  @override
-  http.Client create() {
-    // This will be replaced by conditional imports
-    // The actual platform-specific implementations are in separate files
-    return http.Client();
-  }
-}
+export 'portal_client_io.dart'
+    if (dart.library.js_interop) 'portal_client_web.dart';

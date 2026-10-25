@@ -62,21 +62,40 @@ export async function issueGrant(
     Date.now() + env.PORTAL_LINK_UNUSED_TTL_HOURS * 60 * 60 * 1000,
   );
 
-  const grant = await prisma.portalAccessGrant.create({
-    data: {
-      companyId: context.companyId,
-      customerId: job.customerId,
-      jobId,
-      issuedBy: context.userId,
-      linkTokenHash,
-      linkExpiresAt,
-      status: "ACTIVE",
-    },
-    select: {
-      id: true,
-      linkExpiresAt: true,
-    },
-  });
+  let grant: { id: string; linkExpiresAt: Date };
+  try {
+    grant = await prisma.portalAccessGrant.create({
+      data: {
+        companyId: context.companyId,
+        customerId: job.customerId,
+        jobId,
+        issuedBy: context.userId,
+        linkTokenHash,
+        linkExpiresAt,
+        status: "ACTIVE",
+      },
+      select: {
+        id: true,
+        linkExpiresAt: true,
+      },
+    });
+  } catch (error) {
+    // Lost a concurrent-issue race: the partial unique index
+    // (one ACTIVE grant per job) fired after the check above.
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "P2002"
+    ) {
+      throw new AppError(
+        "PORTAL_ACCESS_ALREADY_ACTIVE",
+        "Portal access is already active for this job",
+        409,
+      );
+    }
+    throw error;
+  }
 
   // Audit the issuance
   await prisma.portalAuditEvent.create({

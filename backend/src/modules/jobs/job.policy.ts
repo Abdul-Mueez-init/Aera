@@ -27,7 +27,10 @@ const technicianFieldTransitions: Record<
   NEW: [],
   QUOTING: [],
   SCHEDULED: ["EN_ROUTE"],
-  EN_ROUTE: ["IN_PROGRESS"],
+  // EN_ROUTE -> IN_PROGRESS is intentionally absent: the only paths are
+  // POST /jobs/:jobId/start (customer handshake code) and its staff
+  // override (handoff 5.7). The generic status command rejects it too.
+  EN_ROUTE: [],
   IN_PROGRESS: ["WAITING_PARTS"],
   WAITING_PARTS: ["IN_PROGRESS"],
   COMPLETED: [],

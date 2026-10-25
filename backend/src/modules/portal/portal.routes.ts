@@ -8,7 +8,6 @@ import {
   submitReview,
   portalLogout,
 } from "./portal.service.js";
-import { verifyHandshakeCode } from "./portal-handshake.service.js";
 import {
   requirePortalSession,
   PortalRequest,
@@ -23,7 +22,6 @@ import {
   portalExchangeRateLimiter,
   portalReadRateLimiter,
   portalWriteRateLimiter,
-  handshakeRateLimiter,
 } from "../../common/rateLimit.js";
 
 const router = Router();
@@ -42,6 +40,7 @@ router.post(
     const parsed = z
       .object({
         token: z.string().length(43),
+        deliver: z.enum(["cookie", "bearer"]).optional().default("cookie"),
       })
       .safeParse(request.body);
 
@@ -56,6 +55,16 @@ router.post(
     }
 
     const { sessionToken } = await exchangeToken(parsed.data.token);
+
+    // deliver:"bearer" is for the mobile app (Android App Link flow): the
+    // session token goes in the body and the app stores it in secure storage.
+    // Default is the web flow: HttpOnly cookie, token never in the body.
+    if (parsed.data.deliver === "bearer") {
+      response.status(200).json({
+        data: { state: "ACTIVE", sessionToken },
+      });
+      return;
+    }
 
     setPortalSessionCookie(response, sessionToken);
     response.status(200).json({
@@ -193,44 +202,6 @@ router.post(
     response.status(200).json({
       data: { success: true },
     });
-  },
-);
-
-/**
- * POST /api/v1/portal/handshake/verify
- * Verify the handshake code for EN_ROUTE → IN_PROGRESS transition.
- */
-router.post(
-  "/handshake/verify",
-  handshakeRateLimiter,
-  requirePortalSession,
-  portalCsrfGuard,
-  async (request: PortalRequest, response: Response) => {
-    const parsed = z
-      .object({
-        code: z.string().regex(/^\d{6}$/, "Code must be 6 digits"),
-      })
-      .safeParse(request.body);
-
-    if (!parsed.success) {
-      response.status(422).json({
-        error: {
-          code: "VALIDATION_FAILED",
-          message: parsed.error.issues.map((issue) => issue.message).join(", "),
-        },
-      });
-      return;
-    }
-
-    const { companyId, customerId, jobId } = request.portal!;
-    const data = await verifyHandshakeCode(
-      companyId,
-      customerId,
-      jobId,
-      parsed.data.code,
-    );
-
-    response.status(200).json({ data });
   },
 );
 

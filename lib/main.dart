@@ -7,6 +7,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'core/theme/aera_theme.dart';
 import 'core/router/app_router.dart';
 import 'core/config/app_config.dart';
+import 'core/network/sentry_scrub.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,6 +50,13 @@ Future<void> main() async {
       options.attachScreenshot = false;
       // ignore: experimental_member_use
       options.attachViewHierarchy = false;
+
+      // Portal magic-link tokens travel in the URL fragment (#t=...);
+      // strip fragments from event request URLs and breadcrumbs so a
+      // single-use token can never leak into a crash report.
+      options.beforeSend = (event, hint) => scrubSentryEvent(event);
+      options.beforeBreadcrumb = (breadcrumb, hint) =>
+          breadcrumb == null ? null : scrubSentryBreadcrumb(breadcrumb);
     });
   }
 

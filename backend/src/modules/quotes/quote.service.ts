@@ -290,7 +290,7 @@ export async function getPublicQuote() {
   );
 }
 
-interface ProcessQuoteResponseOptions {
+export interface ProcessQuoteResponseOptions {
   quoteId: string;
   companyId: string;
   jobId: string | null;
@@ -300,7 +300,13 @@ interface ProcessQuoteResponseOptions {
   now?: Date;
 }
 
-async function processQuoteResponse(options: ProcessQuoteResponseOptions) {
+/**
+ * Shared quote-decision domain logic (handoff 5.5): transition-guarded
+ * status update, QuoteApprovalEvent, and linked-job advancement on
+ * approval. Used by the staff respond command and the customer portal
+ * respond so both surfaces enforce identical expiry/idempotency rules.
+ */
+export async function processQuoteResponse(options: ProcessQuoteResponseOptions) {
   const { quoteId, companyId, jobId, action, source, actorUserId } = options;
   const now = options.now ?? new Date();
 

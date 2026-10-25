@@ -362,6 +362,99 @@ class PaginatedJobs {
   final PageMeta meta;
 }
 
+/// One channel's delivery outcome from a portal link issue/reissue.
+class PortalDelivery {
+  const PortalDelivery({
+    required this.channel,
+    required this.status,
+    this.error,
+  });
+
+  final String channel;
+  final String status;
+  final String? error;
+
+  factory PortalDelivery.fromJson(Map<String, dynamic> json) => PortalDelivery(
+    channel: json['channel'] as String? ?? '',
+    status: json['status'] as String? ?? '',
+    error: json['error'] as String?,
+  );
+}
+
+/// Staff-facing summary of a job's portal access grant
+/// (`GET /jobs/:jobId/portal-access`). A null result from the repository
+/// means no grant has ever been issued for the job. Never contains the
+/// link or token — links are returned exactly once, at issue time.
+class PortalAccessStatus {
+  const PortalAccessStatus({
+    required this.status,
+    this.createdAt,
+    this.linkConsumedAt,
+    this.lastSeenAt,
+    this.deactivatedAt,
+    this.deactivatedReason,
+  });
+
+  final String status;
+  final DateTime? createdAt;
+  final DateTime? linkConsumedAt;
+  final DateTime? lastSeenAt;
+  final DateTime? deactivatedAt;
+  final String? deactivatedReason;
+
+  bool get isActive => status == 'ACTIVE';
+  bool get isDeactivated => status == 'DEACTIVATED';
+  bool get isOpened => linkConsumedAt != null;
+
+  factory PortalAccessStatus.fromJson(Map<String, dynamic> json) =>
+      PortalAccessStatus(
+        status: json['status'] as String? ?? '',
+        createdAt: json['createdAt'] != null
+            ? DateTime.tryParse(json['createdAt'] as String)
+            : null,
+        linkConsumedAt: json['linkConsumedAt'] != null
+            ? DateTime.tryParse(json['linkConsumedAt'] as String)
+            : null,
+        lastSeenAt: json['lastSeenAt'] != null
+            ? DateTime.tryParse(json['lastSeenAt'] as String)
+            : null,
+        deactivatedAt: json['deactivatedAt'] != null
+            ? DateTime.tryParse(json['deactivatedAt'] as String)
+            : null,
+        deactivatedReason: json['deactivatedReason'] as String?,
+      );
+}
+
+/// Result of issuing/reissuing a portal link. [link] is the one and only
+/// time the plaintext link exists client-side — show it once, never store.
+class PortalIssueResult {
+  const PortalIssueResult({
+    required this.grantId,
+    required this.link,
+    this.linkExpiresAt,
+    this.deliveries = const [],
+  });
+
+  final String grantId;
+  final String link;
+  final DateTime? linkExpiresAt;
+  final List<PortalDelivery> deliveries;
+
+  factory PortalIssueResult.fromJson(Map<String, dynamic> json) =>
+      PortalIssueResult(
+        grantId: json['grantId'] as String? ?? '',
+        link: json['link'] as String? ?? '',
+        linkExpiresAt: json['linkExpiresAt'] != null
+            ? DateTime.tryParse(json['linkExpiresAt'] as String)
+            : null,
+        deliveries:
+            (json['deliveries'] as List<dynamic>?)
+                ?.map((d) => PortalDelivery.fromJson(d as Map<String, dynamic>))
+                .toList() ??
+            const [],
+      );
+}
+
 class CreateJobInput {
   const CreateJobInput({
     required this.customerId,
@@ -534,6 +627,71 @@ class JobsRepository {
       },
     );
     return JobMutationResult.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Current portal access grant summary for the job, or null when no
+  /// link has ever been issued. OWNER/DISPATCHER only on the backend.
+  Future<PortalAccessStatus?> getPortalAccess(String jobId) async {
+    final res = await _client.get('/api/v1/jobs/$jobId/portal-access');
+    if (res == null) return null;
+    return PortalAccessStatus.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Issue a new portal link for the job. The returned link is shown to
+  /// staff exactly once; it is never persisted client-side.
+  Future<PortalIssueResult> issuePortalAccess(
+    String jobId,
+    List<String> channels,
+  ) async {
+    final res = await _client.post(
+      '/api/v1/jobs/$jobId/portal-access',
+      body: {'channels': channels},
+    );
+    return PortalIssueResult.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Deactivate the current link/sessions and issue a fresh one.
+  Future<PortalIssueResult> reissuePortalAccess(
+    String jobId,
+    List<String> channels,
+  ) async {
+    final res = await _client.post(
+      '/api/v1/jobs/$jobId/portal-access/reissue',
+      body: {'channels': channels},
+    );
+    return PortalIssueResult.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Deactivate the job's portal access immediately (revokes sessions).
+  Future<void> deactivatePortalAccess(String jobId) async {
+    await _client.post(
+      '/api/v1/jobs/$jobId/portal-access/deactivate',
+      body: const <String, dynamic>{},
+    );
+  }
+
+  /// Technician start: submits the customer handshake [code] the
+  /// technician typed in. Server verifies it and moves the job
+  /// EN_ROUTE → IN_PROGRESS. Failures surface as [ApiException] with
+  /// codes HANDSHAKE_INVALID (422), HANDSHAKE_LOCKED (423) or
+  /// HANDSHAKE_NOT_AVAILABLE (409).
+  Future<Job> startJobWithCode(String jobId, String code) async {
+    final res = await _client.post(
+      '/api/v1/jobs/$jobId/start',
+      body: {'code': code},
+    );
+    return Job.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Staff override: start an EN_ROUTE job without the code. [reason]
+  /// is required (5–300 chars) and lands in the audit log/history.
+  /// OWNER/DISPATCHER only on the backend.
+  Future<Job> overrideStartJob(String jobId, String reason) async {
+    final res = await _client.post(
+      '/api/v1/jobs/$jobId/start/override',
+      body: {'reason': reason.trim()},
+    );
+    return Job.fromJson(res as Map<String, dynamic>);
   }
 
   /// Active technicians on the company, sourced from

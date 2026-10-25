@@ -17,6 +17,7 @@ import '../invoices/data/invoices_repository.dart';
 import '../invoices/providers/invoices_provider.dart';
 import 'data/jobs_repository.dart' show Job, Technician, jobsRepositoryProvider;
 import 'providers/jobs_provider.dart';
+import 'widgets/job_portal_card.dart';
 
 // Needed for technician list
 final techniciansProvider = FutureProvider.autoDispose<List<Technician>>((
@@ -442,6 +443,9 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
           ),
           data: (job) {
             final (priorityColor, prioritySoft) = _priorityColors(job.priority);
+            final role = ref.watch(currentRoleProvider);
+            final canManagePortal = role == 'OWNER' || role == 'DISPATCHER';
+            final companyName = ref.watch(currentCompanyProvider)?.name ?? '';
 
             return ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -639,6 +643,14 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
+
+                // Portal access (owner/dispatcher only): link status,
+                // send/reissue/deactivate, WhatsApp hand-off, and the
+                // audited override start for EN_ROUTE jobs.
+                if (canManagePortal) ...[
+                  JobPortalCard(job: job, companyName: companyName),
+                  const SizedBox(height: 14),
+                ],
 
                 // Problem description
                 AeraCard(

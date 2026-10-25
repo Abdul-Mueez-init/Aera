@@ -80,21 +80,9 @@ class AppConfig {
     return 'http://127.0.0.1:4000';
   }
 
-  // Phase 5: Base URL for customer-facing web build (quote approval, invoice payment, portal).
-  // Required for production/staging web builds. Falls back to empty string in development.
-  static const String customerWebBaseUrl = String.fromEnvironment(
-    'CUSTOMER_WEB_BASE_URL',
-    defaultValue: '',
-  );
-
-  static String get validatedCustomerWebBaseUrl {
-    if (customerWebBaseUrl.isEmpty && (isProduction || isStaging)) {
-      throw StateError(
-        'CUSTOMER_WEB_BASE_URL must be set for $environment web builds',
-      );
-    }
-    return customerWebBaseUrl;
-  }
+  // CUSTOMER_WEB_BASE_URL is gone: customer links are minted by the
+  // backend (portal access grant API) and returned to the app, so the
+  // client no longer builds customer-facing URLs.
 
   static bool get isProduction => environment == 'production';
   static bool get isStaging => environment == 'staging';

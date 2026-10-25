@@ -120,7 +120,7 @@ describe("Phase G1: Critical Backend Authorization Tests", () => {
     expect(sendRes.body.error.code).toBe("QUOTE_EXPIRED");
   });
 
-  it("serves a public quote link before expiry using the token issued by send", async () => {
+  it("send no longer issues a public quote link and the shared route is gone", async () => {
     const owner = await registerOwner("quote-valid");
 
     const { customerId, addressId } = await createCustomerAndAddress(
@@ -152,15 +152,23 @@ describe("Phase G1: Critical Backend Authorization Tests", () => {
       .post(`/api/v1/quotes/${quoteRes.body.data.id}/send`)
       .set("Authorization", `Bearer ${owner.accessToken}`);
     expect(sendRes.status).toBe(200);
-    const shareToken = sendRes.body.data.shareToken;
-    expect(typeof shareToken).toBe("string");
+    expect(sendRes.body.data.status).toBe("SENT");
+    // The portal handoff removed shareToken minting: a sent quote must
+    // not carry a public credential anymore. Customers reach the quote
+    // through the job-scoped portal session instead.
+    expect(sendRes.body.data.shareToken).toBeUndefined();
+    expect(JSON.stringify(sendRes.body)).not.toContain("shareToken");
 
-    const publicAccess = await request(app).get(
-      `/api/v1/quotes/shared/${shareToken}`,
+    // The shared quote routes themselves no longer exist.
+    const publicRead = await request(app).get(
+      "/api/v1/quotes/shared/any-token",
     );
+    expect(publicRead.status).toBe(404);
 
-    expect(publicAccess.status).toBe(200);
-    expect(publicAccess.body.data.id).toBe(quoteRes.body.data.id);
+    const publicRespond = await request(app)
+      .post("/api/v1/quotes/shared/any-token/respond")
+      .send({ action: "APPROVED" });
+    expect(publicRespond.status).toBe(404);
   });
 
   it("prevents cross-company access by guessing customer IDs", async () => {

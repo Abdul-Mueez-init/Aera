@@ -22,11 +22,10 @@ import 'package:aera/features/technician/work_in_progress_screen.dart';
 import 'package:aera/features/technician/job_evidence_screen.dart';
 import 'package:aera/features/technician/complete_job_screen.dart';
 import 'package:aera/features/more/more_screen.dart';
-import 'package:aera/features/quotes/quote_approval_screen.dart';
-import 'package:aera/features/invoices/invoice_payment_screen.dart';
 import 'package:aera/features/invoices/create_invoice_screen.dart';
 import 'package:aera/features/portal/customer_home_screen.dart';
-import 'package:aera/features/field/technician_tracking_screen.dart';
+import 'package:aera/features/portal/portal_closed_screen.dart';
+import 'package:aera/features/portal/portal_open_screen.dart';
 import 'package:aera/features/ai/ai_operations_assistant_screen.dart';
 import 'package:aera/features/ai/ai_insight_detail_screen.dart';
 import 'package:aera/features/calendar/calendar_screen.dart';
@@ -180,7 +179,7 @@ void main() {
       expect(find.byType(CompleteJobScreen), findsOneWidget);
     });
 
-    testWidgets('Customer quote approval/payment path - public portal flow', (
+    testWidgets('Customer portal path - session-based portal flow', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
@@ -190,15 +189,28 @@ void main() {
         ),
       );
 
-      // Navigate to quote approval with share token
-      appRouter.go('/quote-approval/test-share-token-123');
-      await tester.pumpAndSettle();
-      expect(find.byType(QuoteApprovalScreen), findsOneWidget);
+      // The link entry point: establishes the portal session, then routes
+      // on to /p (or /p/closed). Bounded pumps — it shows a progress
+      // indicator while bootstrapping, which never "settles".
+      appRouter.go('/open');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(find.byType(PortalOpenScreen), findsOneWidget);
 
-      // Navigate to invoice payment
-      appRouter.go('/invoice-payment/test-token/INV-1001');
+      // The portal home itself is session-based (no token in the route).
+      // Bounded pumps again — it shows a loading indicator while the
+      // session bootstrap is in flight, which never "settles".
+      appRouter.go('/p');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(find.byType(CustomerHomeScreen), findsOneWidget);
+
+      // And the closed screen.
+      appRouter.go('/p/closed');
       await tester.pumpAndSettle();
-      expect(find.byType(InvoicePaymentScreen), findsOneWidget);
+      expect(find.byType(PortalClosedScreen), findsOneWidget);
     });
 
     testWidgets('AI assistant path - navigation and insight detail', (
@@ -379,7 +391,7 @@ void main() {
       expect(find.byType(CompanySettingsScreen), findsOneWidget);
     }, skip: true); // Skip due to rendering issues with ListTile background
 
-    testWidgets('Customer portal route - token-based access', (
+    testWidgets('Customer portal route - session-based access', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
@@ -389,13 +401,17 @@ void main() {
         ),
       );
 
-      // Test customer portal with token
-      appRouter.go('/portal/customer-token-123');
-      await tester.pumpAndSettle();
+      // The portal home takes no token — the session is the credential.
+      // Bounded pumps: the screen shows a loading indicator while the
+      // session bootstrap is in flight, which never "settles".
+      appRouter.go('/p');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
       expect(find.byType(CustomerHomeScreen), findsOneWidget);
     });
 
-    testWidgets('Technician tracking route - token and job ID', (
+    testWidgets('Legacy token routes no longer resolve', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
@@ -405,10 +421,12 @@ void main() {
         ),
       );
 
-      // Test technician tracking
-      appRouter.go('/technician-tracking/track-token/JOB-4019');
+      // The long-lived-token routes were removed with the old design; the
+      // app must handle them gracefully (router error page, no crash).
+      appRouter.go('/portal/customer-token-123');
       await tester.pumpAndSettle();
-      expect(find.byType(TechnicianTrackingScreen), findsOneWidget);
+      expect(find.byType(CustomerHomeScreen), findsNothing);
+      expect(find.byType(MaterialApp), findsOneWidget);
     });
 
     testWidgets('Route parameter extraction - correct parameter passing', (

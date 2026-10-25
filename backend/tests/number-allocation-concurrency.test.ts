@@ -110,10 +110,13 @@ async function startJob(
     .send({ status: "EN_ROUTE" });
   expect(s2.status).toBe(200);
 
+  // EN_ROUTE -> IN_PROGRESS via /status is closed by the handshake gate
+  // (422 HANDSHAKE_REQUIRED for every role); staff start the job through
+  // the audited override command instead.
   const s3 = await request(app)
-    .post(`/api/v1/jobs/${jobId}/status`)
+    .post(`/api/v1/jobs/${jobId}/start/override`)
     .set(auth)
-    .send({ status: "IN_PROGRESS" });
+    .send({ reason: "Test flow start override" });
   expect(s3.status).toBe(200);
 }
 

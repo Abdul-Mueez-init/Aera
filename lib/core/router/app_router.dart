@@ -39,11 +39,11 @@ import '../../features/quotes/quotes_screen.dart';
 import '../../features/quotes/quote_detail_screen.dart';
 import '../../features/invoices/invoices_screen.dart';
 import '../../features/invoices/invoice_detail_screen.dart';
-import '../../features/quotes/quote_approval_screen.dart';
-import '../../features/invoices/invoice_payment_screen.dart';
 import '../../features/portal/customer_home_screen.dart';
+import '../../features/portal/portal_closed_screen.dart';
+import '../../features/portal/portal_landing_screen.dart';
+import '../../features/portal/portal_open_screen.dart';
 
-import '../../features/field/technician_tracking_screen.dart';
 import '../../features/technician/technician_home_screen.dart';
 import '../../features/technician/job_brief_screen.dart';
 import '../../features/technician/en_route_screen.dart';
@@ -79,9 +79,15 @@ final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     navigatorKey: _rootNavigatorKey,
     observers: _buildObservers(),
-    initialLocation: kSplashPath,
+    initialLocation: AppConfig.isCustomerSurface ? '/' : kSplashPath,
     refreshListenable: refresh,
     redirect: (context, state) {
+      // Customer surface: no staff auth exists here at all — the portal
+      // session is the only credential. Anything outside the four portal
+      // paths falls back to the neutral landing page (handoff 6.1).
+      if (AppConfig.isCustomerSurface) {
+        return _customerSurfaceRedirect(state.uri.path);
+      }
       final authState = ref.read(authNotifierProvider);
       final session = authState.valueOrNull;
       final ownerOnboardingPath = switch (session?.company.onboardingStep) {
@@ -102,7 +108,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ownerOnboardingPath: ownerOnboardingPath,
       );
     },
-    routes: _routes,
+    routes: AppConfig.isCustomerSurface ? _customerRoutes : _staffRoutes,
   );
 
   ref.onDispose(() {
@@ -115,11 +121,45 @@ final routerProvider = Provider<GoRouter>((ref) {
 final GoRouter appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
   observers: _buildObservers(),
-  initialLocation: '/splash',
-  routes: _routes,
+  initialLocation: AppConfig.isCustomerSurface ? '/' : '/splash',
+  redirect: AppConfig.isCustomerSurface
+      ? (context, state) => _customerSurfaceRedirect(state.uri.path)
+      : null,
+  routes: AppConfig.isCustomerSurface ? _customerRoutes : _staffRoutes,
 );
 
-final List<RouteBase> _routes = [
+/// The customer surface knows exactly four paths; everything else
+/// (including staff paths like `/login`) lands on the neutral page.
+String? _customerSurfaceRedirect(String path) {
+  const allowed = {'/', '/open', '/p', '/p/closed'};
+  return allowed.contains(path) ? null : '/';
+}
+
+/// Portal routes shared by both surfaces (handoff 6.1): on the staff
+/// surface they let the installed app handle a portal deep link; on the
+/// customer surface they are (with `/`) the entire route table.
+///
+/// `/open` receives the one-time token in the URL fragment — never in a
+/// path parameter — and hands it to the portal session bootstrap.
+final List<RouteBase> _portalRoutes = [
+  GoRoute(
+    path: '/open',
+    builder: (context, state) => PortalOpenScreen(fragment: state.uri.fragment),
+  ),
+  GoRoute(path: '/p', builder: (context, state) => const CustomerHomeScreen()),
+  GoRoute(
+    path: '/p/closed',
+    builder: (context, state) => const PortalClosedScreen(),
+  ),
+];
+
+/// The customer build's complete route table (handoff 6.1).
+final List<RouteBase> _customerRoutes = [
+  GoRoute(path: '/', builder: (context, state) => const PortalLandingScreen()),
+  ..._portalRoutes,
+];
+
+final List<RouteBase> _staffRoutes = [
   GoRoute(path: '/', redirect: (context, state) => '/dashboard'),
   // Auth Routes
   GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
@@ -213,38 +253,13 @@ final List<RouteBase> _routes = [
       return InvoiceDetailScreen(invoiceId: invoiceId);
     },
   ),
-  GoRoute(
-    path: '/portal/:token',
-    builder: (context, state) {
-      final token = state.pathParameters['token'] ?? '';
-      return CustomerHomeScreen(token: token);
-    },
-  ),
-  GoRoute(
-    path: '/quote-approval/:shareToken',
-    builder: (context, state) {
-      final shareToken = state.pathParameters['shareToken'] ?? '';
-      return QuoteApprovalScreen(shareToken: shareToken);
-    },
-  ),
-  GoRoute(
-    path: '/invoice-payment/:token/:invoiceId',
-    builder: (context, state) {
-      final token = state.pathParameters['token'] ?? '';
-      final invoiceId = state.pathParameters['invoiceId'] ?? '';
-      return InvoicePaymentScreen(token: token, invoiceId: invoiceId);
-    },
-  ),
+  // Secure customer portal (session-based; the old token routes
+  // /portal/:token, /quote-approval/:shareToken,
+  // /invoice-payment/:token/:invoiceId and /technician-tracking/:token/:jobId
+  // were removed with the long-lived token design — handoff 6.1).
+  ..._portalRoutes,
 
   // Field & AI & Settings
-  GoRoute(
-    path: '/technician-tracking/:token/:jobId',
-    builder: (context, state) {
-      final token = state.pathParameters['token'] ?? '';
-      final jobId = state.pathParameters['jobId'] ?? '';
-      return TechnicianTrackingScreen(token: token, jobId: jobId);
-    },
-  ),
   GoRoute(
     path: '/technician-home',
     builder: (context, state) => const TechnicianHomeScreen(),

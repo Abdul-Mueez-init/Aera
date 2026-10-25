@@ -1,4 +1,5 @@
 import { AppError } from "../../common/errors.js";
+import { env } from "../../config/env.js";
 import { prisma } from "../../db/prisma.js";
 import { getCompanyContacts } from "./portal.contacts.js";
 import {
@@ -7,6 +8,7 @@ import {
 } from "./portal.session.js";
 import { hashToken } from "./portal.tokens.js";
 import { closePortalIfDone } from "./portal.grants.js";
+import { processQuoteResponse } from "../quotes/quote.service.js";
 
 function jsonSafe<T>(value: T): T {
   return JSON.parse(
@@ -47,17 +49,17 @@ export async function exchangeToken(token: string) {
 
   // Check if deactivated
   if (grant.status === "DEACTIVATED") {
-    await getCompanyContacts(grant.companyId);
+    const contacts = await getCompanyContacts(grant.companyId);
     throw new AppError(
       "PORTAL_ACCESS_DEACTIVATED",
       "Portal access has been deactivated",
       410,
+      { state: "DEACTIVATED", ...contacts },
     );
   }
 
   // Check if already used
   if (grant.linkConsumedAt) {
-    await getCompanyContacts(grant.companyId);
     throw new AppError(
       "PORTAL_LINK_ALREADY_USED",
       "This link was already opened on another device — ask your service provider to send a new one",
@@ -67,11 +69,12 @@ export async function exchangeToken(token: string) {
 
   // Check if expired
   if (grant.linkExpiresAt < new Date()) {
-    await getCompanyContacts(grant.companyId);
+    const contacts = await getCompanyContacts(grant.companyId);
     throw new AppError(
       "PORTAL_LINK_EXPIRED",
       "Portal link has expired",
       410,
+      { state: "DEACTIVATED", ...contacts },
     );
   }
 
@@ -89,7 +92,6 @@ export async function exchangeToken(token: string) {
 
   if (burnResult.count !== 1) {
     // Lost the race - treat as already used
-    await getCompanyContacts(grant.companyId);
     throw new AppError(
       "PORTAL_LINK_ALREADY_USED",
       "This link was already opened on another device — ask your service provider to send a new one",
@@ -228,7 +230,7 @@ export async function getPortalJob(
     // Derive code from handshakeVersion
     const { deriveHandshakeCode } = await import("./portal.tokens.js");
     const code = deriveHandshakeCode(
-      process.env.PORTAL_CODE_SECRET || "",
+      env.PORTAL_CODE_SECRET ?? "",
       companyId,
       jobId,
       job.handshakeVersion,
@@ -286,11 +288,41 @@ export async function respondToQuote(
     select: {
       id: true,
       status: true,
+      expiresAt: true,
     },
   });
 
   if (!quote) {
     throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
+  }
+
+  // Idempotent repeat of the same decision (handoff 5.5: the portal
+  // respond reuses the shared approval domain logic).
+  if (quote.status === action) {
+    return { id: quote.id, status: quote.status };
+  }
+
+  if (quote.status === "APPROVED" || quote.status === "DECLINED") {
+    throw new AppError(
+      "QUOTE_ALREADY_DECIDED",
+      "This quote has already been decided",
+      409,
+    );
+  }
+
+  // Expiry is enforced exactly like the staff respond path: lazily
+  // transition to EXPIRED and reject with 410 QUOTE_EXPIRED.
+  const now = new Date();
+  const isPastExpiry =
+    quote.expiresAt !== null && quote.expiresAt.getTime() <= now.getTime();
+  if (quote.status === "EXPIRED" || isPastExpiry) {
+    if (quote.status !== "EXPIRED") {
+      await prisma.quote.updateMany({
+        where: { id: quote.id, status: { in: ["DRAFT", "SENT"] } },
+        data: { status: "EXPIRED" },
+      });
+    }
+    throw new AppError("QUOTE_EXPIRED", "This quote has expired", 410);
   }
 
   if (quote.status !== "SENT") {
@@ -301,23 +333,28 @@ export async function respondToQuote(
     );
   }
 
-  // Update quote status
-  const now = new Date();
-  const updateData =
-    action === "APPROVED"
-      ? { status: "APPROVED" as const, approvedAt: now }
-      : { status: "DECLINED" as const, declinedAt: now };
+  // Shared domain logic: guarded transition, QuoteApprovalEvent with
+  // source CUSTOMER, and linked-job advancement on approval.
+  await processQuoteResponse({
+    quoteId,
+    companyId,
+    jobId,
+    action,
+    source: "CUSTOMER",
+    now,
+  });
 
-  const updated = await prisma.quote.update({
-    where: { id: quoteId },
-    data: updateData,
-    select: {
-      id: true,
-      status: true,
+  await prisma.portalAuditEvent.create({
+    data: {
+      companyId,
+      jobId,
+      customerId,
+      action: "PORTAL_QUOTE_RESPONDED",
+      metadata: { quoteId, decision: action },
     },
   });
 
-  return updated;
+  return { id: quote.id, status: action };
 }
 
 /**

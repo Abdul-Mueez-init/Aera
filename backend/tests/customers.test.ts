@@ -288,48 +288,106 @@ describe("customer tenant isolation (Phase 3 exit criteria)", () => {
 });
 
 describe("customer portal access", () => {
-  it("issues a time-limited portal token that actually resolves via the public portal endpoint", async () => {
-    const { accessToken } = await registerOwner("portal");
-    const auth = { Authorization: `Bearer ${accessToken}` };
-
+  // The customer-scoped POST /customers/:customerId/portal-access token
+  // endpoint was removed by the portal handoff. Portal access is now a
+  // job-scoped grant: staff issue POST /jobs/:jobId/portal-access and the
+  // customer exchanges the one-time link token for a portal session.
+  async function createCustomerWithJob(
+    auth: { Authorization: string },
+    firstName: string,
+    lastName: string,
+  ) {
     const customer = await request(app)
       .post("/api/v1/customers")
       .set(auth)
-      .send({ firstName: "Bilal", lastName: "Ahmed" });
+      .send({ firstName, lastName });
+    expect(customer.status).toBe(201);
     const customerId = customer.body.data.id as string;
 
+    const address = await request(app)
+      .post(`/api/v1/customers/${customerId}/addresses`)
+      .set(auth)
+      .send({
+        label: "Home",
+        line1: "12 Canal Road",
+        city: "Lahore",
+        countryCode: "PK",
+      });
+    expect(address.status).toBe(201);
+
+    const job = await request(app)
+      .post("/api/v1/jobs")
+      .set(auth)
+      .send({
+        customerId,
+        serviceAddressId: address.body.data.id,
+        serviceType: "AC Service",
+        problemDescription: "Annual maintenance visit",
+      });
+    expect(job.status).toBe(201);
+
+    return { customerId, job: job.body.data };
+  }
+
+  it("issues a job-scoped portal grant whose link token exchanges for a session that resolves the job", async () => {
+    const { accessToken } = await registerOwner("portal");
+    const auth = { Authorization: `Bearer ${accessToken}` };
+
+    const { job } = await createCustomerWithJob(auth, "Bilal", "Ahmed");
+
     const portal = await request(app)
-      .post(`/api/v1/customers/${customerId}/portal-access`)
+      .post(`/api/v1/jobs/${job.id}/portal-access`)
       .set(auth)
       .send({});
     expect(portal.status).toBe(201);
-    expect(typeof portal.body.data.token).toBe("string");
-    expect(portal.body.data.token.length).toBeGreaterThan(20);
-    expect(new Date(portal.body.data.expiresAt).getTime()).toBeGreaterThan(
-      Date.now(),
-    );
+    expect(typeof portal.body.data.grantId).toBe("string");
+    expect(typeof portal.body.data.link).toBe("string");
+    expect(portal.body.data.link).toContain("#t=");
+    expect(
+      new Date(portal.body.data.linkExpiresAt).getTime(),
+    ).toBeGreaterThan(Date.now());
 
-    const publicPortal = await request(app).get(
-      `/api/v1/portal/${portal.body.data.token}`,
-    );
-    expect(publicPortal.status).toBe(200);
-    expect(publicPortal.body.data.id).toBe(customerId);
+    // The plaintext token travels only in the link fragment.
+    const token = (portal.body.data.link as string).split("#t=")[1];
+    expect(token).toBeDefined();
+    expect(token.length).toBe(43);
+
+    const exchange = await request(app)
+      .post("/api/v1/portal/exchange")
+      .send({ token });
+    expect(exchange.status).toBe(200);
+    expect(exchange.body.data.state).toBe("ACTIVE");
+    const setCookie = exchange.headers["set-cookie"] as unknown as string[];
+    expect(setCookie).toBeDefined();
+    expect(setCookie[0]).toContain("__Host-aera_portal");
+    const cookie = setCookie[0].split(";")[0];
+
+    const snapshot = await request(app)
+      .get("/api/v1/portal/job")
+      .set("Cookie", cookie);
+    expect(snapshot.status).toBe(200);
+    expect(snapshot.body.data.job.jobNumber).toBe(job.jobNumber);
+    expect(snapshot.body.data.job.serviceType).toBe(job.serviceType);
+    expect(snapshot.body.data.job.status).toBe(job.status);
   });
 
-  it("rejects issuing a portal token for another company's customer", async () => {
+  it("rejects issuing a portal grant for another company's job", async () => {
     const companyA = await registerOwner("portal-a");
     const companyB = await registerOwner("portal-b");
+    const authA = { Authorization: `Bearer ${companyA.accessToken}` };
+    const authB = { Authorization: `Bearer ${companyB.accessToken}` };
 
-    const customerB = await request(app)
-      .post("/api/v1/customers")
-      .set({ Authorization: `Bearer ${companyB.accessToken}` })
-      .send({ firstName: "Cross", lastName: "Tenant" });
-    const customerBId = customerB.body.data.id as string;
+    const { job: jobB } = await createCustomerWithJob(
+      authB,
+      "Cross",
+      "Tenant",
+    );
 
     const portal = await request(app)
-      .post(`/api/v1/customers/${customerBId}/portal-access`)
-      .set({ Authorization: `Bearer ${companyA.accessToken}` })
+      .post(`/api/v1/jobs/${jobB.id}/portal-access`)
+      .set(authA)
       .send({});
-    expect(portal.status).toBe(404);
+    expect(portal.status).toBe(403);
+    expect(portal.body.error.code).toBe("TENANT_ACCESS_DENIED");
   });
 });

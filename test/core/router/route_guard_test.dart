@@ -81,7 +81,7 @@ void main() {
     test('public routes are left alone (e.g. mid sign-in)', () {
       expect(_redirect(AuthGate.loading, '/login'), isNull);
       expect(_redirect(AuthGate.loading, '/sign-up'), isNull);
-      expect(_redirect(AuthGate.loading, '/portal/abc'), isNull);
+      expect(_redirect(AuthGate.loading, '/p'), isNull);
     });
   });
 
@@ -124,10 +124,10 @@ void main() {
         '/forgot-password',
         '/reset-password',
         '/accept-invitation',
-        '/portal/token',
-        '/quote-approval/token',
-        '/invoice-payment/token/inv-1',
-        '/technician-tracking/token/job-1',
+        // Secure customer portal paths (session-based, not staff auth).
+        '/open',
+        '/p',
+        '/p/closed',
       ]) {
         expect(_redirect(AuthGate.signedOut, path), isNull, reason: path);
       }
@@ -149,7 +149,7 @@ void main() {
     test('public routes are still reachable', () {
       expect(_redirect(AuthGate.sessionExpired, '/login'), isNull);
       expect(_redirect(AuthGate.sessionExpired, '/welcome'), isNull);
-      expect(_redirect(AuthGate.sessionExpired, '/quote-approval/x'), isNull);
+      expect(_redirect(AuthGate.sessionExpired, '/p'), isNull);
     });
   });
 
@@ -224,7 +224,7 @@ void main() {
       expect(
         _redirect(
           AuthGate.signedIn,
-        '/onboarding/business-basics',
+          '/onboarding/business-basics',
           role: 'OWNER',
           ownerOnboardingPending: true,
         ),
@@ -233,7 +233,7 @@ void main() {
       expect(
         _redirect(
           AuthGate.signedIn,
-        '/onboarding/service-area',
+          '/onboarding/service-area',
           role: 'OWNER',
           ownerOnboardingPending: true,
         ),
@@ -245,7 +245,7 @@ void main() {
       expect(
         _redirect(
           AuthGate.signedIn,
-        '/onboarding/team-setup',
+          '/onboarding/team-setup',
           role: 'OWNER',
           ownerOnboardingPending: true,
           ownerOnboardingPath: '/onboarding/service-area',
@@ -257,16 +257,16 @@ void main() {
 
   group('persisted onboarding resume step', () {
     test('incomplete owner resumes from the server-persisted step', () {
-        expect(
-          _redirect(
-            AuthGate.signedIn,
+      expect(
+        _redirect(
+          AuthGate.signedIn,
           '/dashboard',
-            role: 'OWNER',
-            ownerOnboardingPending: true,
+          role: 'OWNER',
+          ownerOnboardingPending: true,
           ownerOnboardingPath: '/onboarding/services',
-          ),
+        ),
         '/onboarding/services',
-        );
+      );
     });
   });
 
@@ -347,10 +347,15 @@ void main() {
       expect(roleHome(null), '/dashboard');
     });
 
-    test('/technician-tracking (customer) is not the technician area', () {
-      expect(isPublicPath('/technician-tracking/t/j'), isTrue);
+    test('portal paths are public; the technician area is not', () {
+      expect(isPublicPath('/open'), isTrue);
+      expect(isPublicPath('/p'), isTrue);
+      expect(isPublicPath('/p/closed'), isTrue);
       expect(isPublicPath('/technician/jobs/abc/brief'), isFalse);
       expect(isPublicPath('/technician-home'), isFalse);
+      // The old long-lived-token routes are gone and no longer public.
+      expect(isPublicPath('/technician-tracking/t/j'), isFalse);
+      expect(isPublicPath('/portal/some-token'), isFalse);
     });
   });
 }

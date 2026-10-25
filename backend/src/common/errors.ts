@@ -6,6 +6,9 @@ export class AppError extends Error {
     public readonly code: string,
     message: string,
     public readonly statusCode = 400,
+    /** Optional structured payload returned alongside the error (e.g. the
+     * portal closed-state body with company contacts on 410 responses). */
+    public readonly data?: unknown,
   ) {
     super(message);
     this.name = "AppError";
@@ -27,6 +30,7 @@ export const errorHandler: ErrorRequestHandler = (
         code: error.code,
         message: error.message,
       },
+      ...(error.data !== undefined ? { data: error.data } : {}),
       requestId,
     });
     return;

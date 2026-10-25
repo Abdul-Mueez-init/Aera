@@ -145,6 +145,7 @@ model User {
   createdInvoices Invoice[] @relation("InvoiceCreators")
   createdPayments Payment[] @relation("PaymentCreators")
   createdPortalTokens CustomerPortalToken[] @relation("PortalTokenCreators")
+  issuedPortalGrants PortalAccessGrant[] @relation("PortalGrantIssuers")
    notifications Notification[] @relation("NotificationRecipients")
   deviceTokens  DeviceToken[]  @relation("DeviceTokenOwners")
   aiConversations AiConversation[] @relation("AiConversationOwners")
@@ -308,6 +309,7 @@ model Customer {
   quotes          Quote[]
   invoices        Invoice[]
   portalTokens    CustomerPortalToken[]
+  portalGrants    PortalAccessGrant[]
   reviews         CustomerReview[]
 
   @@index([companyId, status])
@@ -372,6 +374,7 @@ model Job {
   invoices              Invoice[]
   reviews               CustomerReview[]
   presignedUploads      PresignedUpload[]
+  portalGrants          PortalAccessGrant[]
 
   @@unique([companyId, jobNumber])
   @@index([companyId, status, scheduledStart])
@@ -781,6 +784,9 @@ model PortalAccessGrant {
   deactivatedBy     String?                   @db.Uuid
   createdAt         DateTime                  @default(now())
   company           Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer          Customer                  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  job               Job                       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  issuer            User?                     @relation("PortalGrantIssuers", fields: [issuedBy], references: [id], onDelete: SetNull)
   sessions          PortalSession[]
 
   @@index([companyId, jobId, status])

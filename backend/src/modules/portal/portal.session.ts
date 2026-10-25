@@ -3,6 +3,7 @@ import { env } from "../../config/env.js";
 import { AppError } from "../../common/errors.js";
 import { prisma } from "../../db/prisma.js";
 import { generateToken, hashToken } from "./portal.tokens.js";
+import { getCompanyContacts } from "./portal.contacts.js";
 
 /**
  * Portal session cookie name.
@@ -159,19 +160,13 @@ export async function validatePortalSession(
     );
   }
 
-  if (session.revokedAt) {
+  if (session.revokedAt || session.grant.status === "DEACTIVATED") {
+    const contacts = await getCompanyContacts(session.companyId);
     throw new AppError(
       "PORTAL_ACCESS_DEACTIVATED",
       "Portal access has been deactivated",
       410,
-    );
-  }
-
-  if (session.grant.status === "DEACTIVATED") {
-    throw new AppError(
-      "PORTAL_ACCESS_DEACTIVATED",
-      "Portal access has been deactivated",
-      410,
+      { state: "DEACTIVATED", ...contacts },
     );
   }
 

@@ -10,7 +10,7 @@ import 'package:aera/features/dashboard/dashboard_screen.dart';
 import 'package:aera/features/dashboard/data/dashboard_repository.dart';
 import 'package:aera/features/dashboard/providers/dashboard_provider.dart';
 import 'package:aera/features/dashboard/providers/get_started_provider.dart';
-import 'package:aera/features/quotes/quote_approval_screen.dart';
+import 'package:aera/features/portal/portal_open_screen.dart';
 import 'package:aera/features/technician/technician_home_screen.dart';
 import 'package:aera/main.dart';
 import 'package:flutter/material.dart';
@@ -71,18 +71,48 @@ Future<ProviderContainer> _startApp(
   final container = ProviderContainer(
     overrides: [
       authNotifierProvider.overrideWith((ref) => AuthNotifier(repo, ref)),
-      dashboardSummaryProvider.overrideWith((ref) => Future.value(const DashboardSummary(
-        date: '2026-10-14',
-        timezone: 'UTC',
-        jobsToday: 0,
-        jobsByStatus: [],
-        unassignedJobs: 0,
-        outstandingInvoices: OutstandingInvoices(count: 0, balanceDueByCurrency: []),
-        revenueThisMonth: RevenueThisMonth(periodStart: '2026-10-01', periodEnd: '2026-10-14', collectedByCurrency: []),
-      ))),
-      dashboardAlertsProvider.overrideWith((ref) => Future.value(const DashboardAlerts(date: '2026-10-14', timezone: 'UTC', alerts: []))),
-      dashboardTodayProvider(50).overrideWith((ref) => Future.value(const DashboardToday(date: '2026-10-14', jobs: []))),
-      getStartedProvider.overrideWith((ref) => Future.value(const GetStartedProgress(hasCustomer: true, hasJob: true, hasTechnician: true))),
+      dashboardSummaryProvider.overrideWith(
+        (ref) => Future.value(
+          const DashboardSummary(
+            date: '2026-10-14',
+            timezone: 'UTC',
+            jobsToday: 0,
+            jobsByStatus: [],
+            unassignedJobs: 0,
+            outstandingInvoices: OutstandingInvoices(
+              count: 0,
+              balanceDueByCurrency: [],
+            ),
+            revenueThisMonth: RevenueThisMonth(
+              periodStart: '2026-10-01',
+              periodEnd: '2026-10-14',
+              collectedByCurrency: [],
+            ),
+          ),
+        ),
+      ),
+      dashboardAlertsProvider.overrideWith(
+        (ref) => Future.value(
+          const DashboardAlerts(
+            date: '2026-10-14',
+            timezone: 'UTC',
+            alerts: [],
+          ),
+        ),
+      ),
+      dashboardTodayProvider(50).overrideWith(
+        (ref) =>
+            Future.value(const DashboardToday(date: '2026-10-14', jobs: [])),
+      ),
+      getStartedProvider.overrideWith(
+        (ref) => Future.value(
+          const GetStartedProgress(
+            hasCustomer: true,
+            hasJob: true,
+            hasTechnician: true,
+          ),
+        ),
+      ),
     ],
   );
   addTearDown(container.dispose);
@@ -167,10 +197,16 @@ void main() {
   testWidgets('customer links open without a session', (tester) async {
     final container = await _startApp(tester, _FakeAuthRepository());
 
-    container.read(routerProvider).go('/quote-approval/some-share-token');
-    await tester.pumpAndSettle();
+    // The portal link entry point is public: the portal session (not the
+    // staff session) is what authorizes the customer from here on.
+    container.read(routerProvider).go('/open');
+    // Bounded pumps (not pumpAndSettle): the open screen shows a progress
+    // indicator while it establishes the session, which never "settles".
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
 
-    expect(find.byType(QuoteApprovalScreen), findsOneWidget);
+    expect(find.byType(PortalOpenScreen), findsOneWidget);
     expect(find.byType(WelcomeScreen), findsNothing);
   });
 

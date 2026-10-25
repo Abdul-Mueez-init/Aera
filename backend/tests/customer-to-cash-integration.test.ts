@@ -291,8 +291,15 @@ async function addJobPart(
   return res.body.data;
 }
 
-async function startJob(auth: { Authorization: string }, jobId: string) {
-  // The job is already SCHEDULED, so transition: SCHEDULED -> EN_ROUTE -> IN_PROGRESS
+async function startJob(
+  auth: { Authorization: string },
+  jobId: string,
+  overrideAuth: { Authorization: string },
+) {
+  // The job is already SCHEDULED, so transition: SCHEDULED -> EN_ROUTE.
+  // EN_ROUTE -> IN_PROGRESS via /status is closed by the handshake gate
+  // (422 HANDSHAKE_REQUIRED for every role), so the start itself goes
+  // through the staff override command with the owner's auth.
   const s1 = await request(app)
     .post(`/api/v1/jobs/${jobId}/status`)
     .set(auth)
@@ -300,9 +307,9 @@ async function startJob(auth: { Authorization: string }, jobId: string) {
   expect(s1.status).toBe(200);
 
   const s2 = await request(app)
-    .post(`/api/v1/jobs/${jobId}/status`)
-    .set(auth)
-    .send({ status: "IN_PROGRESS" });
+    .post(`/api/v1/jobs/${jobId}/start/override`)
+    .set(overrideAuth)
+    .send({ reason: "Test flow start override" });
   expect(s2.status).toBe(200);
 }
 
@@ -403,14 +410,19 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
       expect(quote.jobId).toBe(jobId);
       expect(quote.status).toBe("DRAFT");
 
-      // STEP 5: Send quote to customer
+      // STEP 5: Send quote to customer. Sending no longer mints a public
+      // shareToken — the shared-link surface was removed by the portal
+      // handoff; customers act through the job-scoped portal instead.
       const sentQuote = await sendQuote(auth, quote.id);
       expect(sentQuote.status).toBe("SENT");
-      expect(sentQuote.shareToken).toBeDefined();
+      expect(sentQuote.shareToken).toBeUndefined();
 
-      // STEP 6: Approve quote via public link (customer action)
+      // STEP 6: Approve the quote through the staff respond command (the
+      // live approval path that records a QuoteApprovalEvent; the old
+      // /quotes/shared/:token/respond route no longer exists).
       const approveRes = await request(app)
-        .post(`/api/v1/quotes/shared/${sentQuote.shareToken}/respond`)
+        .post(`/api/v1/quotes/${quote.id}/respond`)
+        .set(auth)
         .send({ action: "APPROVED" });
       expect(approveRes.status).toBe(200);
       expect(approveRes.body.data.status).toBe("APPROVED");
@@ -428,7 +440,7 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
       });
       expect(approvalEvents.length).toBe(1);
       expect(approvalEvents[0].action).toBe("APPROVED");
-      expect(approvalEvents[0].source).toBe("CUSTOMER");
+      expect(approvalEvents[0].source).toBe("STAFF");
     } catch {
       console.log(
         "Quote flow failed, continuing with job scheduling without quote",
@@ -490,7 +502,7 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     };
 
     // Progress job through execution states
-    await startJob(techAuth, jobId);
+    await startJob(techAuth, jobId, auth);
 
     // Verify job is IN_PROGRESS
     const jobInProgress = await request(app)
@@ -750,14 +762,19 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     expect(quote.body.data.items.length).toBe(2);
     expect(quote.body.data.subtotalMinor).toBe("20000"); // $150 + $50 = $200
 
-    // STEP 2: Send quote to customer
+    // STEP 2: Send quote to customer. Sending no longer mints a public
+    // shareToken — the shared-link surface was removed by the portal
+    // handoff, so approvals go through authenticated commands only.
     const sentQuote = await sendQuote(auth, quote.body.data.id);
     expect(sentQuote.status).toBe("SENT");
-    expect(sentQuote.shareToken).toBeDefined();
+    expect(sentQuote.shareToken).toBeUndefined();
 
-    // STEP 3: Customer approves quote via public link
+    // STEP 3: Approve the quote via the staff respond command (the
+    // customer portal is job-scoped, so a job-less quote is decided
+    // through the staff path).
     const approveRes = await request(app)
-      .post(`/api/v1/quotes/shared/${sentQuote.shareToken}/respond`)
+      .post(`/api/v1/quotes/${quote.body.data.id}/respond`)
+      .set(auth)
       .send({ action: "APPROVED" });
     expect(approveRes.status).toBe(200);
     expect(approveRes.body.data.status).toBe("APPROVED");
@@ -769,13 +786,16 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     });
     expect(approvalEvents.length).toBe(1);
     expect(approvalEvents[0].action).toBe("APPROVED");
-    expect(approvalEvents[0].source).toBe("CUSTOMER");
+    expect(approvalEvents[0].source).toBe("STAFF");
+    expect(approvalEvents[0].actorUserId).toBe(owner.userId);
 
     // STEP 5: Verify quote cannot be approved twice (idempotency)
     const secondApprove = await request(app)
-      .post(`/api/v1/quotes/shared/${sentQuote.shareToken}/respond`)
+      .post(`/api/v1/quotes/${quote.body.data.id}/respond`)
+      .set(auth)
       .send({ action: "APPROVED" });
     expect(secondApprove.status).toBe(200); // Idempotent - still returns 200
+    expect(secondApprove.body.data.status).toBe("APPROVED");
 
     // Still only one approval event
     const approvalCountAfter = await prisma.quoteApprovalEvent.count({
@@ -785,13 +805,13 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
 
     // STEP 6: Verify quote cannot be declined after approval
     const declineAttempt = await request(app)
-      .post(`/api/v1/quotes/shared/${sentQuote.shareToken}/respond`)
+      .post(`/api/v1/quotes/${quote.body.data.id}/respond`)
+      .set(auth)
       .send({ action: "DECLINED" });
-    // API returns 409 (conflict) when trying to change an already decided quote
-    expect([409, 422]).toContain(declineAttempt.status);
-    if (declineAttempt.status === 422) {
-      expect(declineAttempt.body.error.code).toBe("QUOTE_ALREADY_DECIDED");
-    }
+    // Staff respond rejects changing an already resolved quote with
+    // 409 QUOTE_ALREADY_RESOLVED.
+    expect(declineAttempt.status).toBe(409);
+    expect(declineAttempt.body.error.code).toBe("QUOTE_ALREADY_RESOLVED");
 
     // STEP 7: Verify cross-company access protection
     const owner2 = await registerOwner("c2c-cross-company");

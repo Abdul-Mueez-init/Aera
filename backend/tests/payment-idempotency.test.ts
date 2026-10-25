@@ -142,10 +142,14 @@ async function completeJob(
     .set("Authorization", `Bearer ${ownerAccessToken}`)
     .send({ status: "EN_ROUTE" });
 
-  await request(app)
-    .post(`/api/v1/jobs/${jobId}/status`)
+  // EN_ROUTE -> IN_PROGRESS via /status is closed by the handshake gate
+  // (422 HANDSHAKE_REQUIRED for every role); staff start the job through
+  // the audited override command instead.
+  const startRes = await request(app)
+    .post(`/api/v1/jobs/${jobId}/start/override`)
     .set("Authorization", `Bearer ${ownerAccessToken}`)
-    .send({ status: "IN_PROGRESS" });
+    .send({ reason: "Test flow start override" });
+  expect(startRes.status).toBe(200);
 
   const completeRes = await request(app)
     .post(`/api/v1/jobs/${jobId}/complete`)

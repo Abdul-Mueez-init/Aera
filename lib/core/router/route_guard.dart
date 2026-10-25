@@ -40,7 +40,7 @@ int? _ownerOnboardingStepForPath(String path) => switch (path) {
 /// session check never makes the splash flash by in a single frame.
 final splashGateProvider = StateProvider<bool>((ref) => false);
 
-/// Routes anyone can open without a session.
+/// Routes anyone can open without a staff session.
 const Set<String> _publicExact = {
   '/splash',
   '/welcome',
@@ -49,15 +49,16 @@ const Set<String> _publicExact = {
   '/forgot-password',
   '/reset-password',
   '/accept-invitation',
+  // Secure customer portal (handoff 6.1/6.3). These are authorized by the
+  // portal session (cookie / stored bearer), which is independent of the
+  // staff session this guard manages — a signed-out staffer, a signed-in
+  // staffer and a customer with a link must all be able to open them. The
+  // old token prefixes (/portal/, /quote-approval/, /invoice-payment/,
+  // /technician-tracking/) went away with the long-lived token design.
+  '/open',
+  '/p',
+  '/p/closed',
 };
-
-/// Token-based customer pages. The token in the URL is the credential.
-const List<String> _publicPrefixes = [
-  '/portal/',
-  '/quote-approval/',
-  '/invoice-payment/',
-  '/technician-tracking/',
-];
 
 /// Screens a signed-in user never needs to see again.
 const Set<String> _authEntryPaths = {
@@ -104,8 +105,7 @@ String _normalize(String path) {
 
 bool isPublicPath(String path) {
   final p = _normalize(path);
-  if (_publicExact.contains(p)) return true;
-  return _publicPrefixes.any((prefix) => p.startsWith(prefix));
+  return _publicExact.contains(p);
 }
 
 /// Whether a technician may open [path].

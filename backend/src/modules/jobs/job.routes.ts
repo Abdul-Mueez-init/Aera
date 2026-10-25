@@ -19,6 +19,8 @@ import {
   type NoteVisibilityValue,
 } from "./job.service.js";
 import { portalStaffRouter } from "../portal/portal-staff.routes.js";
+import { overrideStartJob, startJobWithCode } from "./handshake.service.js";
+import { handshakeRateLimiter } from "../../common/rateLimit.js";
 
 const router = Router();
 const managerRoles = ["OWNER", "DISPATCHER"] as const;
@@ -87,6 +89,12 @@ const completionSchema = z.object({
   summary: z.string().trim().min(1).max(4000),
   autoInvoice: z.boolean().optional(),
   allowZeroAmountInvoice: z.boolean().optional(),
+});
+const startJobSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, "Code must be 6 digits"),
+});
+const overrideStartSchema = z.object({
+  reason: z.string().trim().min(5).max(300),
 });
 
 function sendValidationError(response: Response, error: z.ZodError) {
@@ -202,6 +210,49 @@ router.post("/:jobId/status", requireAuth, async (request, response) => {
   });
 });
 
+// Start an EN_ROUTE job with the customer handshake code (assigned
+// technician only). The role/assignment/state checks live in the service.
+router.post(
+  "/:jobId/start",
+  requireAuth,
+  handshakeRateLimiter,
+  async (request, response) => {
+    const parsed = startJobSchema.safeParse(request.body);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    response.status(200).json({
+      data: await startJobWithCode(
+        request.auth!,
+        routeId(request.params.jobId),
+        parsed.data.code,
+      ),
+    });
+  },
+);
+
+// Staff override for the handshake start (OWNER/DISPATCHER, reason
+// required and audited). Role enforcement lives in the service.
+router.post(
+  "/:jobId/start/override",
+  requireAuth,
+  async (request, response) => {
+    const parsed = overrideStartSchema.safeParse(request.body);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    response.status(200).json({
+      data: await overrideStartJob(
+        request.auth!,
+        routeId(request.params.jobId),
+        parsed.data.reason,
+      ),
+    });
+  },
+);
+
 router.post(
   "/:jobId/photos/presign",
   requireAuth,
@@ -292,7 +343,9 @@ router.get("/:jobId/history", requireAuth, async (request, response) => {
   });
 });
 
-// Mount portal staff routes under /jobs/:jobId/portal-access
-router.use("/:jobId/portal-access", portalStaffRouter);
+// Mount portal staff routes under /jobs/:jobId — the staff router itself
+// defines /portal-access, /portal-access/reissue, /portal-access/deactivate
+// and /handshake/regenerate, so the composed paths match the API contract.
+router.use("/:jobId", portalStaffRouter);
 
 export { router as jobRouter };
