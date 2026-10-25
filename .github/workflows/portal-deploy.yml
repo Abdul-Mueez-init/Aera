@@ -1,0 +1,65 @@
+name: Deploy customer portal to Vercel
+
+# Builds the customer-facing web portal and deploys it to the Vercel
+# project that serves portal.quantixlabs.live. Vercel's own build
+# machines have no Flutter SDK, so the build happens here and only the
+# finished static output is handed to Vercel.
+#
+# Runs when app code that can affect the portal changes on main, or on
+# demand: Actions tab -> "Deploy customer portal to Vercel" -> Run
+# workflow.
+#
+# Required repository secrets (GitHub repo -> Settings -> Secrets and
+# variables -> Actions): VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lib/**"
+      - "web/**"
+      - "assets/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - ".github/workflows/portal-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One production deploy at a time; never cancel a deploy mid-flight.
+concurrency:
+  group: portal-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build portal and deploy to Vercel
+    runs-on: ubuntu-24.04
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Matches ci.yml: latest stable (pubspec requires Dart ^3.12.2,
+          # i.e. Flutter 3.44 or newer).
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Build customer portal (production)
+        run: >
+          flutter build web --release
+          --dart-define=ENVIRONMENT=production
+          --dart-define=APP_SURFACE=customer
+          --dart-define=API_BASE_URL=https://api.quantixlabs.live
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Deploy to Vercel (production)
+        run: vercel deploy build/web --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
