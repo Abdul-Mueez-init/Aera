@@ -301,13 +301,12 @@ export async function getPortalJob(
       // Privacy: the customer sees first name + last initial only,
       // never the technician's full surname.
       technician:
-        job.assignedTechnician &&
-        technicianVisibleStatuses.has(job.status)
-        ? {
-            firstName: job.assignedTechnician.firstName,
-            lastInitial: job.assignedTechnician.lastName.charAt(0),
-          }
-        : null,
+        job.assignedTechnician && technicianVisibleStatuses.has(job.status)
+          ? {
+              firstName: job.assignedTechnician.firstName,
+              lastInitial: job.assignedTechnician.lastName.charAt(0),
+            }
+          : null,
       handshake,
     },
     quotes: job.quotes,

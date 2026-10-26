@@ -48,7 +48,7 @@ export async function runPortalSweep(
 
   // Pass 1: Close completed jobs older than max age
   for (;;) {
-    const page = await prisma.portalAccessGrant.findMany({
+    const page = (await prisma.portalAccessGrant.findMany({
       where: {
         status: "ACTIVE",
         job: {
@@ -65,7 +65,7 @@ export async function runPortalSweep(
       orderBy: { id: "asc" },
       take: PAGE_SIZE,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    }) as Array<{
+    })) as Array<{
       id: string;
       companyId: string;
       customerId: string;
@@ -134,7 +134,7 @@ export async function runPortalSweep(
 
   // Pass 2: Close never-opened links that have expired
   for (;;) {
-    const page = await prisma.portalAccessGrant.findMany({
+    const page = (await prisma.portalAccessGrant.findMany({
       where: {
         status: "ACTIVE",
         linkConsumedAt: null,
@@ -149,7 +149,7 @@ export async function runPortalSweep(
       orderBy: { id: "asc" },
       take: PAGE_SIZE,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    }) as Array<{
+    })) as Array<{
       id: string;
       companyId: string;
       customerId: string;
@@ -214,7 +214,7 @@ export async function runPortalSweep(
   // Pass 3: Re-evaluate closePortalIfDone for COMPLETED jobs with ACTIVE grants
   // This is a safety net for edge cases where the immediate hook might have failed
   for (;;) {
-    const page = await prisma.portalAccessGrant.findMany({
+    const page = (await prisma.portalAccessGrant.findMany({
       where: {
         status: "ACTIVE",
         job: {
@@ -228,7 +228,7 @@ export async function runPortalSweep(
       orderBy: { id: "asc" },
       take: PAGE_SIZE,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    }) as Array<{
+    })) as Array<{
       id: string;
       jobId: string;
     }>;

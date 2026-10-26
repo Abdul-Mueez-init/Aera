@@ -30,9 +30,8 @@ vi.mock("@supabase/supabase-js", () => ({
   }),
 }));
 
-const { supabaseStorageAdapter } = await import(
-  "../src/common/storage/supabase-storage.adapter.js"
-);
+const { supabaseStorageAdapter } =
+  await import("../src/common/storage/supabase-storage.adapter.js");
 
 function headResponse(init: {
   ok: boolean;

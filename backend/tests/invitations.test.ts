@@ -111,7 +111,11 @@ describe("Team invitations", () => {
   it("rejects an invalid or already-used invitation token", async () => {
     const response = await request(app)
       .post("/api/v1/auth/accept-invitation")
-      .send({ token: "not-a-real-token", password: "some-password-123456", email: "nobody@example.com" });
+      .send({
+        token: "not-a-real-token",
+        password: "some-password-123456",
+        email: "nobody@example.com",
+      });
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe("INVITATION_INVALID_OR_EXPIRED");
@@ -337,7 +341,11 @@ describe("Invitations that can no longer be accepted", () => {
 
     const tooShort = await request(app)
       .post("/api/v1/auth/accept-invitation")
-      .send({ token: invite.invitationToken, password: "short-pw-1", email: invite.user.email });
+      .send({
+        token: invite.invitationToken,
+        password: "short-pw-1",
+        email: invite.user.email,
+      });
     expect(tooShort.status).toBe(422);
     expect(tooShort.body.error.code).toBe("VALIDATION_FAILED");
 

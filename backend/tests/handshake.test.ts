@@ -205,9 +205,7 @@ describe("Handshake (handoff 5.7)", () => {
     const code = codeFor(job.id, 1);
 
     for (const auth of [owner.auth, technician.auth]) {
-      const detail = await request(app)
-        .get(`/api/v1/jobs/${job.id}`)
-        .set(auth);
+      const detail = await request(app).get(`/api/v1/jobs/${job.id}`).set(auth);
       expect(detail.status).toBe(200);
       const serialized = JSON.stringify(detail.body);
       expect(serialized).not.toContain(`"code":"${code}"`);

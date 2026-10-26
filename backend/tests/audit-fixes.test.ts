@@ -2,10 +2,7 @@ import { randomBytes, scrypt } from "node:crypto";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
-import {
-  hashPassword,
-  verifyPassword,
-} from "../src/common/auth/password.js";
+import { hashPassword, verifyPassword } from "../src/common/auth/password.js";
 import { prisma } from "../src/db/prisma.js";
 import { notificationPublisher } from "../src/modules/notifications/notification.port.js";
 
@@ -100,9 +97,7 @@ describe("Audit fixes: quote quantity precision (Decimal(10,2))", () => {
       .send({
         customerId,
         currency: "USD",
-        items: [
-          { description: "Labour", quantity, unitPriceMinor: 1000 },
-        ],
+        items: [{ description: "Labour", quantity, unitPriceMinor: 1000 }],
       });
   }
 
@@ -227,7 +222,11 @@ describe("Audit fixes: job customer lock and final-job notes", () => {
     const owner = await registerOwner("custlock");
     const first = await seedCustomer(owner.companyId, "first");
     const second = await seedCustomer(owner.companyId, "second");
-    const job = await seedJob(owner.companyId, first.customer.id, first.address.id);
+    const job = await seedJob(
+      owner.companyId,
+      first.customer.id,
+      first.address.id,
+    );
 
     const quoteRes = await request(app)
       .post("/api/v1/quotes")
@@ -255,7 +254,11 @@ describe("Audit fixes: job customer lock and final-job notes", () => {
     const owner = await registerOwner("custmove");
     const first = await seedCustomer(owner.companyId, "first");
     const second = await seedCustomer(owner.companyId, "second");
-    const job = await seedJob(owner.companyId, first.customer.id, first.address.id);
+    const job = await seedJob(
+      owner.companyId,
+      first.customer.id,
+      first.address.id,
+    );
 
     const move = await request(app)
       .patch(`/api/v1/jobs/${job.id}`)

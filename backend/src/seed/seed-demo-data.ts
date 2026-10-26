@@ -397,7 +397,8 @@ async function seedDemoData() {
   console.log("🔐 Creating portal access grant...");
   const firstJob = jobs[0];
   if (firstJob) {
-    const { generateToken, hashToken } = await import("../modules/portal/portal.tokens.js");
+    const { generateToken, hashToken } =
+      await import("../modules/portal/portal.tokens.js");
     const linkToken = generateToken();
     const linkTokenHash = hashToken(linkToken);
 
@@ -411,7 +412,9 @@ async function seedDemoData() {
         status: "ACTIVE",
       },
     });
-    console.log(`✅ Created portal access grant for job #${firstJob.jobNumber}`);
+    console.log(
+      `✅ Created portal access grant for job #${firstJob.jobNumber}`,
+    );
   }
 
   // Create quotes

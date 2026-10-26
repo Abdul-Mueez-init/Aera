@@ -61,7 +61,11 @@ describe("Expired invitations: resend", () => {
     // The expired code no longer works.
     const expired = await request(app)
       .post("/api/v1/auth/accept-invitation")
-      .send({ token: oldToken, password: "expired-code-password-1", email: first.body.data.user.email });
+      .send({
+        token: oldToken,
+        password: "expired-code-password-1",
+        email: first.body.data.user.email,
+      });
     expect(expired.status).toBe(400);
     expect(expired.body.error.code).toBe("INVITATION_INVALID_OR_EXPIRED");
 
@@ -91,20 +95,32 @@ describe("Expired invitations: resend", () => {
     // The old code stays dead even though the member is pending again.
     const oldAgain = await request(app)
       .post("/api/v1/auth/accept-invitation")
-      .send({ token: oldToken, password: "old-code-password-123456", email: first.body.data.user.email });
+      .send({
+        token: oldToken,
+        password: "old-code-password-123456",
+        email: first.body.data.user.email,
+      });
     expect(oldAgain.status).toBe(400);
 
     // The new code works, exactly once.
     const accept = await request(app)
       .post("/api/v1/auth/accept-invitation")
-      .send({ token: newToken, password: "fresh-code-password-123456", email: first.body.data.user.email });
+      .send({
+        token: newToken,
+        password: "fresh-code-password-123456",
+        email: first.body.data.user.email,
+      });
     expect(accept.status).toBe(200);
     expect(accept.body.data.role).toBe("TECHNICIAN");
     expect(accept.body.data.company.id).toBe(owner.company.id);
 
     const reuse = await request(app)
       .post("/api/v1/auth/accept-invitation")
-      .send({ token: newToken, password: "reuse-code-password-123456", email: first.body.data.user.email });
+      .send({
+        token: newToken,
+        password: "reuse-code-password-123456",
+        email: first.body.data.user.email,
+      });
     expect(reuse.status).toBe(400);
   });
 
