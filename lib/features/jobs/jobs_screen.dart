@@ -112,6 +112,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         backgroundColor: AeraColors.accent,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add, size: 20),

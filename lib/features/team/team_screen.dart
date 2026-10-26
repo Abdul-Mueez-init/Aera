@@ -59,6 +59,7 @@ class TeamScreen extends ConsumerWidget {
       appBar: const AeraAppBar(title: 'Team'),
       floatingActionButton: isOwner
           ? FloatingActionButton.extended(
+              heroTag: null,
               onPressed: () => _openInvite(context, ref),
               backgroundColor: AeraColors.accent,
               foregroundColor: AeraColors.surface,
