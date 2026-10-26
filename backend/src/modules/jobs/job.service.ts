@@ -487,6 +487,7 @@ export async function assignJob(
           assignedTechnicianId: true,
           scheduledStart: true,
           scheduledEnd: true,
+          handshakeVersion: true,
         },
       });
       if (!job) {
@@ -551,11 +552,14 @@ export async function assignJob(
         conflicts,
         technicianId,
         handshakeChanged,
+        handshakeVersion: handshakeChanged
+          ? job.handshakeVersion + 1
+          : undefined,
       };
     })
-    .then(async ({ conflicts, technicianId, handshakeChanged }) => {
+    .then(async ({ conflicts, technicianId, handshakeChanged, handshakeVersion }) => {
       if (handshakeChanged) {
-        queueHandshakeCodeDelivery(jobId);
+        queueHandshakeCodeDelivery(jobId, handshakeVersion!);
       }
       void notificationPublisher.publish({
         type: "JOB_ASSIGNED",
@@ -588,6 +592,7 @@ export async function transitionJob(
       status: true,
       assignedTechnicianId: true,
       startedAt: true,
+      handshakeVersion: true,
     },
   });
   if (!job) {
@@ -683,7 +688,7 @@ export async function transitionJob(
   // Deliver the new handshake code to the customer after commit.
   // Fire-and-forget: delivery failure never fails the transition.
   if (toStatus === "EN_ROUTE") {
-    queueHandshakeCodeDelivery(jobId);
+    queueHandshakeCodeDelivery(jobId, job.handshakeVersion + 1);
   }
 
   return getJob(context, jobId);

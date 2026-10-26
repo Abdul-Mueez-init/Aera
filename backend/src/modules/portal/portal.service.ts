@@ -81,7 +81,7 @@ export async function exchangeToken(token: string, userAgent?: string) {
   }
 
   // Check if expired
-  if (grant.linkExpiresAt < new Date()) {
+  if (grant.linkExpiresAt <= new Date()) {
     const contacts = await getCompanyContacts(grant.companyId);
     throw new AppError("PORTAL_LINK_EXPIRED", "Portal link has expired", 410, {
       state: "DEACTIVATED",
@@ -259,6 +259,14 @@ export async function getPortalJob(
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
 
+  const technicianVisibleStatuses = new Set([
+    "SCHEDULED",
+    "EN_ROUTE",
+    "IN_PROGRESS",
+    "WAITING_PARTS",
+    "COMPLETED",
+  ]);
+
   // Derive handshake code if EN_ROUTE and not verified
   let handshake: { code: string; technicianName: string } | null = null;
   if (
@@ -292,7 +300,9 @@ export async function getPortalJob(
       address: job.serviceAddress,
       // Privacy: the customer sees first name + last initial only,
       // never the technician's full surname.
-      technician: job.assignedTechnician
+      technician:
+        job.assignedTechnician &&
+        technicianVisibleStatuses.has(job.status)
         ? {
             firstName: job.assignedTechnician.firstName,
             lastInitial: job.assignedTechnician.lastName.charAt(0),
@@ -424,34 +434,36 @@ export async function submitReview(
   }
 
   try {
-    const review = await prisma.customerReview.create({
-      data: {
-        companyId,
-        customerId,
-        jobId,
-        rating,
-        comment: comment?.trim() || undefined,
-      },
-      select: {
-        id: true,
-        rating: true,
-        comment: true,
-        createdAt: true,
-      },
-    });
+    const review = await prisma.$transaction(async (tx) => {
+      const createdReview = await tx.customerReview.create({
+        data: {
+          companyId,
+          customerId,
+          jobId,
+          rating,
+          comment: comment?.trim() || undefined,
+        },
+        select: {
+          id: true,
+          rating: true,
+          comment: true,
+          createdAt: true,
+        },
+      });
 
-    await prisma.portalAuditEvent.create({
-      data: {
-        companyId,
-        jobId,
-        customerId,
-        action: "PORTAL_REVIEW_SUBMITTED",
-        metadata: { reviewId: review.id, rating },
-      },
-    });
+      await tx.portalAuditEvent.create({
+        data: {
+          companyId,
+          jobId,
+          customerId,
+          action: "PORTAL_REVIEW_SUBMITTED",
+          metadata: { reviewId: createdReview.id, rating },
+        },
+      });
 
-    // Close portal if job is done (completed + paid + reviewed)
-    await closePortalIfDone(jobId);
+      await closePortalIfDone(jobId, tx);
+      return createdReview;
+    });
 
     return review;
   } catch (error) {

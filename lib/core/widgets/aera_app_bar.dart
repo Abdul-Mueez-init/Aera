@@ -32,7 +32,7 @@ class AeraAppBar extends StatelessWidget implements PreferredSizeWidget {
       elevation: 0,
       scrolledUnderElevation: 1,
       centerTitle: false,
-      leading: (showBack && (canPop || onBack != null))
+      leading: (showBack && canPop)
           ? IconButton(
               icon: const Icon(
                 Icons.arrow_back_ios_new,
@@ -40,7 +40,6 @@ class AeraAppBar extends StatelessWidget implements PreferredSizeWidget {
                 color: AeraColors.ink,
               ),
               onPressed: onBack ?? () => Navigator.of(context).maybePop(),
-              tooltip: 'Back',
             )
           : null,
       title: Row(

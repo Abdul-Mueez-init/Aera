@@ -3,11 +3,8 @@ import { prisma } from "../../db/prisma.js";
 /**
  * Company contact payload for deactivated/expired portal responses.
  * This payload is returned on UNAUTHENTICATED exchange failures, so it
- * must not carry staff login emails: anyone holding an old link could
- * harvest up to 5 owners'/dispatchers' email addresses (which are also
- * their auth usernames) for phishing/credential attacks. Names and
- * phone numbers plus the company phone satisfy the "contact us"
- * purpose; email tiles in the client degrade gracefully when absent.
+ * is bounded to active owner/dispatcher members and never includes unrelated
+ * company users.
  */
 export interface CompanyContact {
   company: {
@@ -18,6 +15,7 @@ export interface CompanyContact {
     role: "OWNER" | "DISPATCHER";
     name: string;
     phone?: string;
+    email?: string;
   }>;
 }
 
@@ -54,6 +52,7 @@ export async function getCompanyContacts(
           firstName: true,
           lastName: true,
           phone: true,
+          email: true,
         },
       },
     },
@@ -63,6 +62,7 @@ export async function getCompanyContacts(
     role: member.role as "OWNER" | "DISPATCHER",
     name: `${member.user.firstName} ${member.user.lastName}`,
     phone: member.user.phone || undefined,
+    email: member.user.email || undefined,
   }));
 
   return {

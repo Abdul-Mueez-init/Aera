@@ -26,6 +26,15 @@ async function assertIssuanceCap(db: PrismaLike, jobId: string) {
   }
 }
 
+async function lockJobForPortalMutation(db: PrismaLike, jobId: string) {
+  await db.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"
+    FROM "jobs"
+    WHERE "id" = ${jobId}
+    FOR UPDATE
+  `;
+}
+
 /**
  * Load a job scoped to the caller's company, in the query itself.
  * A job in another company is indistinguishable from a missing job:
@@ -56,22 +65,6 @@ async function loadJobInCompany(
 export async function issueGrant(context: AuthContext, jobId: string) {
   const job = await loadJobInCompany(prisma, context.companyId, jobId);
 
-  // Check if an ACTIVE grant already exists
-  const existingGrant = await prisma.portalAccessGrant.findFirst({
-    where: {
-      jobId,
-      status: "ACTIVE",
-    },
-  });
-
-  if (existingGrant) {
-    throw new AppError(
-      "PORTAL_ACCESS_ALREADY_ACTIVE",
-      "Portal access is already active for this job",
-      409,
-    );
-  }
-
   // Generate grant
   const linkToken = generateToken();
   const linkTokenHash = hashToken(linkToken);
@@ -84,6 +77,20 @@ export async function issueGrant(context: AuthContext, jobId: string) {
   let grant: { id: string; linkExpiresAt: Date };
   try {
     grant = await prisma.$transaction(async (tx) => {
+      await lockJobForPortalMutation(tx, jobId);
+
+      const existingGrant = await tx.portalAccessGrant.findFirst({
+        where: { jobId, status: "ACTIVE" },
+        select: { id: true },
+      });
+      if (existingGrant) {
+        throw new AppError(
+          "PORTAL_ACCESS_ALREADY_ACTIVE",
+          "Portal access is already active for this job",
+          409,
+        );
+      }
+
       // Abuse limit: max 5 issuances per job per hour (shared with
       // reissue — see assertIssuanceCap).
       await assertIssuanceCap(tx, jobId);
@@ -150,6 +157,8 @@ export async function reissueGrant(context: AuthContext, jobId: string) {
 
   // Transaction: deactivate current ACTIVE grant + revoke sessions + create new grant
   const result = await prisma.$transaction(async (tx) => {
+    await lockJobForPortalMutation(tx, jobId);
+
     // Same per-job issuance cap as issueGrant.
     await assertIssuanceCap(tx, jobId);
 
@@ -212,20 +221,16 @@ export async function reissueGrant(context: AuthContext, jobId: string) {
       },
     });
 
-    if (!currentGrant) {
-      // Reissue used as a first issuance (no ACTIVE grant existed): the
-      // issuance itself must still land in the audit trail.
-      await tx.portalAuditEvent.create({
-        data: {
-          companyId: context.companyId,
-          jobId,
-          customerId: job.customerId,
-          grantId: newGrant.id,
-          actorUserId: context.userId,
-          action: "PORTAL_LINK_ISSUED",
-        },
-      });
-    }
+    await tx.portalAuditEvent.create({
+      data: {
+        companyId: context.companyId,
+        jobId,
+        customerId: job.customerId,
+        grantId: newGrant.id,
+        actorUserId: context.userId,
+        action: "PORTAL_LINK_ISSUED",
+      },
+    });
 
     // Build link
     const link = `${env.PORTAL_PUBLIC_BASE_URL}/open#t=${linkToken}`;
@@ -426,16 +431,21 @@ export async function closePortalIfDone(
     return;
   }
 
-  // Deactivate grant and revoke sessions
-  await db.portalAccessGrant.update({
-    where: { id: grant.id },
+  // Claim the active grant so concurrent lifecycle hooks produce one
+  // deactivation and one audit event.
+  const deactivated = await db.portalAccessGrant.updateMany({
+    where: { id: grant.id, status: "ACTIVE" },
     data: {
       status: "DEACTIVATED",
       deactivatedAt: new Date(),
       deactivatedReason: reason,
     },
   });
+  if (deactivated.count !== 1) {
+    return;
+  }
 
+  // Revoke sessions
   await db.portalSession.updateMany({
     where: { grantId: grant.id, revokedAt: null },
     data: { revokedAt: new Date() },

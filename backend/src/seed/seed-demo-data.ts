@@ -340,7 +340,9 @@ async function seedDemoData() {
     const technician = rng.pick(technicians);
     const serviceType = rng.pick(SERVICE_TYPES);
     const problemDescription = rng.pick(PROBLEM_DESCRIPTIONS);
-    const status = rng.pick(jobStatuses);
+    // Keep at least one completed job so invoice and review fixtures below
+    // always have a valid target.
+    const status = i === 0 ? "COMPLETED" : rng.pick(jobStatuses);
 
     const jobNumber = await getNextJobNumber(company.id);
     const scheduledStart = jobRng.date(thirtyDaysAgo, thirtyDaysFromNow);
@@ -577,12 +579,11 @@ async function seedDemoData() {
 
   // Create customer reviews for completed jobs
   console.log("⭐ Creating customer reviews...");
-  const reviewRng = new SeededRandom("reviews");
   const completedJobs = jobs.filter((j) => j.status === "COMPLETED");
 
-  for (let i = 0; i < 5; i++) {
-    const job = reviewRng.pick(completedJobs);
-    const rating = Math.floor(reviewRng.range(3, 6)); // 3-5 stars
+  for (let i = 0; i < Math.min(5, completedJobs.length); i++) {
+    const job = completedJobs[i];
+    const rating = 3 + (i % 3); // deterministic 3-5 stars
 
     await prisma.customerReview.create({
       data: {

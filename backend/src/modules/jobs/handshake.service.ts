@@ -354,6 +354,7 @@ export async function prepareHandshakeOnEnRoute(
 
 interface HandshakeCodeDeliveryJob {
   jobId: string;
+  handshakeVersion: number;
 }
 
 /**
@@ -380,7 +381,11 @@ async function processHandshakeCodeDelivery(
 
     // Stale delivery (job moved on, or was reassigned and a newer code
     // was issued): the current code is delivered by the newest enqueue.
-    if (!job || job.status !== "EN_ROUTE") {
+    if (
+      !job ||
+      job.status !== "EN_ROUTE" ||
+      job.handshakeVersion !== payload.handshakeVersion
+    ) {
       return;
     }
 
@@ -427,9 +432,15 @@ inProcessQueue.registerHandler<HandshakeCodeDeliveryJob>(
  * Fire-and-forget enqueue of handshake code delivery. Call AFTER the
  * transition transaction has committed. Never throws.
  */
-export function queueHandshakeCodeDelivery(jobId: string): void {
+export function queueHandshakeCodeDelivery(
+  jobId: string,
+  handshakeVersion: number,
+): void {
   void inProcessQueue
-    .enqueue<HandshakeCodeDeliveryJob>(HANDSHAKE_CODE_JOB_TYPE, { jobId })
+    .enqueue<HandshakeCodeDeliveryJob>(HANDSHAKE_CODE_JOB_TYPE, {
+      jobId,
+      handshakeVersion,
+    })
     .catch((error: unknown) => {
       logger.warn(
         { err: error, jobId },

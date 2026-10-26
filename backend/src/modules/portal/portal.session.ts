@@ -189,7 +189,7 @@ export async function validatePortalSession(sessionToken: string): Promise<{
   }
 
   const now = new Date();
-  if (session.expiresAt < now) {
+  if (session.expiresAt <= now) {
     // The expired-session response carries the company contact payload so
     // the closed screen can show the customer who to contact.
     const contacts = await getCompanyContacts(session.companyId);
@@ -207,7 +207,7 @@ export async function validatePortalSession(sessionToken: string): Promise<{
   // Check idle timeout
   const idleMs = now.getTime() - session.lastSeenAt.getTime();
   const idleDays = idleMs / (24 * 60 * 60 * 1000);
-  if (idleDays > env.PORTAL_SESSION_IDLE_DAYS) {
+  if (idleDays >= env.PORTAL_SESSION_IDLE_DAYS) {
     const contacts = await getCompanyContacts(session.companyId);
     throw new AppError(
       "PORTAL_SESSION_EXPIRED",

@@ -1,5 +1,5 @@
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 
 class AppConfig {
   static const String environment = String.fromEnvironment(
@@ -67,15 +67,11 @@ class AppConfig {
       return 'http://127.0.0.1:4000';
     }
 
-    try {
-      if (Platform.isAndroid) {
-        return 'http://10.0.2.2:4000';
-      }
-      if (Platform.isIOS) {
-        return 'http://127.0.0.1:4000';
-      }
-    } catch (_) {
-      // Platform check may throw in some environments
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:4000';
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return 'http://127.0.0.1:4000';
     }
     return 'http://127.0.0.1:4000';
   }

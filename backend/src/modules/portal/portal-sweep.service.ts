@@ -159,7 +159,7 @@ export async function runPortalSweep(
     cursor = page[page.length - 1].id;
 
     for (const grant of page) {
-      await prisma.$transaction(async (tx) => {
+      const closed = await prisma.$transaction(async (tx) => {
         // Re-check within transaction
         const current = await tx.portalAccessGrant.findUnique({
           where: { id: grant.id },
@@ -167,7 +167,7 @@ export async function runPortalSweep(
         });
 
         if (!current || current.status !== "ACTIVE" || current.linkConsumedAt) {
-          return;
+          return false;
         }
 
         // Deactivate grant
@@ -197,9 +197,12 @@ export async function runPortalSweep(
             metadata: { reason: "AUTO_LINK_UNUSED" },
           },
         });
+        return true;
       });
 
-      neverOpenedLinksClosed += 1;
+      if (closed) {
+        neverOpenedLinksClosed += 1;
+      }
     }
 
     if (page.length < PAGE_SIZE) break;
