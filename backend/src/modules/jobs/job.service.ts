@@ -557,25 +557,32 @@ export async function assignJob(
           : undefined,
       };
     })
-    .then(async ({ conflicts, technicianId, handshakeChanged, handshakeVersion }) => {
-      if (handshakeChanged) {
-        queueHandshakeCodeDelivery(jobId, handshakeVersion!);
-      }
-      void notificationPublisher.publish({
-        type: "JOB_ASSIGNED",
-        companyId: context.companyId,
-        jobId,
-        recipientUserId: technicianId ?? undefined,
-      });
-      return {
-        job: await getJob(context, jobId),
-        warnings: conflicts.map((conflict) => ({
-          code: "TECHNICIAN_SCHEDULE_CONFLICT",
-          jobId: conflict.id,
-          jobNumber: conflict.jobNumber,
-        })),
-      };
-    });
+    .then(
+      async ({
+        conflicts,
+        technicianId,
+        handshakeChanged,
+        handshakeVersion,
+      }) => {
+        if (handshakeChanged) {
+          queueHandshakeCodeDelivery(jobId, handshakeVersion!);
+        }
+        void notificationPublisher.publish({
+          type: "JOB_ASSIGNED",
+          companyId: context.companyId,
+          jobId,
+          recipientUserId: technicianId ?? undefined,
+        });
+        return {
+          job: await getJob(context, jobId),
+          warnings: conflicts.map((conflict) => ({
+            code: "TECHNICIAN_SCHEDULE_CONFLICT",
+            jobId: conflict.id,
+            jobNumber: conflict.jobNumber,
+          })),
+        };
+      },
+    );
 }
 
 export async function transitionJob(
@@ -716,8 +723,7 @@ export async function listTechnicianToday(context: AuthContext, date: string) {
     },
     // Technicians get the redacted select here too (customer email/phone
     // withheld), matching listJobs/getJob — /today used the full select.
-    select:
-      context.role === "TECHNICIAN" ? technicianJobSelect() : jobSelect(),
+    select: context.role === "TECHNICIAN" ? technicianJobSelect() : jobSelect(),
     orderBy: { scheduledStart: "asc" },
   });
   return { date, jobs };

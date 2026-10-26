@@ -545,8 +545,7 @@ export async function recordPayment(
       );
     }
     resumeOperationId = existingOperation.id;
-    providerAlreadyAccepted =
-      existingOperation.status === "PROVIDER_ACCEPTED";
+    providerAlreadyAccepted = existingOperation.status === "PROVIDER_ACCEPTED";
   }
 
   if (input.amountMinor < 0) {
@@ -755,7 +754,10 @@ export async function recordPayment(
     if (isUniqueConstraintError(error)) {
       return getInvoice(context, invoiceId);
     }
-    if (error instanceof AppError && error.code === "PAYMENT_OPERATION_CLAIM_LOST") {
+    if (
+      error instanceof AppError &&
+      error.code === "PAYMENT_OPERATION_CLAIM_LOST"
+    ) {
       // The recovery sweep won the commit race. If it completed the
       // operation, this payment is recorded — replay success; if it is
       // still mid-commit, report the payment as in flight.

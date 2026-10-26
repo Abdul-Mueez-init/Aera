@@ -102,7 +102,12 @@ describe("Portal Tokens", () => {
 
     it("should generate different codes for different secrets", () => {
       const code1 = deriveHandshakeCode(secret, "company-1", "job-1", 1);
-      const code2 = deriveHandshakeCode("different-secret", "company-1", "job-1", 1);
+      const code2 = deriveHandshakeCode(
+        "different-secret",
+        "company-1",
+        "job-1",
+        1,
+      );
       expect(code1).not.toBe(code2);
     });
   });

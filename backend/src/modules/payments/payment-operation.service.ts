@@ -216,9 +216,7 @@ export async function processProviderAcceptedOperations(
 
   for (const operation of acceptedOperations) {
     let outcome = "claimed-elsewhere" as
-      | "committed"
-      | "claimed-elsewhere"
-      | "conflict";
+      "committed" | "claimed-elsewhere" | "conflict";
     try {
       // Attempt to commit the ledger payment. The operation is claimed
       // inside the transaction (PROVIDER_ACCEPTED -> PROCESSING) and the

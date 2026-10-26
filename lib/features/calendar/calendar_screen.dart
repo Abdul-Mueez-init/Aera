@@ -113,6 +113,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         backgroundColor: AeraColors.accent,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add, size: 20),

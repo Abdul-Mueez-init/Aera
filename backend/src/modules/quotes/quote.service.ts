@@ -326,7 +326,9 @@ export interface ProcessQuoteResponseOptions {
  * approval. Used by the staff respond command and the customer portal
  * respond so both surfaces enforce identical expiry/idempotency rules.
  */
-export async function processQuoteResponse(options: ProcessQuoteResponseOptions) {
+export async function processQuoteResponse(
+  options: ProcessQuoteResponseOptions,
+) {
   const { quoteId, companyId, jobId, action, source, actorUserId } = options;
   const now = options.now ?? new Date();
 

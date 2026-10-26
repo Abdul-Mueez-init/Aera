@@ -107,6 +107,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         backgroundColor: AeraColors.accent,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.person_add, size: 20),

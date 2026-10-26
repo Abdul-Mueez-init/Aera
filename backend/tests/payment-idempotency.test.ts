@@ -440,9 +440,8 @@ describe("Audit fixes: payment validation and operation recovery", () => {
   }
 
   it("rejects an overpayment before creating any operation, and the same key stays usable", async () => {
-    const { owner, invoiceId } = await createIssuedInvoiceWithBalance(
-      "audit-overpay",
-    );
+    const { owner, invoiceId } =
+      await createIssuedInvoiceWithBalance("audit-overpay");
     const key = `audit-overpay-${Date.now()}`;
 
     const overpay = await pay(owner.accessToken, invoiceId, key, 10001);
@@ -457,9 +456,8 @@ describe("Audit fixes: payment validation and operation recovery", () => {
   });
 
   it("rejects a $0 payment while a balance is due, without touching the invoice", async () => {
-    const { owner, invoiceId } = await createIssuedInvoiceWithBalance(
-      "audit-zero",
-    );
+    const { owner, invoiceId } =
+      await createIssuedInvoiceWithBalance("audit-zero");
     const key = `audit-zero-${Date.now()}`;
 
     const zero = await pay(owner.accessToken, invoiceId, key, 0);
@@ -539,9 +537,8 @@ describe("Audit fixes: payment validation and operation recovery", () => {
   });
 
   it("refuses to silently retry an operation parked for reconciliation", async () => {
-    const { owner, invoiceId } = await createIssuedInvoiceWithBalance(
-      "audit-recon",
-    );
+    const { owner, invoiceId } =
+      await createIssuedInvoiceWithBalance("audit-recon");
     const key = `audit-recon-${Date.now()}`;
     await prisma.paymentOperation.create({
       data: {
@@ -572,9 +569,8 @@ describe("Audit fixes: payment validation and operation recovery", () => {
   });
 
   it("rejects reusing a key with a different amount on a resumable operation", async () => {
-    const { owner, invoiceId } = await createIssuedInvoiceWithBalance(
-      "audit-payload",
-    );
+    const { owner, invoiceId } =
+      await createIssuedInvoiceWithBalance("audit-payload");
     const key = `audit-payload-${Date.now()}`;
     await prisma.paymentOperation.create({
       data: {
@@ -597,9 +593,8 @@ describe("Audit fixes: payment validation and operation recovery", () => {
   });
 
   it("concurrent submissions with the same key never produce a raw 500 and credit the invoice once", async () => {
-    const { owner, invoiceId } = await createIssuedInvoiceWithBalance(
-      "audit-concurrent",
-    );
+    const { owner, invoiceId } =
+      await createIssuedInvoiceWithBalance("audit-concurrent");
     const key = `audit-concurrent-${Date.now()}`;
 
     const [first, second] = await Promise.all([

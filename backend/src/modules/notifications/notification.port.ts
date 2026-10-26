@@ -77,7 +77,9 @@ async function resolveRecipients(
         status: "ACTIVE",
       },
       select: {
-        user: { select: { id: true, email: true, phone: true, firstName: true } },
+        user: {
+          select: { id: true, email: true, phone: true, firstName: true },
+        },
       },
     });
     return membership
