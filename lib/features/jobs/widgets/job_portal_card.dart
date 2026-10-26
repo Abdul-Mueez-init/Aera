@@ -10,6 +10,7 @@ import '../../../core/theme/aera_typography.dart';
 import '../../../core/widgets/aera_button.dart';
 import '../../../core/widgets/aera_card.dart';
 import '../../../core/widgets/aera_status_chip.dart';
+import '../../../core/widgets/text_prompt_dialog.dart';
 import '../data/jobs_repository.dart';
 import '../providers/jobs_provider.dart';
 
@@ -344,61 +345,17 @@ class _JobPortalCardState extends ConsumerState<JobPortalCard> {
   }
 
   Future<void> _overrideStart() async {
-    final controller = TextEditingController();
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          final text = controller.text.trim();
-          final valid = text.length >= 5 && text.length <= 300;
-          return AlertDialog(
-            backgroundColor: AeraColors.surface,
-            shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
-            title: Text(
-              'Override start',
-              style: AeraTypography.h3.copyWith(fontSize: 17),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Starts the job without the customer code. The reason '
-                  'is recorded in the job history and portal activity.',
-                  style: AeraTypography.bodySm,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: controller,
-                  maxLength: 300,
-                  maxLines: 3,
-                  onChanged: (_) => setDialogState(() {}),
-                  decoration: const InputDecoration(
-                    hintText: 'Reason (required, 5–300 characters)',
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: valid
-                    ? () => Navigator.of(dialogContext).pop(text)
-                    : null,
-                child: const Text(
-                  'Start job',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+    final reason = await showTextPromptDialog(
+      context,
+      title: 'Override start',
+      message:
+          'Starts the job without the customer code. The reason '
+          'is recorded in the job history and portal activity.',
+      hintText: 'Reason (required, 5–300 characters)',
+      confirmLabel: 'Start job',
+      minLength: 5,
+      maxLength: 300,
     );
-    controller.dispose();
     if (reason == null) return;
 
     setState(() => _busy = true);

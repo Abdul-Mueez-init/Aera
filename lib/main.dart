@@ -8,8 +8,12 @@ import 'core/theme/aera_theme.dart';
 import 'core/router/app_router.dart';
 import 'core/config/app_config.dart';
 import 'core/network/sentry_scrub.dart';
+import 'features/portal/portal_launch_fragment.dart';
 
 Future<void> main() async {
+  // Must run before anything touches the router / URL: portal links carry
+  // their one-time token in the URL fragment, which the router discards.
+  captureLaunchFragment();
   WidgetsFlutterBinding.ensureInitialized();
 
   // Phase 5: Use path URL strategy for web builds so customer-facing links

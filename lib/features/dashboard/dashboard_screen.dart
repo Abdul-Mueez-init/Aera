@@ -191,7 +191,7 @@ class DashboardScreen extends ConsumerWidget {
                   AeraCard(
                     padding: const EdgeInsets.all(8),
                     borderRadius: AeraRadii.borderMd,
-                    onTap: () => context.push('/calendar'),
+                    onTap: () => context.go('/calendar'),
                     child: const Icon(
                       Icons.calendar_month_outlined,
                       color: AeraColors.accent,
@@ -237,7 +237,7 @@ class DashboardScreen extends ConsumerWidget {
                               value: summary.jobsToday.toString(),
                               sublabel: '${summary.unassignedJobs} unassigned',
                               icon: Icons.assignment_outlined,
-                              onTap: () => context.push('/jobs'),
+                              onTap: () => context.go('/jobs'),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -250,7 +250,7 @@ class DashboardScreen extends ConsumerWidget {
                               icon: Icons.precision_manufacturing_outlined,
                               iconColor: AeraColors.accent,
                               iconBgColor: AeraColors.accentSoft,
-                              onTap: () => context.push('/jobs'),
+                              onTap: () => context.go('/jobs'),
                             ),
                           ),
                         ],
@@ -269,7 +269,7 @@ class DashboardScreen extends ConsumerWidget {
                                   ? AeraColors.warning
                                   : AeraColors.ink,
                               icon: Icons.person_add_outlined,
-                              onTap: () => context.push('/jobs'),
+                              onTap: () => context.go('/jobs'),
                             ),
                           ),
                           const SizedBox(width: 10),

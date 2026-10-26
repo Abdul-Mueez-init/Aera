@@ -12,6 +12,7 @@ import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_status_chip.dart';
+import '../../core/widgets/text_prompt_dialog.dart';
 import '../auth/providers/auth_provider.dart';
 import '../calendar/providers/calendar_provider.dart';
 import '../customers/providers/customers_provider.dart';
@@ -205,53 +206,11 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
   }
 
   Future<void> _completeJob() async {
-    final summaryController = TextEditingController();
-    final summary = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AeraColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
-        title: Text(
-          'Complete Job',
-          style: AeraTypography.h3.copyWith(fontSize: 17),
-        ),
-        content: TextField(
-          controller: summaryController,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: 'What was done? (required)',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              summaryController.dispose();
-              Navigator.of(dialogContext).pop();
-            },
-            child: Text(
-              'Cancel',
-              style: AeraTypography.bodyMedium.copyWith(
-                color: AeraColors.inkSoft,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              final text = summaryController.text.trim();
-              if (text.isEmpty) return;
-              summaryController.dispose();
-              Navigator.of(dialogContext).pop(text);
-            },
-            child: Text(
-              'Complete',
-              style: AeraTypography.bodyMedium.copyWith(
-                color: AeraColors.accent,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
+    final summary = await showTextPromptDialog(
+      context,
+      title: 'Complete Job',
+      hintText: 'What was done? (required)',
+      confirmLabel: 'Complete',
     );
 
     if (summary == null || summary.isEmpty) return;
@@ -318,61 +277,17 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
   }
 
   Future<void> _overrideStart() async {
-    final controller = TextEditingController();
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          final text = controller.text.trim();
-          final valid = text.length >= 5 && text.length <= 300;
-          return AlertDialog(
-            backgroundColor: AeraColors.surface,
-            shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
-            title: Text(
-              'Override start',
-              style: AeraTypography.h3.copyWith(fontSize: 17),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Starts the job without the customer code. The reason '
-                  'is recorded in the job history and portal activity.',
-                  style: AeraTypography.bodySm,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: controller,
-                  maxLength: 300,
-                  maxLines: 3,
-                  onChanged: (_) => setDialogState(() {}),
-                  decoration: const InputDecoration(
-                    hintText: 'Reason (required, 5–300 characters)',
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: valid
-                    ? () => Navigator.of(dialogContext).pop(text)
-                    : null,
-                child: const Text(
-                  'Start job',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+    final reason = await showTextPromptDialog(
+      context,
+      title: 'Override start',
+      message:
+          'Starts the job without the customer code. The reason '
+          'is recorded in the job history and portal activity.',
+      hintText: 'Reason (required, 5–300 characters)',
+      confirmLabel: 'Start job',
+      minLength: 5,
+      maxLength: 300,
     );
-    controller.dispose();
     if (reason == null) return;
 
     setState(() => _updating = true);

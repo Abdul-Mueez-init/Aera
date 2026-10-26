@@ -11,6 +11,7 @@ import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_status_chip.dart';
 import '../../core/widgets/aera_text_field.dart';
+import '../../core/widgets/text_prompt_dialog.dart';
 import '../jobs/data/jobs_repository.dart';
 import '../jobs/providers/jobs_provider.dart';
 import 'data/technician_repository.dart';
@@ -60,54 +61,12 @@ class _WorkInProgressScreenState extends ConsumerState<WorkInProgressScreen> {
   }
 
   Future<void> _addNote() async {
-    final controller = TextEditingController();
-    final note = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AeraColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
-        title: Text(
-          'Add Field Note',
-          style: AeraTypography.h3.copyWith(fontSize: 17),
-        ),
-        content: TextField(
-          controller: controller,
-          maxLines: 3,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'What did you observe or do?',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              controller.dispose();
-              Navigator.of(dialogContext).pop();
-            },
-            child: Text(
-              'Cancel',
-              style: AeraTypography.bodyMedium.copyWith(
-                color: AeraColors.inkSoft,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              final text = controller.text.trim();
-              if (text.isEmpty) return;
-              controller.dispose();
-              Navigator.of(dialogContext).pop(text);
-            },
-            child: Text(
-              'Save',
-              style: AeraTypography.bodyMedium.copyWith(
-                color: AeraColors.accent,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
+    final note = await showTextPromptDialog(
+      context,
+      title: 'Add Field Note',
+      hintText: 'What did you observe or do?',
+      confirmLabel: 'Save',
+      autofocus: true,
     );
     if (note == null || note.isEmpty) return;
 

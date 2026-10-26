@@ -7,6 +7,7 @@ import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_button.dart';
 import 'data/portal_repository.dart';
+import 'portal_launch_fragment.dart';
 import 'providers/portal_provider.dart';
 
 /// The link landing screen (`/open#t=…`, handoff 6.3).
@@ -40,6 +41,8 @@ class _PortalOpenScreenState extends ConsumerState<PortalOpenScreen> {
   String get _effectiveFragment {
     final fromRoute = widget.fragment;
     if (fromRoute != null && fromRoute.isNotEmpty) return fromRoute;
+    final captured = launchFragment;
+    if (captured.isNotEmpty) return captured;
     if (kIsWeb) return Uri.base.fragment;
     return '';
   }
@@ -51,6 +54,7 @@ class _PortalOpenScreenState extends ConsumerState<PortalOpenScreen> {
     final outcome = await ref
         .read(portalSessionControllerProvider.notifier)
         .bootstrap(fragmentToken: token);
+    if (outcome != PortalBootstrapOutcome.error) clearLaunchFragment();
     if (!mounted) return;
     switch (outcome) {
       case PortalBootstrapOutcome.active:

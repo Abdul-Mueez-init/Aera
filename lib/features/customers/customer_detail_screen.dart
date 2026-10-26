@@ -200,7 +200,7 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                     child: AeraButton(
                       text: 'View All Jobs',
                       variant: AeraButtonVariant.secondary,
-                      onPressed: () => context.push('/jobs'),
+                      onPressed: () => context.go('/jobs'),
                     ),
                   ),
                   const SizedBox(width: 10),
