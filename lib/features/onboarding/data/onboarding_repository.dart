@@ -6,16 +6,6 @@ final onboardingRepositoryProvider = Provider<OnboardingRepository>((ref) {
   return OnboardingRepository(ref.watch(apiClientProvider));
 });
 
-final onboardingProfileProvider = FutureProvider.autoDispose<OnboardingProfile>(
-  (ref) {
-    return ref.watch(onboardingRepositoryProvider).getProfile();
-  },
-);
-
-final companyLogoUrlProvider = FutureProvider.autoDispose<String?>((ref) {
-  return ref.read(onboardingRepositoryProvider).getLogoUrl();
-});
-
 class OnboardingService {
   const OnboardingService({
     this.id,
@@ -156,58 +146,21 @@ class OnboardingRepository {
   OnboardingRepository(this._client);
   final ApiClient _client;
 
-  Future<OnboardingProfile> getProfile() async {
-    final response = await _client.get('/api/v1/companies/current/onboarding');
-    return OnboardingProfile.fromJson(response as Map<String, dynamic>);
-  }
-
-  Future<OnboardingProfile> saveBusiness({
-    required String name,
-    required String phone,
-    String? taxId,
-    required String currency,
-  }) async {
-    final response = await _client.patch(
-      '/api/v1/companies/current/onboarding/business',
-      body: {
-        'name': name.trim(),
-        'phone': phone.trim(),
-        'taxId': taxId?.trim(),
-        'defaultCurrency': currency,
-      },
-    );
-    return OnboardingProfile.fromJson(response as Map<String, dynamic>);
-  }
-
-  Future<String?> getLogoUrl() async {
-    final response = await _client.get('/api/v1/companies/current/logo');
-    return (response as Map<String, dynamic>)['logoUrl'] as String?;
-  }
-
-  Future<void> uploadLogo({
-    required String fileName,
-    required List<int> bytes,
-  }) async {
-    if (bytes.isEmpty || bytes.length > 5_000_000) {
-      throw Exception('Choose an image no larger than 5 MB.');
-    }
-    final lower = fileName.toLowerCase();
-    final mimeType = lower.endsWith('.png')
-        ? 'image/png'
-        : (lower.endsWith('.webp')
-              ? 'image/webp'
-              : (lower.endsWith('.jpg') || lower.endsWith('.jpeg')
-                    ? 'image/jpeg'
-                    : null));
-    if (mimeType == null) throw Exception('Choose a JPEG, PNG, or WebP image.');
+  Future<String> presignLogo(String mimeType) async {
     final presign =
         await _client.post(
               '/api/v1/companies/current/onboarding/logo/presign',
               body: {'mimeType': mimeType},
             )
             as Map<String, dynamic>;
-    final objectKey = presign['objectKey'] as String;
-    final uploadUrl = presign['uploadUrl'] as String;
+    return presign['uploadUrl'] as String;
+  }
+
+  Future<String> uploadLogoToPresignedUrl({
+    required String uploadUrl,
+    required String mimeType,
+    required List<int> bytes,
+  }) async {
     final uploadResponse = await http
         .put(
           Uri.parse(uploadUrl),
@@ -220,14 +173,7 @@ class OnboardingRepository {
         'The image could not be uploaded. Check your connection and retry.',
       );
     }
-    await _client.post(
-      '/api/v1/companies/current/onboarding/logo',
-      body: {
-        'objectKey': objectKey,
-        'mimeType': mimeType,
-        'sizeBytes': bytes.length,
-      },
-    );
+    return uploadResponse.headers['x-amz-version-id'] ?? '';
   }
 
   Future<List<ServiceZone>> findZones({
@@ -247,26 +193,6 @@ class OnboardingRepository {
         .whereType<Map<String, dynamic>>()
         .map(ServiceZone.fromJson)
         .toList(growable: false);
-  }
-
-  Future<OnboardingProfile> saveServiceArea({
-    required double latitude,
-    required double longitude,
-    required int radiusKm,
-    required Iterable<ServiceZone> zones,
-    Iterable<String> customZoneNames = const [],
-  }) async {
-    final response = await _client.patch(
-      '/api/v1/companies/current/onboarding/service-area',
-      body: {
-        'latitude': latitude,
-        'longitude': longitude,
-        'radiusKm': radiusKm,
-        'zonePlaceIds': zones.map((zone) => zone.placeId).toList(),
-        'customZones': customZoneNames.toList(),
-      },
-    );
-    return OnboardingProfile.fromJson(response as Map<String, dynamic>);
   }
 
   Future<GeocodedLocation> reverseGeocode({
@@ -291,21 +217,29 @@ class OnboardingRepository {
     return GeocodedLocation.fromJson(response as Map<String, dynamic>);
   }
 
-  Future<OnboardingProfile> saveServices(
-    List<OnboardingService> services,
-  ) async {
-    final response = await _client.put(
-      '/api/v1/companies/current/onboarding/services',
-      body: {'services': services.map((service) => service.toJson()).toList()},
-    );
-    return OnboardingProfile.fromJson(response as Map<String, dynamic>);
-  }
-
-  Future<OnboardingProfile> complete() async {
+  Future<Map<String, dynamic>> completeOnboarding({
+    required Map<String, dynamic> business,
+    required Map<String, dynamic> area,
+    required Map<String, dynamic> services,
+    String? logoObjectKey,
+    String? logoMimeType,
+    int? logoSizeBytes,
+  }) async {
+    final body = <String, dynamic>{
+      'business': business,
+      'area': area,
+      'services': services,
+    };
+    if (logoObjectKey != null) {
+      body['logoObjectKey'] = logoObjectKey;
+      body['logoMimeType'] = logoMimeType;
+      body['logoSizeBytes'] = logoSizeBytes;
+    }
     final response = await _client.post(
       '/api/v1/companies/current/onboarding/complete',
+      body: body,
     );
-    return OnboardingProfile.fromJson(response as Map<String, dynamic>);
+    return response as Map<String, dynamic>;
   }
 }
 

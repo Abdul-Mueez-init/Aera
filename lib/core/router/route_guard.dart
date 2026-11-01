@@ -25,15 +25,6 @@ const Set<String> _ownerOnboardingPaths = {
   '/onboarding/complete',
 };
 
-int? _ownerOnboardingStepForPath(String path) => switch (path) {
-  '/onboarding/business-basics' => 1,
-  '/onboarding/service-area' => 2,
-  '/onboarding/services' => 3,
-  '/onboarding/team-setup' => 4,
-  '/onboarding/complete' => 5,
-  _ => null,
-};
-
 /// True once the splash screen has been visible for its minimum brand time.
 ///
 /// The router keeps the user on `/splash` until this is true, so a fast
@@ -132,7 +123,9 @@ String? resolveRedirect({
   required String path,
   bool holdSplash = false,
   bool ownerOnboardingPending = false,
-  String ownerOnboardingPath = kOwnerOnboardingPath,
+  bool wizardBusinessBasicsComplete = false,
+  bool wizardServiceAreaComplete = false,
+  bool wizardServicesComplete = false,
 }) {
   final p = _normalize(path);
 
@@ -160,14 +153,26 @@ String? resolveRedirect({
         return null;
       }
       if (role == 'OWNER' && ownerOnboardingPending) {
-        final requestedStep = _ownerOnboardingStepForPath(p);
-        final requiredStep = _ownerOnboardingStepForPath(ownerOnboardingPath);
-        if (requestedStep == null ||
-            requiredStep == null ||
-            requestedStep > requiredStep) {
-          return _ownerOnboardingPaths.contains(ownerOnboardingPath)
-              ? ownerOnboardingPath
-              : kOwnerOnboardingPath;
+        // If wizard is empty (no prerequisites met), all non-onboarding paths go to step 1
+        if (!wizardBusinessBasicsComplete &&
+            !wizardServiceAreaComplete &&
+            !wizardServicesComplete) {
+          if (!_ownerOnboardingPaths.contains(p)) {
+            return kOwnerOnboardingPath;
+          }
+        }
+        // Check wizard prerequisites for each onboarding path
+        if (p == '/onboarding/service-area' && !wizardBusinessBasicsComplete) {
+          return kOwnerOnboardingPath;
+        }
+        if (p == '/onboarding/services' && !wizardServiceAreaComplete) {
+          return kOwnerOnboardingPath;
+        }
+        if (p == '/onboarding/team-setup' && !wizardServicesComplete) {
+          return kOwnerOnboardingPath;
+        }
+        if (p == '/onboarding/complete' && !wizardServicesComplete) {
+          return kOwnerOnboardingPath;
         }
       }
       if (p == kSplashPath || _authEntryPaths.contains(p)) {

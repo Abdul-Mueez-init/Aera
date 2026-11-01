@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
@@ -11,6 +10,7 @@ import '../../core/widgets/aera_card.dart';
 import '../auth/providers/auth_provider.dart';
 import '../settings/data/members_repository.dart';
 import 'data/onboarding_repository.dart';
+import 'providers/onboarding_wizard_provider.dart';
 
 class TeamSetupScreen extends ConsumerStatefulWidget {
   const TeamSetupScreen({super.key});
@@ -23,7 +23,6 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
   final List<_TeamMember> _members = [];
   bool _isLoading = false;
   String? _errorMessage;
-  static const String _invitedCountKey = 'onboarding_invited_count';
 
   @override
   Widget build(BuildContext context) {
@@ -494,8 +493,11 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
       _isLoading = true;
       _errorMessage = null;
     });
-    int successCount = _members.where((member) => member.isInvited).length;
     try {
+      // First complete onboarding with all wizard data
+      await _completeOnboarding();
+
+      // Then send team invites as best-effort
       final membersRepo = ref.read(membersRepositoryProvider);
       for (int i = 0; i < _members.length; i++) {
         final member = _members[i];
@@ -527,7 +529,6 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
               isInvited: true,
             );
           });
-          successCount++;
         } catch (e) {
           setState(() {
             _members[i] = _TeamMember(
@@ -544,14 +545,7 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
         }
       }
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(_invitedCountKey, successCount);
-      if (_members.isNotEmpty && successCount == 0) {
-        throw Exception(
-          'No invitations were sent. Fix the errors above or skip invitations to finish setup.',
-        );
-      }
-      await _completeWorkspace();
+      if (mounted) context.push('/onboarding/complete');
     } catch (e) {
       if (mounted) {
         setState(
@@ -571,7 +565,8 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
       _errorMessage = null;
     });
     try {
-      await _completeWorkspace();
+      await _completeOnboarding();
+      if (mounted) context.push('/onboarding/complete');
     } catch (e) {
       if (mounted) {
         setState(
@@ -585,10 +580,60 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
     }
   }
 
-  Future<void> _completeWorkspace() async {
-    await ref.read(onboardingRepositoryProvider).complete();
+  Future<void> _completeOnboarding() async {
+    final wizard = ref.read(onboardingWizardProvider);
+    final repo = ref.read(onboardingRepositoryProvider);
+
+    // Upload logo if present
+    String? logoObjectKey;
+    String? logoMimeType;
+    int? logoSizeBytes;
+    if (wizard.logoBytes != null && wizard.logoFileName != null) {
+      final lower = wizard.logoFileName!.toLowerCase();
+      logoMimeType = lower.endsWith('.png')
+          ? 'image/png'
+          : (lower.endsWith('.webp')
+                ? 'image/webp'
+                : (lower.endsWith('.jpg') || lower.endsWith('.jpeg')
+                      ? 'image/jpeg'
+                      : 'image/jpeg'));
+
+      final uploadUrl = await repo.presignLogo(logoMimeType);
+      await repo.uploadLogoToPresignedUrl(
+        uploadUrl: uploadUrl,
+        mimeType: logoMimeType,
+        bytes: wizard.logoBytes!,
+      );
+      // Extract objectKey from uploadUrl (last path segment)
+      final uri = Uri.parse(uploadUrl);
+      logoObjectKey = uri.pathSegments.last;
+      logoSizeBytes = wizard.logoBytes!.length;
+    }
+
+    await repo.completeOnboarding(
+      business: {
+        'name': wizard.name,
+        'phone': wizard.phone,
+        'taxId': wizard.taxId,
+        'defaultCurrency': wizard.currency,
+      },
+      area: {
+        'latitude': wizard.latitude,
+        'longitude': wizard.longitude,
+        'radiusKm': wizard.radiusKm,
+        'zonePlaceIds': wizard.selectedZoneIds,
+        'customZones': wizard.customZoneNames,
+      },
+      services: {
+        'services': wizard.selectedServices.map((s) => s.toJson()).toList(),
+      },
+      logoObjectKey: logoObjectKey,
+      logoMimeType: logoMimeType,
+      logoSizeBytes: logoSizeBytes,
+    );
+
     await ref.read(authNotifierProvider.notifier).refreshServerIdentity();
-    if (mounted) context.push('/onboarding/complete');
+    ref.read(onboardingWizardProvider.notifier).reset();
   }
 }
 

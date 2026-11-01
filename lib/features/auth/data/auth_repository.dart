@@ -87,14 +87,12 @@ class AuthCompany {
   final String name;
   final String slug;
   final bool onboardingComplete;
-  final int onboardingStep;
 
   const AuthCompany({
     required this.id,
     required this.name,
     required this.slug,
     this.onboardingComplete = true,
-    this.onboardingStep = 1,
   });
 
   factory AuthCompany.fromJson(Map<String, dynamic> json) => AuthCompany(
@@ -102,7 +100,7 @@ class AuthCompany {
     name: json['name'] as String? ?? '',
     slug: json['slug'] as String? ?? '',
     onboardingComplete: json['onboardingComplete'] as bool? ?? true,
-    onboardingStep: (json['onboardingStep'] as num?)?.toInt() ?? 1,
+    // Tolerate old session JSON with onboardingStep, but don't store it
   );
 
   Map<String, dynamic> toJson() => {
@@ -110,7 +108,6 @@ class AuthCompany {
     'name': name,
     'slug': slug,
     'onboardingComplete': onboardingComplete,
-    'onboardingStep': onboardingStep,
   };
 }
 

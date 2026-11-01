@@ -170,6 +170,8 @@ model Company {
   headquartersLatitude  Decimal?              @db.Decimal(10, 7)
   headquartersLongitude Decimal?              @db.Decimal(10, 7)
   serviceRadiusKm       Int?
+  // DEPRECATED: No longer used. Onboarding is now all-or-nothing with atomic commit.
+  // Kept for backward compatibility with existing data. Will be dropped in a future migration.
   onboardingStep        Int                   @default(1)
   onboardingCompletedAt DateTime?
   memberships  CompanyMember[]

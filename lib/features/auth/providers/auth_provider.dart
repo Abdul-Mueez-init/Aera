@@ -13,6 +13,7 @@ import '../../team/providers/team_provider.dart';
 import '../../settings/providers/company_provider.dart';
 import '../../settings/providers/notifications_provider.dart';
 import '../../ai/providers/ai_provider.dart';
+import '../../onboarding/providers/onboarding_wizard_provider.dart';
 
 final authNotifierProvider =
     StateNotifierProvider<AuthNotifier, AsyncValue<AuthSession?>>((ref) {
@@ -161,6 +162,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
     _ref.invalidate(companyDetailsProvider);
     _ref.invalidate(notificationsRepositoryProvider);
     _ref.invalidate(aiConversationsListProvider);
+    _ref.invalidate(onboardingWizardProvider);
     // Detail families — invalidating the family clears every cached
     // instance, not just the ones currently on screen.
     _ref.invalidate(jobDetailProvider);

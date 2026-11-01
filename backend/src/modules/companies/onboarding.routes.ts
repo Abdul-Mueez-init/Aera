@@ -6,7 +6,6 @@ import rateLimit from "express-rate-limit";
 import { env } from "../../config/env.js";
 import { prisma } from "../../db/prisma.js";
 import {
-  createCompanyLogoReadUrl,
   createCompanyLogoUploadUrl,
   verifyCompanyLogoUpload,
 } from "../../common/storage/supabase-storage.adapter.js";
@@ -154,7 +153,6 @@ function companySelect() {
     headquartersLatitude: true,
     headquartersLongitude: true,
     serviceRadiusKm: true,
-    onboardingStep: true,
     onboardingCompletedAt: true,
     services: {
       select: {
@@ -208,62 +206,6 @@ router.post("/logo/presign", async (request, response) => {
   response.status(201).json({ data: upload });
 });
 
-router.post("/logo", async (request, response) => {
-  const parsed = z
-    .object({
-      objectKey: z.string().trim().min(1).max(500),
-      mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
-      sizeBytes: z.number().int().positive().max(5_000_000),
-    })
-    .safeParse(request.body);
-  if (!parsed.success) failValidation(parsed.error);
-  const companyId = companyIdFromRequest(request);
-  await verifyCompanyLogoUpload(
-    parsed.data.objectKey,
-    companyId,
-    parsed.data.mimeType,
-  );
-  const company = await prisma.company.update({
-    where: { id: companyId },
-    data: { logoObjectKey: parsed.data.objectKey },
-    select: { id: true, logoObjectKey: true },
-  });
-  response.status(200).json({ data: company });
-});
-
-router.get("/logo", async (request, response) => {
-  const company = await prisma.company.findUnique({
-    where: { id: companyIdFromRequest(request) },
-    select: { logoObjectKey: true },
-  });
-  if (!company)
-    throw new AppError("TENANT_ACCESS_DENIED", "Company access denied", 403);
-  const logoUrl = company.logoObjectKey
-    ? await createCompanyLogoReadUrl(
-        companyIdFromRequest(request),
-        company.logoObjectKey,
-      )
-    : null;
-  response.status(200).json({ data: { logoUrl } });
-});
-
-router.patch("/business", async (request, response) => {
-  const parsed = businessSchema.safeParse(request.body);
-  if (!parsed.success) failValidation(parsed.error);
-  const company = await prisma.company.update({
-    where: { id: companyIdFromRequest(request) },
-    data: {
-      name: parsed.data.name,
-      phone: parsed.data.phone,
-      taxId: parsed.data.taxId?.trim() || null,
-      defaultCurrency: parsed.data.defaultCurrency,
-      onboardingStep: 2,
-    },
-    select: companySelect(),
-  });
-  response.status(200).json({ data: company });
-});
-
 router.get("/zones", mapsProviderRateLimiter, async (request, response) => {
   const parsed = coordinatesSchema
     .extend({ radiusKm: radiusSchema })
@@ -306,100 +248,104 @@ router.get(
   },
 );
 
-router.patch(
-  "/service-area",
-  mapsProviderRateLimiter,
-  async (request, response) => {
-    const parsed = areaSchema.safeParse(request.body);
-    if (!parsed.success) failValidation(parsed.error);
-    const uniqueIds = [...new Set(parsed.data.zonePlaceIds)];
-    if (uniqueIds.length !== parsed.data.zonePlaceIds.length) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        "Duplicate service zones are not allowed",
-        422,
-      );
-    }
-    const [resolvedAddress, nearbyPlaces] = await Promise.all([
-      reverseGeocode(parsed.data.latitude, parsed.data.longitude),
-      uniqueIds.length > 0
-        ? discoverNeighborhoods(
-            parsed.data.latitude,
-            parsed.data.longitude,
-            parsed.data.radiusKm,
-          )
-        : Promise.resolve([]),
-    ]);
-    const byId = new Map(nearbyPlaces.map((zone) => [zone.placeId, zone]));
-    const verified = uniqueIds.map((id) => byId.get(id));
-    if (verified.some((zone) => !zone)) {
-      throw new AppError(
-        "SERVICE_ZONE_INVALID",
-        "One or more selected zones are no longer available at this location and radius. Reload zones and select again.",
-        422,
-      );
-    }
-    const customByKey = new Map<string, string>();
-    for (const rawName of parsed.data.customZones) {
-      const name = rawName.replace(/\s+/g, " ").trim();
-      const key = name
-        .toLocaleLowerCase("en-US")
-        .replace(/\s/g, "-")
-        .slice(0, 60);
-      if (!customByKey.has(key)) customByKey.set(key, name);
-    }
-    const customZones = await Promise.all(
-      [...customByKey.entries()].map(async ([key, name]) => ({
-        placeId: `custom:${key}`,
-        name,
-        ...(await locateCustomArea(
-          name,
-          parsed.data.latitude,
-          parsed.data.longitude,
-          parsed.data.radiusKm,
-        )),
-      })),
-    );
-    const selected = [
-      ...verified.flatMap((zone) => (zone ? [zone] : [])),
-      ...customZones,
-    ];
-    const companyId = companyIdFromRequest(request);
-    await prisma.$transaction(async (tx) => {
-      await tx.companyServiceZone.deleteMany({ where: { companyId } });
-      await tx.companyServiceZone.createMany({
-        data: selected.map((zone) => ({
-          companyId,
-          providerPlaceId: zone.placeId,
-          name: zone.name,
-          latitude: zone.latitude,
-          longitude: zone.longitude,
-          isActive: true,
-        })),
-      });
-      await tx.company.update({
-        where: { id: companyId },
-        data: {
-          headquartersAddress: resolvedAddress,
-          headquartersLatitude: parsed.data.latitude,
-          headquartersLongitude: parsed.data.longitude,
-          serviceRadiusKm: parsed.data.radiusKm,
-          onboardingStep: 3,
-        },
-      });
-    });
-    const company = await prisma.company.findUniqueOrThrow({
-      where: { id: companyId },
-      select: companySelect(),
-    });
-    response.status(200).json({ data: company });
-  },
-);
 
-router.put("/services", async (request, response) => {
-  const parsed = serviceSchema.safeParse(request.body);
+
+const completeSchema = z.object({
+  business: businessSchema,
+  area: areaSchema,
+  services: serviceSchema,
+  logoObjectKey: z.string().trim().min(1).max(500).optional().nullable(),
+  logoMimeType: z.enum(["image/jpeg", "image/png", "image/webp"]).optional().nullable(),
+  logoSizeBytes: z.number().int().positive().max(5_000_000).optional().nullable(),
+});
+
+router.post("/complete", async (request, response) => {
+  const parsed = completeSchema.safeParse(request.body);
   if (!parsed.success) failValidation(parsed.error);
-  const prepared = parsed.data.services.map((service) => {
+  const companyId = companyIdFromRequest(request);
+
+  // Check if already completed
+  const existing = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { onboardingCompletedAt: true },
+  });
+  if (existing?.onboardingCompletedAt) {
+    throw new AppError(
+      "ONBOARDING_ALREADY_COMPLETED",
+      "Onboarding has already been completed for this company",
+      409,
+    );
+  }
+
+  const { business, area, services, logoObjectKey, logoMimeType } =
+    parsed.data;
+
+  // Verify logo if provided
+  if (logoObjectKey) {
+    await verifyCompanyLogoUpload(
+      logoObjectKey,
+      companyId,
+      logoMimeType ?? "image/jpeg",
+    );
+  }
+
+  // Verify zones before transaction
+  const uniqueIds = [...new Set(area.zonePlaceIds)];
+  if (uniqueIds.length !== area.zonePlaceIds.length) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Duplicate service zones are not allowed",
+      422,
+    );
+  }
+
+  const [resolvedAddress, nearbyPlaces] = await Promise.all([
+    reverseGeocode(area.latitude, area.longitude),
+    uniqueIds.length > 0
+      ? discoverNeighborhoods(area.latitude, area.longitude, area.radiusKm)
+      : Promise.resolve([]),
+  ]);
+
+  const byId = new Map(nearbyPlaces.map((zone) => [zone.placeId, zone]));
+  const verified = uniqueIds.map((id) => byId.get(id));
+  if (verified.some((zone) => !zone)) {
+    throw new AppError(
+      "SERVICE_ZONE_INVALID",
+      "One or more selected zones are no longer available at this location and radius. Reload zones and select again.",
+      422,
+    );
+  }
+
+  const customByKey = new Map<string, string>();
+  for (const rawName of area.customZones) {
+    const name = rawName.replace(/\s+/g, " ").trim();
+    const key = name
+      .toLocaleLowerCase("en-US")
+      .replace(/\s/g, "-")
+      .slice(0, 60);
+    if (!customByKey.has(key)) customByKey.set(key, name);
+  }
+
+  const customZones = await Promise.all(
+    [...customByKey.entries()].map(async ([key, name]) => ({
+      placeId: `custom:${key}`,
+      name,
+      ...(await locateCustomArea(
+        name,
+        area.latitude,
+        area.longitude,
+        area.radiusKm,
+      )),
+    })),
+  );
+
+  const selected = [
+    ...verified.flatMap((zone) => (zone ? [zone] : [])),
+    ...customZones,
+  ];
+
+  // Prepare services
+  const prepared = services.services.map((service) => {
     const normalizedName = service.name.trim().toLocaleLowerCase("en-US");
     if (service.isCustom) {
       if (service.serviceKey != null || !customIconKeys.has(service.iconKey)) {
@@ -439,80 +385,72 @@ router.put("/services", async (request, response) => {
       serviceKey: service.serviceKey!,
     };
   });
-  if (
-    new Set(prepared.map((item) => item.normalizedName)).size !==
-    prepared.length
-  ) {
+
+  if (new Set(prepared.map((item) => item.normalizedName)).size !== prepared.length) {
     throw new AppError(
       "SERVICE_DUPLICATE",
       "Service names must be unique, ignoring letter case",
       422,
     );
   }
-  const companyId = companyIdFromRequest(request);
-  await prisma.$transaction(async (tx) => {
+
+  // Atomic transaction
+  const updated = await prisma.$transaction(async (tx) => {
+    // Double-check not completed inside transaction
+    const current = await tx.company.findUnique({
+      where: { id: companyId },
+      select: { onboardingCompletedAt: true },
+    });
+    if (current?.onboardingCompletedAt) {
+      throw new AppError(
+        "ONBOARDING_ALREADY_COMPLETED",
+        "Onboarding has already been completed for this company",
+        409,
+      );
+    }
+
+    // Update company
+    await tx.company.update({
+      where: { id: companyId },
+      data: {
+        name: business.name,
+        phone: business.phone,
+        taxId: business.taxId?.trim() || null,
+        defaultCurrency: business.defaultCurrency,
+        headquartersAddress: resolvedAddress,
+        headquartersLatitude: area.latitude,
+        headquartersLongitude: area.longitude,
+        serviceRadiusKm: area.radiusKm,
+        logoObjectKey: logoObjectKey ?? undefined,
+        onboardingCompletedAt: new Date(),
+      },
+    });
+
+    // Replace zones
+    await tx.companyServiceZone.deleteMany({ where: { companyId } });
+    await tx.companyServiceZone.createMany({
+      data: selected.map((zone) => ({
+        companyId,
+        providerPlaceId: zone.placeId,
+        name: zone.name,
+        latitude: zone.latitude,
+        longitude: zone.longitude,
+        isActive: true,
+      })),
+    });
+
+    // Replace services
     await tx.companyService.deleteMany({ where: { companyId } });
     await tx.companyService.createMany({
       data: prepared.map((service) => ({ companyId, ...service })),
     });
-    await tx.company.update({
+
+    return tx.company.findUniqueOrThrow({
       where: { id: companyId },
-      data: { onboardingStep: 4 },
+      select: companySelect(),
     });
   });
-  const company = await prisma.company.findUniqueOrThrow({
-    where: { id: companyId },
-    select: companySelect(),
-  });
-  response.status(200).json({ data: company });
-});
 
-router.post("/complete", async (request, response) => {
-  const companyId = companyIdFromRequest(request);
-  const company = await prisma.company.findFirst({
-    where: {
-      id: companyId,
-      memberships: {
-        some: { userId: request.auth!.userId, status: "ACTIVE", role: "OWNER" },
-      },
-    },
-    select: {
-      name: true,
-      phone: true,
-      headquartersAddress: true,
-      headquartersLatitude: true,
-      headquartersLongitude: true,
-      serviceRadiusKm: true,
-      services: { select: { id: true } },
-      serviceZones: { where: { isActive: true }, select: { id: true } },
-    },
-  });
-  if (!company)
-    throw new AppError("TENANT_ACCESS_DENIED", "Company access denied", 403);
-  if (
-    !company.name.trim() ||
-    !company.phone ||
-    !company.headquartersAddress ||
-    company.headquartersLatitude == null ||
-    company.headquartersLongitude == null ||
-    company.serviceRadiusKm == null ||
-    company.services.length === 0 ||
-    company.serviceZones.length === 0
-  ) {
-    throw new AppError(
-      "ONBOARDING_INCOMPLETE",
-      "Complete the company profile, resolved service area with at least one zone, and select at least one service before finishing setup.",
-      422,
-    );
-  }
-  await prisma.company.update({
-    where: { id: companyId },
-    data: { onboardingCompletedAt: new Date(), onboardingStep: 4 },
-  });
-  const updated = await prisma.company.findUniqueOrThrow({
-    where: { id: companyId },
-    select: companySelect(),
-  });
   response.status(200).json({ data: updated });
 });
 

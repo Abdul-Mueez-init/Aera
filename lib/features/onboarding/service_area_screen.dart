@@ -13,8 +13,8 @@ import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
-import '../auth/providers/auth_provider.dart';
 import 'data/onboarding_repository.dart';
+import 'providers/onboarding_wizard_provider.dart';
 
 class ServiceAreaScreen extends ConsumerStatefulWidget {
   const ServiceAreaScreen({super.key});
@@ -44,7 +44,6 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
   final Set<String> _selectedZoneIds = {};
   final List<String> _customZones = [];
 
-  bool _loading = true;
   bool _searching = false;
   bool _resolvingAddress = false;
   bool _loadingZones = false;
@@ -75,8 +74,20 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
     _focusNode.addListener(_onAddressUnfocus);
+    // Load from wizard state if exists
+    final wizard = ref.read(onboardingWizardProvider);
+    if (wizard.latitude != null) {
+      _latitude = wizard.latitude;
+      _longitude = wizard.longitude;
+      _radiusKm = wizard.radiusKm;
+      _addressController.text = wizard.resolvedAddress ?? '';
+      _resolvedAddress = wizard.resolvedAddress;
+      _selectedZoneIds.addAll(wizard.selectedZoneIds);
+      _zones = wizard.zoneObjects;
+      _customZones.addAll(wizard.customZoneNames);
+      _zonesLoaded = wizard.zoneObjects.isNotEmpty;
+    }
   }
 
   @override
@@ -85,48 +96,6 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
     _customZoneController.dispose();
     _focusNode.dispose();
     super.dispose();
-  }
-
-  Future<void> _load() async {
-    try {
-      final profile = await ref.read(onboardingRepositoryProvider).getProfile();
-      if (!mounted) return;
-      final discovered = profile.serviceZones
-          .where((zone) => !zone.isCustom && zone.placeId.startsWith('osm:'))
-          .toList();
-      final legacyGoogleZones = profile.serviceZones
-          .where((zone) => !zone.isCustom && !zone.placeId.startsWith('osm:'))
-          .toList();
-      setState(() {
-        _latitude = profile.headquartersLatitude;
-        _longitude = profile.headquartersLongitude;
-        _radiusKm = (profile.serviceRadiusKm ?? 30).clamp(10, 50);
-        _addressController.text = profile.headquartersAddress ?? '';
-        _resolvedAddress = profile.headquartersAddress;
-        _zones = discovered;
-        _selectedZoneIds.addAll(discovered.map((zone) => zone.placeId));
-        _customZones.addAll(
-          profile.serviceZones
-              .where((zone) => zone.isCustom)
-              .map((zone) => zone.name),
-        );
-        // Treat legacy Google place IDs as custom areas
-        for (final zone in legacyGoogleZones) {
-          if (!_customZones.contains(zone.name)) {
-            _customZones.add(zone.name);
-          }
-        }
-        _zonesLoaded = discovered.isNotEmpty;
-        _loading = false;
-      });
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = _friendly(error);
-        });
-      }
-    }
   }
 
   String _friendly(Object error) {
@@ -394,17 +363,17 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
       _error = null;
     });
     try {
-      await ref
-          .read(onboardingRepositoryProvider)
-          .saveServiceArea(
+      ref
+          .read(onboardingWizardProvider.notifier)
+          .updateServiceArea(
             latitude: _latitude!,
             longitude: _longitude!,
             radiusKm: _radiusKm,
-            zones: selected,
+            resolvedAddress: _resolvedAddress!,
+            selectedZoneIds: _selectedZoneIds.toList(),
+            zoneObjects: selected,
             customZoneNames: _customZones,
           );
-      ref.invalidate(onboardingProfileProvider);
-      await ref.read(authNotifierProvider.notifier).refreshServerIdentity();
       if (mounted) context.push('/onboarding/services');
     } catch (error) {
       if (mounted) setState(() => _error = _friendly(error));
@@ -434,8 +403,8 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
             initialCenter: point,
             initialZoom: 12,
             onTap: (_, p) {
-            _placePin(p.latitude, p.longitude);
-          },
+              _placePin(p.latitude, p.longitude);
+            },
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
             ),
@@ -536,9 +505,7 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
             ),
             const RichAttributionWidget(
               attributions: [
-                TextSourceAttribution(
-                  'OpenStreetMap contributors',
-                ),
+                TextSourceAttribution('OpenStreetMap contributors'),
               ],
             ),
           ],
@@ -560,9 +527,7 @@ class _ServiceAreaScreenState extends ConsumerState<ServiceAreaScreen> {
         showBrand: true,
       ),
       body: SafeArea(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
+        child: ListView(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
                   vertical: 12,

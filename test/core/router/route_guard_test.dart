@@ -23,14 +23,18 @@ String? _redirect(
   String? role,
   bool holdSplash = false,
   bool ownerOnboardingPending = false,
-  String ownerOnboardingPath = kOwnerOnboardingPath,
+  bool wizardBusinessBasicsComplete = false,
+  bool wizardServiceAreaComplete = false,
+  bool wizardServicesComplete = false,
 }) => resolveRedirect(
   gate: gate,
   role: role,
   path: path,
   holdSplash: holdSplash,
   ownerOnboardingPending: ownerOnboardingPending,
-  ownerOnboardingPath: ownerOnboardingPath,
+  wizardBusinessBasicsComplete: wizardBusinessBasicsComplete,
+  wizardServiceAreaComplete: wizardServiceAreaComplete,
+  wizardServicesComplete: wizardServicesComplete,
 );
 
 void main() {
@@ -206,6 +210,9 @@ void main() {
           '/sign-up',
           role: 'OWNER',
           ownerOnboardingPending: true,
+          wizardBusinessBasicsComplete: false,
+          wizardServiceAreaComplete: false,
+          wizardServicesComplete: false,
         ),
         '/onboarding/business-basics',
       );
@@ -215,6 +222,9 @@ void main() {
           '/dashboard',
           role: 'OWNER',
           ownerOnboardingPending: true,
+          wizardBusinessBasicsComplete: false,
+          wizardServiceAreaComplete: false,
+          wizardServicesComplete: false,
         ),
         '/onboarding/business-basics',
       );
@@ -227,6 +237,9 @@ void main() {
           '/onboarding/business-basics',
           role: 'OWNER',
           ownerOnboardingPending: true,
+          wizardBusinessBasicsComplete: false,
+          wizardServiceAreaComplete: false,
+          wizardServicesComplete: false,
         ),
         isNull,
       );
@@ -236,21 +249,26 @@ void main() {
           '/onboarding/service-area',
           role: 'OWNER',
           ownerOnboardingPending: true,
+          wizardBusinessBasicsComplete: false,
+          wizardServiceAreaComplete: false,
+          wizardServicesComplete: false,
         ),
         '/onboarding/business-basics',
       );
     });
 
-    test('forward navigation cannot skip the server-persisted step', () {
+    test('forward navigation cannot skip wizard prerequisites', () {
       expect(
         _redirect(
           AuthGate.signedIn,
           '/onboarding/team-setup',
           role: 'OWNER',
           ownerOnboardingPending: true,
-          ownerOnboardingPath: '/onboarding/service-area',
+          wizardBusinessBasicsComplete: false,
+          wizardServiceAreaComplete: false,
+          wizardServicesComplete: false,
         ),
-        '/onboarding/service-area',
+        '/onboarding/business-basics',
       );
     });
   });
@@ -264,6 +282,9 @@ void main() {
             path,
             role: 'OWNER',
             ownerOnboardingPending: true,
+            wizardBusinessBasicsComplete: false,
+            wizardServiceAreaComplete: false,
+            wizardServicesComplete: false,
           ),
           isNull,
           reason: path,
@@ -278,23 +299,28 @@ void main() {
           '/dashboard',
           role: 'OWNER',
           ownerOnboardingPending: true,
+          wizardBusinessBasicsComplete: false,
+          wizardServiceAreaComplete: false,
+          wizardServicesComplete: false,
         ),
         '/onboarding/business-basics',
       );
     });
   });
 
-  group('persisted onboarding resume step', () {
-    test('incomplete owner resumes from the server-persisted step', () {
+  group('incomplete owner with empty wizard goes to step 1', () {
+    test('incomplete owner with empty wizard state goes to step 1', () {
       expect(
         _redirect(
           AuthGate.signedIn,
           '/dashboard',
           role: 'OWNER',
           ownerOnboardingPending: true,
-          ownerOnboardingPath: '/onboarding/services',
+          wizardBusinessBasicsComplete: false,
+          wizardServiceAreaComplete: false,
+          wizardServicesComplete: false,
         ),
-        '/onboarding/services',
+        '/onboarding/business-basics',
       );
     });
   });

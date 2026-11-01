@@ -8,8 +8,8 @@ import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_app_bar.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
-import '../auth/providers/auth_provider.dart';
 import 'data/onboarding_repository.dart';
+import 'providers/onboarding_wizard_provider.dart';
 
 class ServicesScreen extends ConsumerStatefulWidget {
   const ServicesScreen({super.key});
@@ -93,7 +93,6 @@ const _catalogue = <_ServiceOption>[
 
 class _ServicesScreenState extends ConsumerState<ServicesScreen> {
   final Map<String, OnboardingService> _selected = {};
-  bool _loading = true;
   bool _saving = false;
   String? _error;
 
@@ -111,28 +110,11 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final profile = await ref.read(onboardingRepositoryProvider).getProfile();
-      if (!mounted) return;
-      for (final service in profile.services) {
-        final key =
-            service.serviceKey ?? 'custom:${service.name.toLowerCase()}';
-        _selected[key] = service;
-      }
-      setState(() => _loading = false);
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = error is ApiException
-              ? error.message
-              : 'Could not load saved services.';
-        });
-      }
+    // Load from wizard state if exists
+    final wizard = ref.read(onboardingWizardProvider);
+    for (final service in wizard.selectedServices) {
+      final key = service.serviceKey ?? 'custom:${service.name.toLowerCase()}';
+      _selected[key] = service;
     }
   }
 
@@ -279,11 +261,9 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
       _error = null;
     });
     try {
-      await ref
-          .read(onboardingRepositoryProvider)
-          .saveServices(_selected.values.toList());
-      ref.invalidate(onboardingProfileProvider);
-      await ref.read(authNotifierProvider.notifier).refreshServerIdentity();
+      ref
+          .read(onboardingWizardProvider.notifier)
+          .updateServices(_selected.values.toList());
       if (mounted) context.push('/onboarding/team-setup');
     } catch (error) {
       if (mounted) {
@@ -308,9 +288,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
         showBrand: true,
       ),
       body: SafeArea(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
+        child: ListView(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
                   vertical: 12,

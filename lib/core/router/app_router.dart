@@ -20,6 +20,7 @@ import '../../features/onboarding/service_area_screen.dart';
 import '../../features/onboarding/services_screen.dart';
 import '../../features/onboarding/team_setup_screen.dart';
 import '../../features/onboarding/onboarding_complete_screen.dart';
+import '../../features/onboarding/providers/onboarding_wizard_provider.dart';
 
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/jobs/jobs_screen.dart';
@@ -90,22 +91,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
       final authState = ref.read(authNotifierProvider);
       final session = authState.valueOrNull;
-      final ownerOnboardingPath = switch (session?.company.onboardingStep) {
-        2 => '/onboarding/service-area',
-        3 => '/onboarding/services',
-        4 => '/onboarding/team-setup',
-        _ => kOwnerOnboardingPath,
-      };
+      final wizard = ref.read(onboardingWizardProvider);
+      final ownerOnboardingPending =
+          session?.role == 'OWNER' &&
+          !(session?.company.onboardingComplete ?? true);
       final holdSplash = !ref.read(splashGateProvider);
       return resolveRedirect(
         gate: authGateFor(authState),
         role: authState.valueOrNull?.role,
         path: state.uri.path,
         holdSplash: holdSplash,
-        ownerOnboardingPending:
-            session?.role == 'OWNER' &&
-            !(session?.company.onboardingComplete ?? true),
-        ownerOnboardingPath: ownerOnboardingPath,
+        ownerOnboardingPending: ownerOnboardingPending,
+        wizardBusinessBasicsComplete: wizard.businessBasicsComplete,
+        wizardServiceAreaComplete: wizard.serviceAreaComplete,
+        wizardServicesComplete: wizard.servicesComplete,
       );
     },
     routes: AppConfig.isCustomerSurface ? _customerRoutes : _staffRoutes,

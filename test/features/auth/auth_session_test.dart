@@ -93,12 +93,12 @@ void main() {
         'name': 'Test HVAC Co',
         'slug': 'test-hvac-co',
         'onboardingComplete': false,
-        'onboardingStep': 3,
+        'onboardingStep': 3, // Old field from session JSON - should be tolerated
       });
 
       expect(company.onboardingComplete, isFalse);
-      expect(company.onboardingStep, 3);
-      expect(company.toJson()['onboardingStep'], 3);
+      // onboardingStep is no longer stored, so toJson shouldn't include it
+      expect(company.toJson().containsKey('onboardingStep'), isFalse);
     },
   );
 
