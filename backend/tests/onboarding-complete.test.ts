@@ -347,11 +347,11 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
       .send({ logoObjectKey: "test.jpg" });
     expect(res4.status).toBe(404);
 
-    // GET /onboarding/ - This endpoint still exists (read-only)
+    // GET /onboarding/ - Removed (was a persisted draft read path)
     const res5 = await request(app)
       .get("/api/v1/companies/current/onboarding/")
       .set("Authorization", `Bearer ${owner.accessToken}`);
-    expect(res5.status).toBe(200);
+    expect(res5.status).toBe(404);
   });
 
   it("auth responses contain no onboardingStep", async () => {

@@ -178,21 +178,6 @@ function companySelect() {
   };
 }
 
-router.get("/", async (request, response) => {
-  const company = await prisma.company.findFirst({
-    where: {
-      id: companyIdFromRequest(request),
-      memberships: {
-        some: { userId: request.auth!.userId, status: "ACTIVE", role: "OWNER" },
-      },
-    },
-    select: companySelect(),
-  });
-  if (!company)
-    throw new AppError("TENANT_ACCESS_DENIED", "Company access denied", 403);
-  response.status(200).json({ data: company });
-});
-
 const logoMimeSchema = z.object({
   mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
 });
