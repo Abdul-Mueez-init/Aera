@@ -299,12 +299,22 @@ router.post("/complete", async (request, response) => {
     );
   }
 
-  const [resolvedAddress, nearbyPlaces] = await Promise.all([
-    reverseGeocode(area.latitude, area.longitude),
-    uniqueIds.length > 0
-      ? discoverNeighborhoods(area.latitude, area.longitude, area.radiusKm)
-      : Promise.resolve([]),
-  ]);
+  let resolvedAddress: GeocodedLocation;
+  let nearbyPlaces: Neighborhood[] = [];
+  try {
+    [resolvedAddress, nearbyPlaces] = await Promise.all([
+      reverseGeocode(area.latitude, area.longitude),
+      uniqueIds.length > 0
+        ? discoverNeighborhoods(area.latitude, area.longitude, area.radiusKm)
+        : Promise.resolve([]),
+    ]);
+  } catch (error) {
+    throw new AppError(
+      "UPSTREAM_UNAVAILABLE",
+      "Geocoding service temporarily unavailable. Please try again.",
+      503,
+    );
+  }
 
   const byId = new Map(nearbyPlaces.map((zone) => [zone.placeId, zone]));
   const verified = uniqueIds.map((id) => byId.get(id));
@@ -326,18 +336,27 @@ router.post("/complete", async (request, response) => {
     if (!customByKey.has(key)) customByKey.set(key, name);
   }
 
-  const customZones = await Promise.all(
-    [...customByKey.entries()].map(async ([key, name]) => ({
-      placeId: `custom:${key}`,
-      name,
-      ...(await locateCustomArea(
+  let customZones: Array<{ placeId: string; name: string; latitude: number; longitude: number }>;
+  try {
+    customZones = await Promise.all(
+      [...customByKey.entries()].map(async ([key, name]) => ({
+        placeId: `custom:${key}`,
         name,
-        area.latitude,
-        area.longitude,
-        area.radiusKm,
-      )),
-    })),
-  );
+        ...(await locateCustomArea(
+          name,
+          area.latitude,
+          area.longitude,
+          area.radiusKm,
+        )),
+      })),
+    );
+  } catch (error) {
+    throw new AppError(
+      "UPSTREAM_UNAVAILABLE",
+      "Geocoding service temporarily unavailable. Please try again.",
+      503,
+    );
+  }
 
   const selected = [
     ...verified.flatMap((zone) => (zone ? [zone] : [])),
@@ -417,7 +436,7 @@ router.post("/complete", async (request, response) => {
         phone: business.phone,
         taxId: business.taxId?.trim() || null,
         defaultCurrency: business.defaultCurrency,
-        headquartersAddress: resolvedAddress,
+        headquartersAddress: resolvedAddress.address,
         headquartersLatitude: area.latitude,
         headquartersLongitude: area.longitude,
         serviceRadiusKm: area.radiusKm,
@@ -451,7 +470,7 @@ router.post("/complete", async (request, response) => {
     });
   });
 
-  response.status(200).json({ data: updated });
+  response.status(201).json({ data: updated });
 });
 
 export { router as onboardingRouter };

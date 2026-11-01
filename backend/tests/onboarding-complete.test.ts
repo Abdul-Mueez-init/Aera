@@ -1,9 +1,20 @@
 import request from "supertest";
-import { describe, expect, it, beforeAll, afterAll } from "vitest";
+import { describe, expect, it, beforeAll, afterAll, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { prisma } from "../src/db/prisma.js";
+import * as osmGeoService from "../src/modules/companies/osm-geo.service.js";
 
 const app = buildApp();
+
+// Mock external geocoding calls
+vi.mock("../src/modules/companies/osm-geo.service.js", () => ({
+  reverseGeocode: vi.fn(() => Promise.resolve({ address: "123 Test St", latitude: 40.7128, longitude: -74.006 })),
+  discoverNeighborhoods: vi.fn(() => Promise.resolve([])),
+  locateCustomArea: vi.fn(() => Promise.resolve({ latitude: 40.7128, longitude: -74.006, radiusKm: 15 })),
+}));
+
+// Import the mocked module to access the mocked functions
+import { reverseGeocode, discoverNeighborhoods, locateCustomArea } from "../src/modules/companies/osm-geo.service.js";
 
 function uniqueSuffix(label: string) {
   return `${label}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -247,12 +258,6 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
   it("handles concurrent double-submit (commits once)", async () => {
     const owner = await registerOwner("concurrent");
 
-    // Manually set onboardingCompletedAt to test the 409 logic
-    await prisma.company.update({
-      where: { id: owner.company.id },
-      data: { onboardingCompletedAt: new Date() },
-    });
-
     const payload = {
       business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
       area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: ["Manhattan"] },
@@ -271,10 +276,25 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
         .send(payload),
     ]);
 
-    // Both should fail with 409 since already completed
+    // With early check: both might fail with 409, or one succeeds (201) and one fails (409)
+    // Transaction guard ensures at most one success
+    const successCount = [res1.status, res2.status].filter((s) => s === 201).length;
     const conflictCount = [res1.status, res2.status].filter((s) => s === 409).length;
 
-    expect(conflictCount).toBe(2);
+    expect(successCount).toBeLessThanOrEqual(1);
+    expect(conflictCount).toBeGreaterThanOrEqual(1);
+    expect(successCount + conflictCount).toBe(2);
+
+    // Verify at most one completion was recorded
+    const company = await prisma.company.findUnique({
+      where: { id: owner.company.id },
+    });
+    if (successCount === 1) {
+      expect(company?.onboardingCompletedAt).not.toBeNull();
+    } else {
+      // Both hit early check, neither completed
+      expect(company?.onboardingCompletedAt).toBeNull();
+    }
   });
 
   it("rejects logo objectKey from another company", async () => {
@@ -372,28 +392,15 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
         services: {
           services: [
             { serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false },
-            { serviceKey: "heating", name: "Heating", iconKey: "tools", isCustom: false },
+            { serviceKey: "ac_installation", name: "AC Installation", iconKey: "tools", isCustom: false },
           ],
         },
       });
 
-    // Zone verification will fail - test by manually completing onboarding
-    expect(res.status).toBe(422);
-    
-    // Manually complete onboarding to verify data is written correctly
-    await prisma.company.update({
-      where: { id: owner.company.id },
-      data: {
-        name: "Happy Path HVAC",
-        phone: "+15551234567",
-        taxId: "12-3456789",
-        defaultCurrency: "USD",
-        headquartersLatitude: 40.7128,
-        headquartersLongitude: -74.0060,
-        serviceRadiusKm: 15,
-        onboardingCompletedAt: new Date(),
-      },
-    });
+    if (res.status !== 201) {
+      console.log("Happy path error:", res.body);
+    }
+    expect(res.status).toBe(201);
 
     // Verify company fields were updated
     const company = await prisma.company.findUnique({
@@ -404,5 +411,73 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
     expect(company?.taxId).toBe("12-3456789");
     expect(company?.defaultCurrency).toBe("USD");
     expect(company?.onboardingCompletedAt).not.toBeNull();
+
+    // Verify service zones were created
+    const zones = await prisma.companyServiceZone.findMany({
+      where: { companyId: owner.company.id },
+    });
+    expect(zones.length).toBeGreaterThan(0);
+    expect(Number(zones[0].latitude)).toBe(40.7128);
+    expect(Number(zones[0].longitude)).toBeCloseTo(-74.006, 3);
+    // radiusKm is stored at company level (serviceRadiusKm), not on zones
+    expect(company?.serviceRadiusKm).toBe(15);
+
+    // Verify services were created
+    const services = await prisma.companyService.findMany({
+      where: { companyId: owner.company.id },
+    });
+    expect(services.length).toBe(2);
+    expect(services.map((s) => s.serviceKey)).toContain("ac_repair");
+    expect(services.map((s) => s.serviceKey)).toContain("ac_installation");
+  });
+
+  it("returns 503 UPSTREAM_UNAVAILABLE when geocoding service fails", async () => {
+    const owner = await registerOwner("upstream-fail");
+
+    // Mock the geocoding service to throw an error
+    vi.mocked(osmGeoService.reverseGeocode).mockRejectedValueOnce(new Error("Network timeout"));
+
+    const res = await request(app)
+      .post("/api/v1/companies/current/onboarding/complete")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({
+        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
+        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: ["Manhattan"] },
+        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+      });
+
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe("UPSTREAM_UNAVAILABLE");
+
+    // Verify nothing was written
+    const company = await prisma.company.findUnique({
+      where: { id: owner.company.id },
+    });
+    expect(company?.onboardingCompletedAt).toBeNull();
+  });
+
+  it("returns 422 SERVICE_ZONE_INVALID for genuinely invalid zones", async () => {
+    const owner = await registerOwner("invalid-zone");
+
+    // Mock discoverNeighborhoods to return empty list (no zones found)
+    vi.mocked(osmGeoService.discoverNeighborhoods).mockResolvedValueOnce([]);
+
+    const res = await request(app)
+      .post("/api/v1/companies/current/onboarding/complete")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({
+        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
+        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: ["nonexistent-zone-id"], customZones: [] },
+        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+      });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("SERVICE_ZONE_INVALID");
+
+    // Verify nothing was written
+    const company = await prisma.company.findUnique({
+      where: { id: owner.company.id },
+    });
+    expect(company?.onboardingCompletedAt).toBeNull();
   });
 });
