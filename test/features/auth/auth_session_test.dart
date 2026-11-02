@@ -6,6 +6,7 @@ import 'package:aera/core/network/api_response.dart';
 import 'package:aera/features/auth/data/auth_repository.dart';
 import 'package:aera/features/auth/data/session_store.dart';
 import 'package:aera/features/auth/providers/auth_provider.dart';
+import 'package:aera/features/onboarding/data/onboarding_repository.dart';
 import 'package:aera/features/onboarding/providers/onboarding_wizard_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';

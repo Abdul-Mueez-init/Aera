@@ -7,7 +7,6 @@ import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_metric_card.dart';
 import '../auth/providers/auth_provider.dart';
-import '../onboarding/data/onboarding_repository.dart';
 import 'data/dashboard_repository.dart';
 import 'providers/dashboard_provider.dart';
 import 'providers/get_started_provider.dart';
