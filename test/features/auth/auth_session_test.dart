@@ -586,7 +586,7 @@ void main() {
         customZoneNames: ['Custom Zone'],
       );
       wizard.updateServices([
-        const OnboardingService(
+        OnboardingService(
           serviceKey: 'ac_repair',
           name: 'AC Repair',
           iconKey: 'air_conditioning',
