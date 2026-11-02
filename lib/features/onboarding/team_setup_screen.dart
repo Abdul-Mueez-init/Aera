@@ -520,28 +520,32 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                   : 'DISPATCHER',
             ),
           );
-          setState(() {
-            _members[i] = _TeamMember(
-              name: member.name,
-              contact: member.contact,
-              initials: member.initials,
-              role: member.role,
-              isInvited: true,
-            );
-          });
+          if (mounted) {
+            setState(() {
+              _members[i] = _TeamMember(
+                name: member.name,
+                contact: member.contact,
+                initials: member.initials,
+                role: member.role,
+                isInvited: true,
+              );
+            });
+          }
         } catch (e) {
-          setState(() {
-            _members[i] = _TeamMember(
-              name: member.name,
-              contact: member.contact,
-              initials: member.initials,
-              role: member.role,
-              isInvited: false,
-              invitationError: e is FormatException
-                  ? e.message
-                  : 'Failed to send invitation',
-            );
-          });
+          if (mounted) {
+            setState(() {
+              _members[i] = _TeamMember(
+                name: member.name,
+                contact: member.contact,
+                initials: member.initials,
+                role: member.role,
+                isInvited: false,
+                invitationError: e is FormatException
+                    ? e.message
+                    : 'Failed to send invitation',
+              );
+            });
+          }
         }
       }
 
@@ -629,9 +633,6 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
       logoMimeType: logoMimeType,
       logoSizeBytes: logoSizeBytes,
     );
-
-    await ref.read(authNotifierProvider.notifier).refreshServerIdentity();
-    ref.read(onboardingWizardProvider.notifier).reset();
   }
 }
 

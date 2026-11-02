@@ -6,6 +6,7 @@ import '../../core/theme/aera_radii.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
+import '../auth/providers/auth_provider.dart';
 import 'providers/onboarding_wizard_provider.dart';
 
 class OnboardingCompleteScreen extends ConsumerWidget {
@@ -16,14 +17,15 @@ class OnboardingCompleteScreen extends ConsumerWidget {
     final wizard = ref.watch(onboardingWizardProvider);
     return Scaffold(
       backgroundColor: AeraColors.canvas,
-      body: SafeArea(child: _CompletionContent(wizard: wizard)),
+      body: SafeArea(child: _CompletionContent(wizard: wizard, ref: ref)),
     );
   }
 }
 
 class _CompletionContent extends StatelessWidget {
-  const _CompletionContent({required this.wizard});
+  const _CompletionContent({required this.wizard, required this.ref});
   final OnboardingWizardState wizard;
+  final WidgetRef ref;
 
   @override
   Widget build(BuildContext context) {
@@ -174,8 +176,12 @@ class _CompletionContent extends StatelessWidget {
             size: 18,
             color: Colors.white,
           ),
-          onPressed: () {
-            context.go('/dashboard');
+          onPressed: () async {
+            await ref.read(authNotifierProvider.notifier).refreshServerIdentity();
+            ref.read(onboardingWizardProvider.notifier).reset();
+            if (context.mounted) {
+              context.go('/dashboard');
+            }
           },
         ),
         const SizedBox(height: 20),

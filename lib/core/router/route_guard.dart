@@ -145,14 +145,14 @@ String? resolveRedirect({
       if (p == kSplashPath) return entry;
       return isPublicPath(p) ? null : entry;
     case AuthGate.signedIn:
-      // Portal paths are authorized by the independent portal session,
-      // not the staff session: a signed-in owner with onboarding still
-      // pending must be able to open a customer portal link (e.g. to
-      // test the one they just sent). Never bounce them to onboarding.
-      if (p == '/open' || p == '/p' || p == '/p/closed') {
-        return null;
-      }
       if (role == 'OWNER' && ownerOnboardingPending) {
+        // Portal paths are authorized by the independent portal session,
+        // not the staff session: a signed-in owner with onboarding still
+        // pending must be able to open a customer portal link (e.g. to
+        // test the one they just sent). Never bounce them to onboarding.
+        if (p == '/open' || p == '/p' || p == '/p/closed') {
+          return null;
+        }
         // Check wizard prerequisites for each onboarding path
         if (p == '/onboarding/service-area' && !wizardBusinessBasicsComplete) {
           return kOwnerOnboardingPath;
@@ -166,11 +166,15 @@ String? resolveRedirect({
         if (p == '/onboarding/complete' && !wizardServicesComplete) {
           return kOwnerOnboardingPath;
         }
-        // If wizard is empty (no prerequisites met), all non-onboarding paths go to step 1
-        if (!wizardBusinessBasicsComplete &&
-            !wizardServiceAreaComplete &&
-            !wizardServicesComplete) {
-          if (!_ownerOnboardingPaths.contains(p)) {
+        // Pending owner on non-onboarding, non-portal paths: redirect to furthest step
+        if (!_ownerOnboardingPaths.contains(p)) {
+          if (wizardServicesComplete) {
+            return '/onboarding/team-setup';
+          } else if (wizardServiceAreaComplete) {
+            return '/onboarding/services';
+          } else if (wizardBusinessBasicsComplete) {
+            return '/onboarding/service-area';
+          } else {
             return kOwnerOnboardingPath;
           }
         }
