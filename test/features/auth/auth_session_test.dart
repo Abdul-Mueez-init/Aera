@@ -579,7 +579,9 @@ void main() {
         latitude: 40.7128,
         longitude: -74.0060,
         radiusKm: 15,
+        resolvedAddress: '123 Test St',
         selectedZoneIds: ['zone-1'],
+        zoneObjects: [],
         customZoneNames: ['Custom Zone'],
       );
       wizard.updateServices([
@@ -616,7 +618,7 @@ void main() {
         taxId: null,
         currency: 'USD',
       );
-      wizard.setPendingLogoBytes([1, 2, 3], 'logo.jpg');
+      wizard.setLogo([1, 2, 3], 'logo.jpg');
 
       expect(wizard.state.name, 'Test Co');
       expect(wizard.state.logoBytes, [1, 2, 3]);
