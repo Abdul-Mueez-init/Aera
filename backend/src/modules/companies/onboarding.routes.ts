@@ -284,8 +284,8 @@ router.post("/complete", async (request, response) => {
     );
   }
 
-  let resolvedAddress: GeocodedLocation;
-  let nearbyPlaces: Neighborhood[] = [];
+  let resolvedAddress: string;
+  let nearbyPlaces: { placeId: string; name: string; latitude: number; longitude: number }[] = [];
   try {
     [resolvedAddress, nearbyPlaces] = await Promise.all([
       reverseGeocode(area.latitude, area.longitude),
@@ -293,7 +293,7 @@ router.post("/complete", async (request, response) => {
         ? discoverNeighborhoods(area.latitude, area.longitude, area.radiusKm)
         : Promise.resolve([]),
     ]);
-  } catch (error) {
+  } catch {
     throw new AppError(
       "UPSTREAM_UNAVAILABLE",
       "Geocoding service temporarily unavailable. Please try again.",
@@ -335,7 +335,7 @@ router.post("/complete", async (request, response) => {
         )),
       })),
     );
-  } catch (error) {
+  } catch {
     throw new AppError(
       "UPSTREAM_UNAVAILABLE",
       "Geocoding service temporarily unavailable. Please try again.",
@@ -421,7 +421,7 @@ router.post("/complete", async (request, response) => {
         phone: business.phone,
         taxId: business.taxId?.trim() || null,
         defaultCurrency: business.defaultCurrency,
-        headquartersAddress: resolvedAddress.address,
+        headquartersAddress: resolvedAddress,
         headquartersLatitude: area.latitude,
         headquartersLongitude: area.longitude,
         serviceRadiusKm: area.radiusKm,

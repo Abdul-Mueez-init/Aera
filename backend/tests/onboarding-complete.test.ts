@@ -2,19 +2,16 @@ import request from "supertest";
 import { describe, expect, it, beforeAll, afterAll, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { prisma } from "../src/db/prisma.js";
-import * as osmGeoService from "../src/modules/companies/osm-geo.service.js";
 
 const app = buildApp();
 
 // Mock external geocoding calls
 vi.mock("../src/modules/companies/osm-geo.service.js", () => ({
-  reverseGeocode: vi.fn(() => Promise.resolve({ address: "123 Test St", latitude: 40.7128, longitude: -74.006 })),
+  reverseGeocode: vi.fn(() => Promise.resolve("123 Test St")),
   discoverNeighborhoods: vi.fn(() => Promise.resolve([])),
   locateCustomArea: vi.fn(() => Promise.resolve({ latitude: 40.7128, longitude: -74.006, radiusKm: 15 })),
+  forwardGeocode: vi.fn(() => Promise.resolve([])),
 }));
-
-// Import the mocked module to access the mocked functions
-import { reverseGeocode, discoverNeighborhoods, locateCustomArea } from "../src/modules/companies/osm-geo.service.js";
 
 function uniqueSuffix(label: string) {
   return `${label}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -411,6 +408,7 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
     expect(company?.taxId).toBe("12-3456789");
     expect(company?.defaultCurrency).toBe("USD");
     expect(company?.onboardingCompletedAt).not.toBeNull();
+    expect(company?.headquartersAddress).toBe("123 Test St");
 
     // Verify service zones were created
     const zones = await prisma.companyServiceZone.findMany({

@@ -598,15 +598,13 @@ class _TeamSetupScreenState extends ConsumerState<TeamSetupScreen> {
                       ? 'image/jpeg'
                       : 'image/jpeg'));
 
-      final uploadUrl = await repo.presignLogo(logoMimeType);
+      final presign = await repo.presignLogo(logoMimeType);
       await repo.uploadLogoToPresignedUrl(
-        uploadUrl: uploadUrl,
+        uploadUrl: presign['uploadUrl'],
         mimeType: logoMimeType,
         bytes: wizard.logoBytes!,
       );
-      // Extract objectKey from uploadUrl (last path segment)
-      final uri = Uri.parse(uploadUrl);
-      logoObjectKey = uri.pathSegments.last;
+      logoObjectKey = presign['objectKey'];
       logoSizeBytes = wizard.logoBytes!.length;
     }
 

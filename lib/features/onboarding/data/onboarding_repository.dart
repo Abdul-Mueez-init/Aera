@@ -146,14 +146,18 @@ class OnboardingRepository {
   OnboardingRepository(this._client);
   final ApiClient _client;
 
-  Future<String> presignLogo(String mimeType) async {
+  Future<Map<String, dynamic>> presignLogo(String mimeType) async {
     final presign =
         await _client.post(
               '/api/v1/companies/current/onboarding/logo/presign',
               body: {'mimeType': mimeType},
             )
             as Map<String, dynamic>;
-    return presign['uploadUrl'] as String;
+    return {
+      'objectKey': presign['objectKey'] as String,
+      'uploadUrl': presign['uploadUrl'] as String,
+      'expiresAt': presign['expiresAt'] as String,
+    };
   }
 
   Future<String> uploadLogoToPresignedUrl({
