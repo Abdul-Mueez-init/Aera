@@ -153,14 +153,6 @@ String? resolveRedirect({
         return null;
       }
       if (role == 'OWNER' && ownerOnboardingPending) {
-        // If wizard is empty (no prerequisites met), all non-onboarding paths go to step 1
-        if (!wizardBusinessBasicsComplete &&
-            !wizardServiceAreaComplete &&
-            !wizardServicesComplete) {
-          if (!_ownerOnboardingPaths.contains(p)) {
-            return kOwnerOnboardingPath;
-          }
-        }
         // Check wizard prerequisites for each onboarding path
         if (p == '/onboarding/service-area' && !wizardBusinessBasicsComplete) {
           return kOwnerOnboardingPath;
@@ -174,6 +166,18 @@ String? resolveRedirect({
         if (p == '/onboarding/complete' && !wizardServicesComplete) {
           return kOwnerOnboardingPath;
         }
+        // If wizard is empty (no prerequisites met), all non-onboarding paths go to step 1
+        if (!wizardBusinessBasicsComplete &&
+            !wizardServiceAreaComplete &&
+            !wizardServicesComplete) {
+          if (!_ownerOnboardingPaths.contains(p)) {
+            return kOwnerOnboardingPath;
+          }
+        }
+      }
+      // Completed owner on onboarding paths goes to dashboard
+      if (role == 'OWNER' && !ownerOnboardingPending && _ownerOnboardingPaths.contains(p)) {
+        return kDashboardPath;
       }
       if (p == kSplashPath || _authEntryPaths.contains(p)) {
         return roleHome(role);

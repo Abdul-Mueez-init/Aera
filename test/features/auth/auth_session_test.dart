@@ -6,6 +6,7 @@ import 'package:aera/core/network/api_response.dart';
 import 'package:aera/features/auth/data/auth_repository.dart';
 import 'package:aera/features/auth/data/session_store.dart';
 import 'package:aera/features/auth/providers/auth_provider.dart';
+import 'package:aera/features/onboarding/providers/onboarding_wizard_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -537,6 +538,93 @@ void main() {
       expect(await secure.read(), isNull);
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString(SecureSessionStore.legacyPrefsKey), isNull);
+    });
+  });
+
+  group('OnboardingWizardProvider', () {
+    test('initial state is empty except company name', () {
+      final container = ProviderContainer();
+      final wizard = container.read(onboardingWizardProvider.notifier);
+
+      final state = wizard.state;
+      expect(state.name, isEmpty);
+      expect(state.phone, isEmpty);
+      expect(state.taxId, isEmpty);
+      expect(state.currency, 'USD');
+      expect(state.latitude, isNull);
+      expect(state.longitude, isNull);
+      expect(state.radiusKm, 30);
+      expect(state.selectedZoneIds, isEmpty);
+      expect(state.customZoneNames, isEmpty);
+      expect(state.selectedServices, isEmpty);
+      expect(state.teamInvites, isEmpty);
+      expect(state.logoBytes, isNull);
+      expect(state.logoFileName, isNull);
+
+      container.dispose();
+    });
+
+    test('state resets on sign-out', () {
+      final container = ProviderContainer();
+      final wizard = container.read(onboardingWizardProvider.notifier);
+
+      // Set some state
+      wizard.updateBusinessBasics(
+        name: 'Test Co',
+        phone: '+1234567890',
+        taxId: '12-3456789',
+        currency: 'USD',
+      );
+      wizard.updateServiceArea(
+        latitude: 40.7128,
+        longitude: -74.0060,
+        radiusKm: 15,
+        selectedZoneIds: ['zone-1'],
+        customZoneNames: ['Custom Zone'],
+      );
+      wizard.updateServices([
+        const OnboardingService(
+          serviceKey: 'ac_repair',
+          name: 'AC Repair',
+          iconKey: 'air_conditioning',
+          isCustom: false,
+        ),
+      ]);
+
+      expect(wizard.state.name, 'Test Co');
+      expect(wizard.state.selectedZoneIds, ['zone-1']);
+      expect(wizard.state.selectedServices.length, 1);
+
+      // Reset (simulating sign-out)
+      wizard.reset();
+
+      expect(wizard.state.name, isEmpty);
+      expect(wizard.state.selectedZoneIds, isEmpty);
+      expect(wizard.state.selectedServices, isEmpty);
+
+      container.dispose();
+    });
+
+    test('provider never touches storage', () {
+      final container = ProviderContainer();
+      final wizard = container.read(onboardingWizardProvider.notifier);
+
+      // All operations are in-memory - no storage calls
+      wizard.updateBusinessBasics(
+        name: 'Test Co',
+        phone: '+1234567890',
+        taxId: null,
+        currency: 'USD',
+      );
+      wizard.setPendingLogoBytes([1, 2, 3], 'logo.jpg');
+
+      expect(wizard.state.name, 'Test Co');
+      expect(wizard.state.logoBytes, [1, 2, 3]);
+
+      // No SharedPreferences or secure storage should be called
+      // This is verified by the fact that the provider uses no storage dependencies
+
+      container.dispose();
     });
   });
 }

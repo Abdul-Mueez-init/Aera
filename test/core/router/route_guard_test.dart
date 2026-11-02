@@ -202,6 +202,142 @@ void main() {
     }
   });
 
+  group('OWNER onboarding with in-memory wizard', () {
+    test('cold start on any /onboarding/* path redirects to business-basics', () {
+      for (final path in [
+        '/onboarding/business-basics',
+        '/onboarding/service-area',
+        '/onboarding/services',
+        '/onboarding/team-setup',
+        '/onboarding/complete',
+      ]) {
+        expect(
+          _redirect(
+            AuthGate.signedIn,
+            path,
+            role: 'OWNER',
+            ownerOnboardingPending: true,
+            wizardBusinessBasicsComplete: false,
+            wizardServiceAreaComplete: false,
+            wizardServicesComplete: false,
+          ),
+          '/onboarding/business-basics',
+          reason: path,
+        );
+      }
+    });
+
+    test('cannot jump to service-area without business basics complete', () {
+      expect(
+        _redirect(
+          AuthGate.signedIn,
+          '/onboarding/service-area',
+          role: 'OWNER',
+          ownerOnboardingPending: true,
+          wizardBusinessBasicsComplete: false,
+          wizardServiceAreaComplete: false,
+          wizardServicesComplete: false,
+        ),
+        '/onboarding/business-basics',
+      );
+    });
+
+    test('cannot jump to services without service-area complete', () {
+      expect(
+        _redirect(
+          AuthGate.signedIn,
+          '/onboarding/services',
+          role: 'OWNER',
+          ownerOnboardingPending: true,
+          wizardBusinessBasicsComplete: true,
+          wizardServiceAreaComplete: false,
+          wizardServicesComplete: false,
+        ),
+        '/onboarding/business-basics',
+      );
+    });
+
+    test('cannot jump to team-setup without services complete', () {
+      expect(
+        _redirect(
+          AuthGate.signedIn,
+          '/onboarding/team-setup',
+          role: 'OWNER',
+          ownerOnboardingPending: true,
+          wizardBusinessBasicsComplete: true,
+          wizardServiceAreaComplete: true,
+          wizardServicesComplete: false,
+        ),
+        '/onboarding/business-basics',
+      );
+    });
+
+    test('completed owner goes to dashboard', () {
+      expect(
+        _redirect(
+          AuthGate.signedIn,
+          '/onboarding/business-basics',
+          role: 'OWNER',
+          ownerOnboardingPending: false,
+        ),
+        '/dashboard',
+      );
+    });
+
+    test('completed owner on any onboarding path goes to dashboard', () {
+      for (final path in [
+        '/onboarding/business-basics',
+        '/onboarding/service-area',
+        '/onboarding/services',
+        '/onboarding/team-setup',
+        '/onboarding/complete',
+      ]) {
+        expect(
+          _redirect(
+            AuthGate.signedIn,
+            path,
+            role: 'OWNER',
+            ownerOnboardingPending: false,
+          ),
+          '/dashboard',
+          reason: path,
+        );
+      }
+    });
+  });
+
+  group('TECHNICIAN and PORTAL paths unchanged', () {
+    test('TECHNICIAN goes to technician-home on entry screens', () {
+      for (final path in [
+        '/splash',
+        '/welcome',
+        '/login',
+        '/sign-up',
+      ]) {
+        expect(
+          _redirect(AuthGate.signedIn, path, role: 'TECHNICIAN'),
+          '/technician-home',
+          reason: path,
+        );
+      }
+    });
+
+    test('portal paths are exempt from onboarding redirects', () {
+      for (final path in ['/open', '/p', '/p/closed']) {
+        expect(
+          _redirect(
+            AuthGate.signedIn,
+            path,
+            role: 'OWNER',
+            ownerOnboardingPending: true,
+          ),
+          isNull,
+          reason: path,
+        );
+      }
+    });
+  });
+
   group('new owner onboarding handoff', () {
     test('new owner is sent into onboarding and cannot skip to Dashboard', () {
       expect(
