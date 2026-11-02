@@ -203,13 +203,12 @@ void main() {
   });
 
   group('OWNER onboarding with in-memory wizard', () {
-    test('cold start on any /onboarding/* path redirects to business-basics', () {
+    test('cold start on non-onboarding, non-portal paths redirects to business-basics', () {
       for (final path in [
-        '/onboarding/business-basics',
-        '/onboarding/service-area',
-        '/onboarding/services',
-        '/onboarding/team-setup',
-        '/onboarding/complete',
+        '/dashboard',
+        '/jobs',
+        '/customers',
+        '/company-settings',
       ]) {
         expect(
           _redirect(
@@ -225,6 +224,51 @@ void main() {
           reason: path,
         );
       }
+    });
+
+    test('pending owner with step 1 complete opening /dashboard redirects to service-area', () {
+      expect(
+        _redirect(
+          AuthGate.signedIn,
+          '/dashboard',
+          role: 'OWNER',
+          ownerOnboardingPending: true,
+          wizardBusinessBasicsComplete: true,
+          wizardServiceAreaComplete: false,
+          wizardServicesComplete: false,
+        ),
+        '/onboarding/service-area',
+      );
+    });
+
+    test('pending owner with step 2 complete opening /dashboard redirects to services', () {
+      expect(
+        _redirect(
+          AuthGate.signedIn,
+          '/dashboard',
+          role: 'OWNER',
+          ownerOnboardingPending: true,
+          wizardBusinessBasicsComplete: true,
+          wizardServiceAreaComplete: true,
+          wizardServicesComplete: false,
+        ),
+        '/onboarding/services',
+      );
+    });
+
+    test('pending owner with step 3 complete opening /dashboard redirects to team-setup', () {
+      expect(
+        _redirect(
+          AuthGate.signedIn,
+          '/dashboard',
+          role: 'OWNER',
+          ownerOnboardingPending: true,
+          wizardBusinessBasicsComplete: true,
+          wizardServiceAreaComplete: true,
+          wizardServicesComplete: true,
+        ),
+        '/onboarding/team-setup',
+      );
     });
 
     test('cannot jump to service-area without business basics complete', () {
