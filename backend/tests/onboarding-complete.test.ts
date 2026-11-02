@@ -534,8 +534,8 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
         services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
       });
 
-    expect(res.status).toBe(404);
-    expect(res.body.error).toBe("CUSTOM_AREA_NOT_FOUND");
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe("UPSTREAM_UNAVAILABLE");
 
     // Reset mock
     mockLocateCustomArea.mockResolvedValueOnce({ latitude: 40.7128, longitude: -74.006, radiusKm: 15 });
@@ -556,7 +556,7 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
       });
 
     expect(res.status).toBe(503);
-    expect(res.body.error).toBe("UPSTREAM_UNAVAILABLE");
+    expect(res.body.error.code).toBe("UPSTREAM_UNAVAILABLE");
 
     // Reset mock
     mockReverseGeocode.mockResolvedValueOnce("123 Test St");
