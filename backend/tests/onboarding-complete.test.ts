@@ -2,6 +2,8 @@ import request from "supertest";
 import { describe, expect, it, beforeAll, afterAll, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { prisma } from "../src/db/prisma.js";
+import { AppError } from "../src/common/errors.js";
+import * as osmGeoService from "../src/modules/companies/osm-geo.service.js";
 
 const app = buildApp();
 
@@ -12,6 +14,10 @@ vi.mock("../src/modules/companies/osm-geo.service.js", () => ({
   locateCustomArea: vi.fn(() => Promise.resolve({ latitude: 40.7128, longitude: -74.006, radiusKm: 15 })),
   forwardGeocode: vi.fn(() => Promise.resolve([])),
 }));
+
+// Get mocked functions
+const mockReverseGeocode = osmGeoService.reverseGeocode as ReturnType<typeof vi.fn>;
+const mockLocateCustomArea = osmGeoService.locateCustomArea as ReturnType<typeof vi.fn>;
 
 function uniqueSuffix(label: string) {
   return `${label}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -510,5 +516,49 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
     if (logoRes.status === 200) {
       expect(logoRes.body.data).toHaveProperty("logoUrl");
     }
+  });
+
+  it("returns 404 for invalid custom area", async () => {
+    const owner = await registerOwner("InvalidAreaTest");
+
+    mockLocateCustomArea.mockRejectedValueOnce(
+      new AppError("CUSTOM_AREA_NOT_FOUND", "Custom area not found.", 404)
+    );
+
+    const res = await request(app)
+      .post("/api/v1/companies/current/onboarding/complete")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({
+        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
+        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: ["InvalidArea"] },
+        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+      });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("CUSTOM_AREA_NOT_FOUND");
+
+    // Reset mock
+    mockLocateCustomArea.mockResolvedValueOnce({ latitude: 40.7128, longitude: -74.006, radiusKm: 15 });
+  });
+
+  it("returns 503 for network failures", async () => {
+    const owner = await registerOwner("NetworkFailTest");
+
+    mockReverseGeocode.mockRejectedValueOnce(new Error("Network timeout"));
+
+    const res = await request(app)
+      .post("/api/v1/companies/current/onboarding/complete")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({
+        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
+        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: ["Manhattan"] },
+        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+      });
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe("UPSTREAM_UNAVAILABLE");
+
+    // Reset mock
+    mockReverseGeocode.mockResolvedValueOnce("123 Test St");
   });
 });

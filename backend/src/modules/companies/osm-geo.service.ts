@@ -641,8 +641,16 @@ export async function locateCustomArea(
         return { latitude, longitude };
       }
     }
-  } catch {
-    // Fall through to headquarters coordinates
+    throw new AppError(
+      "CUSTOM_AREA_NOT_FOUND",
+      "Custom area not found. Please enter a valid location name.",
+      404,
+    );
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    // Fall through to headquarters coordinates on network errors
   }
 
   return { latitude: lat, longitude: lng };

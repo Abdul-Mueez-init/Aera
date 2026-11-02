@@ -16,9 +16,6 @@ import {
   locateCustomArea,
 } from "./osm-geo.service.js";
 
-const router = Router();
-router.use(requireAuth, requireRole("OWNER"));
-
 // Google Places/Geocoding can incur usage-based charges. Bound calls per
 // authenticated owner; do not key this by a submitted company ID.
 const mapsProviderRateLimiter = rateLimit({
@@ -38,6 +35,10 @@ const mapsProviderRateLimiter = rateLimit({
     );
   },
 });
+
+const router = Router();
+router.use(requireAuth, requireRole("OWNER"));
+router.use(mapsProviderRateLimiter);
 
 const builtInServices = {
   ac_repair: { name: "AC Repair", iconKey: "air_conditioning" },
@@ -293,7 +294,10 @@ router.post("/complete", async (request, response) => {
         ? discoverNeighborhoods(area.latitude, area.longitude, area.radiusKm)
         : Promise.resolve([]),
     ]);
-  } catch {
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error; // Rethrow AppError as-is (e.g., LOCATION_NOT_RESOLVED = 422)
+    }
     throw new AppError(
       "UPSTREAM_UNAVAILABLE",
       "Geocoding service temporarily unavailable. Please try again.",
