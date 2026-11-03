@@ -26,6 +26,7 @@ import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/jobs/jobs_screen.dart';
 import '../../features/jobs/job_detail_screen.dart';
 import '../../features/calendar/calendar_screen.dart';
+import '../../features/calendar/booking_settings_screen.dart';
 import '../../features/customers/customers_screen.dart';
 import '../../features/customers/customer_detail_screen.dart';
 import '../../features/customers/edit_customer_screen.dart';
@@ -33,6 +34,9 @@ import '../../features/customers/edit_customer_screen.dart';
 import '../../features/customers/create_customer_screen.dart';
 import '../../features/jobs/create_job_screen.dart';
 import '../../features/jobs/schedule_job_screen.dart';
+import '../../features/requests/requests_screen.dart';
+import '../../features/requests/create_service_request_screen.dart';
+import '../../features/requests/service_request_detail_screen.dart';
 import '../../features/quotes/create_quote_screen.dart';
 import '../../features/invoices/create_invoice_screen.dart';
 
@@ -40,7 +44,7 @@ import '../../features/quotes/quotes_screen.dart';
 import '../../features/quotes/quote_detail_screen.dart';
 import '../../features/invoices/invoices_screen.dart';
 import '../../features/invoices/invoice_detail_screen.dart';
-import '../../features/portal/customer_home_screen.dart';
+import '../../features/portal/workspace_home_screen.dart';
 import '../../features/portal/portal_closed_screen.dart';
 import '../../features/portal/portal_landing_screen.dart';
 import '../../features/portal/portal_open_screen.dart';
@@ -145,7 +149,10 @@ final List<RouteBase> _portalRoutes = [
     path: '/open',
     builder: (context, state) => PortalOpenScreen(fragment: state.uri.fragment),
   ),
-  GoRoute(path: '/p', builder: (context, state) => const CustomerHomeScreen()),
+  GoRoute(
+    path: '/p',
+    builder: (context, state) => const PortalWorkspaceHomeScreen(),
+  ),
   GoRoute(
     path: '/p/closed',
     builder: (context, state) => const PortalClosedScreen(),
@@ -160,6 +167,10 @@ final List<RouteBase> _customerRoutes = [
 
 final List<RouteBase> _staffRoutes = [
   GoRoute(path: '/', redirect: (context, state) => '/dashboard'),
+  GoRoute(
+    path: '/booking-settings',
+    builder: (context, state) => const BookingSettingsScreen(),
+  ),
   // Auth Routes
   GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
   GoRoute(path: '/welcome', builder: (context, state) => const WelcomeScreen()),
@@ -348,6 +359,20 @@ final List<RouteBase> _staffRoutes = [
       final customerId = state.pathParameters['customerId'] ?? '';
       return EditCustomerScreen(customerId: customerId);
     },
+  ),
+  GoRoute(
+    path: '/service-requests',
+    builder: (context, state) => const RequestsScreen(),
+  ),
+  GoRoute(
+    path: '/create-service-request',
+    builder: (context, state) => const CreateServiceRequestScreen(),
+  ),
+  GoRoute(
+    path: '/service-requests/:requestId',
+    builder: (context, state) => ServiceRequestDetailScreen(
+      requestId: state.pathParameters['requestId'] ?? '',
+    ),
   ),
 
   // Main App Shell with Bottom Navigation

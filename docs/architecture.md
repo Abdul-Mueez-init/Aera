@@ -355,6 +355,27 @@ POST   /jobs/:jobId/schedule
 POST   /jobs/:jobId/reschedule
 ```
 
+Booking is an additive, feature-gated surface. `BOOKING_ENABLED=false` leaves
+the legacy schedule contract unchanged.
+
+```text
+GET    /booking/config
+PATCH  /booking/config
+GET    /booking/queue
+GET    /booking/availability
+POST   /booking/proposals
+POST   /booking/proposals/:proposalId/pick
+POST   /booking/holds
+POST   /booking/holds/:holdId/confirm
+```
+
+Availability is calculated as technician capacity from server-owned working
+hours, time off, existing jobs, active holds and travel buffers. Holds expire
+after ten minutes. Confirmation takes a per-company-day PostgreSQL advisory
+transaction lock, rechecks conflicts, and updates the job and hold atomically.
+The pure capacity engine accepts instants from the API boundary and never
+performs database reads.
+
 ## 7. Quotes
 
 ```text
@@ -474,6 +495,25 @@ Especially important for:
 
 # Architecture Decision Records
 
+## ADR-018 — Booking is additive and server-authoritative
+
+**Context:** Existing companies use the legacy schedule endpoints, while Phase
+5 needs proposals, holds and customer-selectable windows.
+
+**Decision:** Add `/booking` behind `BOOKING_ENABLED`, retain `/schedule`
+unchanged, and make availability, conflict checks and booking mode decisions
+server-authoritative. The default mode is `DISPATCHER_CONFIRMS`.
+
+**Rejected alternatives:** Replacing the existing schedule API would risk
+breaking dispatch workflows; client-side conflict checks cannot guarantee
+correctness under concurrent confirmation.
+
+**Consequences:** New booking tables can be deployed additively and enabled
+per environment. Confirmation is serialized by company and local calendar day.
+
+**Revisit trigger:** Replace the in-process expiry sweep with a durable worker
+when booking volume or multi-instance scheduling requires it.
+
 
 ## ADR-001 — Modular monolith first
 
@@ -531,11 +571,84 @@ Especially important for:
 
 **Why:** Primary user actions should not fail because a notification provider is temporarily unavailable.
 
+Notification delivery uses a channel-aware outbox when `NOTIFICATION_OUTBOX_ENABLED`
+is enabled. Each recipient and channel (in-app, email, push, and SMS) has its own
+dedupe key, retry state, and provider outcome, so a failed provider cannot block
+the other channels or the business transaction. The outbox worker re-checks
+active company membership before delivery and treats provider failures as
+background errors.
+
 ## ADR-010 — AI is a tool caller, not an authority
 
 **Decision:** AI may read data only through authorized tools and may never receive direct database access. Sensitive mutations require explicit typed commands with authorization.
 
 **Why:** Prevents prompt injection and model output from becoming an authorization mechanism.
+
+## ADR-011 — Service requests precede operational jobs
+
+**Context:** Work can begin from phone intake, a customer request, an inspection, or a direct staff dispatch.
+
+**Decision:** `ServiceRequest` is the parent intake record. Quotes and jobs may attach to it, while direct staff jobs create an accepted `STAFF_DIRECT` request in the same transaction.
+
+**Rejected:** Making Job the intake record would conflate a request, a quote and booked work.
+
+**Consequence:** Request status is independently auditable and job existence is derived from related jobs.
+
+**Revisit when:** A future workflow needs a separate intake aggregate.
+
+## ADR-012 — Request state machine and inspection flag
+
+**Decision:** Service requests use explicit SUBMITTED, NEEDS_INFO, QUOTING, QUOTED, ACCEPTED, DECLINED, EXPIRED, CANCELLED and CLOSED states. `requiresInspection` is a boolean, not a state.
+
+**Why:** Inspection is a routing requirement and must not create a second state machine.
+
+**Revisit when:** Inspection develops independent lifecycle requirements.
+
+## ADR-013 — Request, quote and job cardinality
+
+**Decision:** One request can have many quotes and jobs. `Quote.jobId` remains the job advanced or changed by that quote; `basisJobId` identifies an informational diagnostic basis.
+
+**Consequence:** Revisions and diagnostic-to-repair flows do not overwrite history.
+
+## ADR-014 — Immutable sent quotes and revision chains
+
+**Decision:** A sent quote is immutable. Revisions create a new quote linked by `supersedesQuoteId`; totals are recomputed server-side.
+
+**Revisit when:** A versioned commercial-document subsystem replaces the current quote model.
+
+## ADR-015 — Separate deposit invoice and explicit credits
+
+**Decision:** Deposits are separate invoices and later credits are explicit invoice-credit rows. Payments remain immutable.
+
+**Rejected:** Loosening Payment-to-Invoice ownership or editing payment records.
+
+## ADR-016 — Workspace scope is customer/company based
+
+**Decision:** A workspace grant authenticates one customer relationship within one company. Legacy job-scoped portal grants remain isolated until deprecation.
+
+**Revisit when:** Multi-contact or property-manager accounts are introduced.
+
+## ADR-017 — Completion review is a field, not a job status
+
+**Decision:** Keep the existing eight job statuses and represent review with `reviewState`. This preserves existing scheduling, dashboard and portal behavior.
+
+**Revisit when:** Completion review needs independent scheduling semantics.
+
+## ADR-018 — Verified arrival is derived from the handshake
+
+**Decision:** The customer handshake timestamp is exposed as `arrivedVerifiedAt`; no ARRIVED status is added to the job state machine.
+
+**Why:** Arrival is a verified fact used by staff, technicians and customers, while the existing eight-state workflow remains stable.
+
+**Revisit when:** Arrival needs a separate operational workflow with independent transitions.
+
+## ADR-019 — Invoice lines retain their approved scope source
+
+**Decision:** Final invoice items store a nullable source type and source id. Approved quote items and job parts are distinguishable from manual lines, and invoice generation remains behind the existing completion and review gates.
+
+**Why:** Server-side provenance prevents unapproved field work from silently becoming customer charges while preserving the current manual-payment pipeline.
+
+**Revisit when:** Change-order authorization becomes a separate financial aggregate in the payments phase.
 
 ## Architecture ownership
 

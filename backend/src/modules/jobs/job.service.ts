@@ -11,16 +11,22 @@ import {
   assertCanViewJob,
 } from "./job.policy.js";
 import { generateInvoiceFromJob } from "../invoices/invoice.service.js";
-import { getNextJobNumber } from "../../common/counters/counter.service.js";
+import {
+  getNextCounter,
+  getNextJobNumber,
+} from "../../common/counters/counter.service.js";
 import {
   prepareHandshakeOnEnRoute,
   queueHandshakeCodeDelivery,
 } from "./handshake.service.js";
 import { closePortalIfDone } from "../portal/portal.grants.js";
+import { createRequestMediaReadUrl } from "../../common/storage/supabase-storage.adapter.js";
+import { env } from "../../config/env.js";
 import {
   dayBoundsInTimezone,
   getCompanyTimezone,
 } from "../ai/tools/timezone.util.js";
+import { clearJobTracking } from "../tracking/tracking.service.js";
 
 export type JobStatusValue =
   | "NEW"
@@ -41,6 +47,8 @@ export interface JobInput {
   serviceType: string;
   problemDescription: string;
   priority?: JobPriorityValue;
+  serviceRequestId?: string;
+  type?: "DIAGNOSTIC" | "REPAIR" | "INSTALLATION" | "MAINTENANCE" | "OTHER";
 }
 
 export interface JobFilters {
@@ -107,6 +115,11 @@ function jobSelect() {
     startedAt: true,
     completedAt: true,
     completionSummary: true,
+    type: true,
+    reviewState: true,
+    reviewedAt: true,
+    reviewNote: true,
+    handshakeVerifiedAt: true,
     createdAt: true,
     updatedAt: true,
     customer: {
@@ -133,6 +146,27 @@ function jobSelect() {
     assignedTechnician: {
       select: { id: true, firstName: true, lastName: true, email: true },
     },
+    serviceRequest: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        serviceCategory: true,
+        attachments: {
+          orderBy: { createdAt: "desc" as const },
+          take: 20,
+          select: {
+            id: true,
+            objectKey: true,
+            mimeType: true,
+            kind: true,
+            sizeBytes: true,
+            caption: true,
+            createdAt: true,
+          },
+        },
+      },
+    },
   } as const;
 }
 
@@ -152,6 +186,11 @@ function technicianJobSelect() {
     startedAt: true,
     completedAt: true,
     completionSummary: true,
+    type: true,
+    reviewState: true,
+    reviewedAt: true,
+    reviewNote: true,
+    handshakeVerifiedAt: true,
     createdAt: true,
     updatedAt: true,
     customer: {
@@ -176,6 +215,27 @@ function technicianJobSelect() {
     },
     assignedTechnician: {
       select: { id: true, firstName: true, lastName: true, email: true },
+    },
+    serviceRequest: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        serviceCategory: true,
+        attachments: {
+          orderBy: { createdAt: "desc" as const },
+          take: 20,
+          select: {
+            id: true,
+            objectKey: true,
+            mimeType: true,
+            kind: true,
+            sizeBytes: true,
+            caption: true,
+            createdAt: true,
+          },
+        },
+      },
     },
   } as const;
 }
@@ -236,6 +296,58 @@ export async function createJob(context: AuthContext, input: JobInput) {
   await assertJobReferences(context.companyId, input);
 
   return prisma.$transaction(async (transaction) => {
+    let serviceRequestId = input.serviceRequestId;
+    if (env.REQUESTS_ENABLED) {
+      if (serviceRequestId) {
+        const existingRequest = await transaction.serviceRequest.findFirst({
+          where: {
+            id: serviceRequestId,
+            companyId: context.companyId,
+            customerId: input.customerId,
+            serviceAddressId: input.serviceAddressId,
+          },
+          select: { id: true },
+        });
+        if (!existingRequest) {
+          throw new AppError(
+            "JOB_INVALID_SERVICE_REQUEST",
+            "Service request must belong to the customer and address",
+            422,
+          );
+        }
+      } else {
+        const requestNumber = await getNextCounter(
+          context.companyId,
+          "SERVICE_REQUEST",
+          transaction,
+        );
+        const serviceRequest = await transaction.serviceRequest.create({
+          data: {
+            companyId: context.companyId,
+            customerId: input.customerId,
+            serviceAddressId: input.serviceAddressId,
+            requestNumber,
+            title: input.serviceType.trim(),
+            description: input.problemDescription.trim(),
+            serviceCategory: input.serviceType.trim(),
+            priority: input.priority ?? "NORMAL",
+            status: "ACCEPTED",
+            source: "STAFF_DIRECT",
+          },
+          select: { id: true },
+        });
+        serviceRequestId = serviceRequest.id;
+        await transaction.serviceRequestEvent.create({
+          data: {
+            companyId: context.companyId,
+            requestId: serviceRequest.id,
+            actorUserId: context.userId,
+            type: "CREATED",
+            toStatus: "ACCEPTED",
+          },
+        });
+      }
+    }
     const jobNumber = await getNextJobNumber(context.companyId, transaction);
     const job = await transaction.job.create({
       data: {
@@ -246,6 +358,8 @@ export async function createJob(context: AuthContext, input: JobInput) {
         serviceType: input.serviceType.trim(),
         problemDescription: input.problemDescription.trim(),
         priority: input.priority ?? "NORMAL",
+        serviceRequestId,
+        type: input.type ?? "OTHER",
       },
       select: jobSelect(),
     });
@@ -371,6 +485,28 @@ export async function getJob(context: AuthContext, jobId: string) {
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
 
+  const requestContext = job.serviceRequest
+    ? {
+        id: job.serviceRequest.id,
+        title: job.serviceRequest.title,
+        description: job.serviceRequest.description,
+        serviceCategory: job.serviceRequest.serviceCategory,
+        attachments: await Promise.all(
+          job.serviceRequest.attachments.map(async (attachment) => ({
+            id: attachment.id,
+            mimeType: attachment.mimeType,
+            kind: attachment.kind,
+            sizeBytes: attachment.sizeBytes,
+            caption: attachment.caption,
+            createdAt: attachment.createdAt,
+            signedReadUrl: await createRequestMediaReadUrl(
+              attachment.objectKey,
+            ),
+          })),
+        ),
+      }
+    : null;
+
   // Handshake exposure rule (handoff 5.7): staff/technician responses
   // carry only the handshake STATE, never the code, the derived version,
   // or the failed-attempt counters.
@@ -390,6 +526,8 @@ export async function getJob(context: AuthContext, jobId: string) {
 
   return jsonSafe({
     ...job,
+    requestContext,
+    arrivedVerifiedAt: job.handshakeVerifiedAt,
     handshake: {
       state: handshakeState,
       lockedUntil: isLocked ? jobMeta.handshakeLockedUntil : null,
@@ -485,6 +623,8 @@ export async function assignJob(
           id: true,
           status: true,
           assignedTechnicianId: true,
+          type: true,
+          reviewState: true,
           scheduledStart: true,
           scheduledEnd: true,
           handshakeVersion: true,
@@ -567,6 +707,7 @@ export async function assignJob(
         if (handshakeChanged) {
           queueHandshakeCodeDelivery(jobId, handshakeVersion!);
         }
+        await clearJobTracking(jobId, context.companyId);
         void notificationPublisher.publish({
           type: "JOB_ASSIGNED",
           companyId: context.companyId,
@@ -598,6 +739,8 @@ export async function transitionJob(
       companyId: true,
       status: true,
       assignedTechnicianId: true,
+      type: true,
+      reviewState: true,
       startedAt: true,
       handshakeVersion: true,
     },
@@ -697,6 +840,9 @@ export async function transitionJob(
   if (toStatus === "EN_ROUTE") {
     queueHandshakeCodeDelivery(jobId, job.handshakeVersion + 1);
   }
+  if (toStatus === "IN_PROGRESS" || toStatus === "CANCELLED") {
+    await clearJobTracking(jobId, context.companyId);
+  }
 
   return getJob(context, jobId);
 }
@@ -729,7 +875,11 @@ export async function listTechnicianToday(context: AuthContext, date: string) {
   return { date, jobs };
 }
 
-async function assertExecutableJob(context: AuthContext, jobId: string) {
+async function assertExecutableJob(
+  context: AuthContext,
+  jobId: string,
+  allowReviewChanges = false,
+) {
   const job = await prisma.job.findFirst({
     where: { id: jobId, companyId: context.companyId },
     select: {
@@ -737,13 +887,21 @@ async function assertExecutableJob(context: AuthContext, jobId: string) {
       companyId: true,
       status: true,
       assignedTechnicianId: true,
+      reviewState: true,
     },
   });
   if (!job) {
     throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   }
   assertCanExecuteJobWork(context, job);
-  if (["COMPLETED", "CANCELLED"].includes(job.status)) {
+  if (
+    ["COMPLETED", "CANCELLED"].includes(job.status) &&
+    !(
+      allowReviewChanges &&
+      job.status === "COMPLETED" &&
+      job.reviewState === "CHANGES_REQUESTED"
+    )
+  ) {
     throw new AppError("JOB_IMMUTABLE", "Final jobs cannot be changed", 409);
   }
   return job;
@@ -783,7 +941,7 @@ export async function addJobPhoto(
   jobId: string,
   input: JobPhotoInput,
 ) {
-  await assertExecutableJob(context, jobId);
+  await assertExecutableJob(context, jobId, true);
 
   // Validate against presigned upload record
   const presignedUpload = await prisma.presignedUpload.findUnique({
@@ -950,6 +1108,200 @@ export async function addJobPart(
   return jsonSafe(part);
 }
 
+export interface JobFindingInput {
+  summary: string;
+  recommendedWork?: string;
+  equipmentInfo?: unknown;
+  likelyParts?: unknown;
+  estimatedLaborMinutes?: number;
+  customerVisible?: boolean;
+}
+
+export async function addJobFinding(
+  context: AuthContext,
+  jobId: string,
+  input: JobFindingInput,
+) {
+  const job = await prisma.job.findFirst({
+    where: { id: jobId, companyId: context.companyId },
+    select: {
+      id: true,
+      companyId: true,
+      status: true,
+      assignedTechnicianId: true,
+    },
+  });
+  if (!job) throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+  assertCanExecuteJobWork(context, job);
+  if (!["IN_PROGRESS", "WAITING_PARTS", "COMPLETED"].includes(job.status)) {
+    throw new AppError(
+      "JOB_FINDING_NOT_ALLOWED",
+      "Findings can only be recorded during or after field work",
+      422,
+    );
+  }
+  if (job.status === "COMPLETED") {
+    const review = await prisma.job.findUnique({
+      where: { id: jobId },
+      select: { reviewState: true },
+    });
+    if (review?.reviewState !== "CHANGES_REQUESTED") {
+      throw new AppError("JOB_IMMUTABLE", "Final jobs cannot be changed", 409);
+    }
+  }
+  const finding = await prisma.jobFinding.create({
+    data: {
+      companyId: context.companyId,
+      jobId,
+      authorUserId: context.userId,
+      summary: input.summary.trim(),
+      recommendedWork: input.recommendedWork?.trim() || undefined,
+      equipmentInfo: input.equipmentInfo as object | undefined,
+      likelyParts: input.likelyParts as object | undefined,
+      estimatedLaborMinutes: input.estimatedLaborMinutes,
+      customerVisible: input.customerVisible ?? false,
+    },
+  });
+  return jsonSafe(finding);
+}
+
+export async function listJobFindings(
+  context: AuthContext,
+  jobId: string,
+  customerVisibleOnly = false,
+) {
+  const job = await prisma.job.findFirst({
+    where: { id: jobId, companyId: context.companyId },
+    select: { id: true, companyId: true, assignedTechnicianId: true },
+  });
+  if (!job) throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+  assertCanViewJob(context, job);
+  const findings = await prisma.jobFinding.findMany({
+    where: {
+      companyId: context.companyId,
+      jobId,
+      ...(customerVisibleOnly ? { customerVisible: true } : {}),
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      summary: true,
+      recommendedWork: true,
+      equipmentInfo: true,
+      likelyParts: true,
+      estimatedLaborMinutes: true,
+      customerVisible: true,
+      createdAt: true,
+      author: { select: { id: true, firstName: true, lastName: true } },
+    },
+  });
+  return jsonSafe(findings);
+}
+
+export async function reviewCompletedJob(
+  context: AuthContext,
+  jobId: string,
+  decision: "APPROVED" | "CHANGES_REQUESTED",
+  note?: string,
+) {
+  if (context.role !== "OWNER" && context.role !== "DISPATCHER") {
+    throw new AppError(
+      "AUTH_FORBIDDEN",
+      "Only staff can review completions",
+      403,
+    );
+  }
+  const current = await prisma.job.findFirst({
+    where: { id: jobId, companyId: context.companyId },
+    select: { id: true, status: true, reviewState: true },
+  });
+  if (!current) throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+  if (current.status !== "COMPLETED" || current.reviewState !== "PENDING") {
+    throw new AppError(
+      "JOB_REVIEW_NOT_PENDING",
+      "This job does not have a pending completion review",
+      409,
+    );
+  }
+  const updated = await prisma.job.update({
+    where: { id: jobId },
+    data: {
+      reviewState: decision,
+      reviewedBy: context.userId,
+      reviewedAt: new Date(),
+      reviewNote: note?.trim() || null,
+    },
+  });
+  return getJob(context, updated.id);
+}
+
+export async function createJobChangeRequest(
+  context: AuthContext,
+  jobId: string,
+  input: {
+    reason: string;
+    description: string;
+    estimatedPriceMinor: number;
+    currency: string;
+    evidencePhotoIds?: string[];
+  },
+) {
+  const job = await prisma.job.findFirst({
+    where: { id: jobId, companyId: context.companyId },
+    select: {
+      id: true,
+      companyId: true,
+      status: true,
+      assignedTechnicianId: true,
+    },
+  });
+  if (!job) throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+  assertCanExecuteJobWork(context, job);
+  if (!["IN_PROGRESS", "WAITING_PARTS"].includes(job.status)) {
+    throw new AppError(
+      "CHANGE_REQUEST_NOT_ALLOWED",
+      "Change requests require an active job",
+      422,
+    );
+  }
+  if (input.estimatedPriceMinor < 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Estimated price cannot be negative",
+      422,
+    );
+  }
+  if (input.evidencePhotoIds?.length) {
+    const evidenceCount = await prisma.jobPhoto.count({
+      where: {
+        id: { in: input.evidencePhotoIds },
+        companyId: context.companyId,
+        jobId,
+      },
+    });
+    if (evidenceCount !== input.evidencePhotoIds.length) {
+      throw new AppError(
+        "INVALID_CHANGE_REQUEST_EVIDENCE",
+        "Every evidence photo must belong to this job",
+        422,
+      );
+    }
+  }
+  const changeRequest = await prisma.jobChangeRequest.create({
+    data: {
+      companyId: context.companyId,
+      jobId,
+      technicianId: context.userId,
+      reason: input.reason.trim(),
+      description: input.description.trim(),
+      estimatedPriceMinor: BigInt(input.estimatedPriceMinor),
+      currency: input.currency.toUpperCase(),
+      evidencePhotoIds: input.evidencePhotoIds,
+    },
+  });
+  return jsonSafe(changeRequest);
+}
+
 export interface CompleteJobOptions {
   autoInvoice?: boolean;
   allowZeroAmountInvoice?: boolean;
@@ -968,6 +1320,8 @@ export async function completeJob(
       companyId: true,
       status: true,
       assignedTechnicianId: true,
+      type: true,
+      reviewState: true,
     },
   });
   if (!existingJob) {
@@ -1000,6 +1354,23 @@ export async function completeJob(
     );
   }
 
+  const [findingCount, company] = await prisma.$transaction([
+    prisma.jobFinding.count({ where: { companyId: context.companyId, jobId } }),
+    prisma.company.findUnique({
+      where: { id: context.companyId },
+      select: { requireCompletionReview: true },
+    }),
+  ]);
+  if (existingJob.type === "DIAGNOSTIC" && findingCount < 1) {
+    throw new AppError(
+      "JOB_FINDING_REQUIRED",
+      "Diagnostic jobs require at least one finding before completion",
+      422,
+    );
+  }
+  const reviewRequired =
+    env.COMPLETION_REVIEW_ENABLED && company?.requireCompletionReview === true;
+
   const now = new Date();
   await prisma.$transaction(async (transaction) => {
     const result = await transaction.job.updateMany({
@@ -1012,6 +1383,7 @@ export async function completeJob(
         status: "COMPLETED",
         completedAt: now,
         completionSummary: summary.trim(),
+        reviewState: reviewRequired ? "PENDING" : "NOT_REQUIRED",
       },
     });
     if (result.count !== 1) {
@@ -1036,7 +1408,7 @@ export async function completeJob(
       },
     });
 
-    if (options?.autoInvoice) {
+    if (options?.autoInvoice && !reviewRequired) {
       await generateInvoiceFromJob(
         context,
         jobId,
@@ -1049,6 +1421,7 @@ export async function completeJob(
     // This is a no-op if conditions aren't met
     await closePortalIfDone(jobId, transaction);
   });
+  await clearJobTracking(jobId, context.companyId);
   return getJob(context, jobId);
 }
 

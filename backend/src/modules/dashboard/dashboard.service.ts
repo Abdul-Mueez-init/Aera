@@ -28,6 +28,8 @@ export interface DashboardSummary {
   jobsToday: number;
   jobsByStatus: Array<{ status: string; count: number }>;
   unassignedJobs: number;
+  openServiceRequests: number;
+  needsInfoServiceRequests: number;
   outstandingInvoices: {
     count: number;
     balanceDueByCurrency: Array<{ currency: string; totalMinor: string }>;
@@ -97,6 +99,8 @@ export async function getDashboardSummary(
     unassignedJobs,
     outstandingGroups,
     revenueGroups,
+    openServiceRequests,
+    needsInfoServiceRequests,
   ] = await Promise.all([
     prisma.job.count({
       where: {
@@ -134,6 +138,15 @@ export async function getDashboardSummary(
       },
       _sum: { amountMinor: true },
     }),
+    prisma.serviceRequest.count({
+      where: {
+        companyId,
+        status: { notIn: ["CLOSED", "CANCELLED", "DECLINED", "EXPIRED"] },
+      },
+    }),
+    prisma.serviceRequest.count({
+      where: { companyId, status: "NEEDS_INFO" },
+    }),
   ]);
 
   return {
@@ -145,6 +158,8 @@ export async function getDashboardSummary(
       count: row._count._all,
     })),
     unassignedJobs,
+    openServiceRequests,
+    needsInfoServiceRequests,
     outstandingInvoices: {
       count: outstandingGroups.reduce((sum, row) => sum + row._count._all, 0),
       balanceDueByCurrency: outstandingGroups.map((row) => ({

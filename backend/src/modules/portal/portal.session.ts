@@ -92,10 +92,10 @@ export async function createPortalSession(
     now.getTime() + env.PORTAL_SESSION_MAX_DAYS * 24 * 60 * 60 * 1000,
   );
 
-  // First, get the grant to fetch companyId, customerId, jobId
+  // First, get the grant to fetch the tenant and scope context.
   const grant = await db.portalAccessGrant.findFirst({
     where: { id: grantId },
-    select: { companyId: true, customerId: true, jobId: true },
+    select: { companyId: true, customerId: true, jobId: true, scope: true },
   });
 
   if (!grant) {
@@ -108,6 +108,7 @@ export async function createPortalSession(
       companyId: grant.companyId,
       customerId: grant.customerId,
       jobId: grant.jobId,
+      scope: grant.scope,
       sessionTokenHash,
       userAgentHash,
       expiresAt,
@@ -118,6 +119,7 @@ export async function createPortalSession(
       companyId: true,
       customerId: true,
       jobId: true,
+      scope: true,
       expiresAt: true,
     },
   });
@@ -134,7 +136,8 @@ export async function validatePortalSession(sessionToken: string): Promise<{
   grantId: string;
   companyId: string;
   customerId: string;
-  jobId: string;
+  jobId: string | null;
+  scope: "JOB" | "WORKSPACE";
   expiresAt: Date;
 }> {
   const sessionTokenHash = hashToken(sessionToken);
@@ -151,6 +154,7 @@ export async function validatePortalSession(sessionToken: string): Promise<{
           companyId: true,
           customerId: true,
           jobId: true,
+          scope: true,
         },
       },
     },
@@ -232,6 +236,7 @@ export async function validatePortalSession(sessionToken: string): Promise<{
     companyId: session.grant.companyId,
     customerId: session.grant.customerId,
     jobId: session.grant.jobId,
+    scope: session.grant.scope,
     expiresAt: session.expiresAt,
   };
 }

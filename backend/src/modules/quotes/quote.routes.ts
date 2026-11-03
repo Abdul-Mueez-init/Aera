@@ -6,7 +6,9 @@ import {
   getQuote,
   listQuotes,
   respondToQuote,
+  reviseQuote,
   sendQuote,
+  updateQuote,
   type QuoteStatusValue,
 } from "./quote.service.js";
 
@@ -32,6 +34,10 @@ const itemSchema = z.object({
 const createSchema = z.object({
   customerId: z.string().uuid(),
   jobId: z.string().uuid().optional(),
+  serviceRequestId: z.string().uuid().optional(),
+  kind: z
+    .enum(["INSPECTION", "REPAIR", "INSTALLATION", "CHANGE_ORDER", "GENERAL"])
+    .optional(),
   currency: z.string().regex(/^[A-Za-z]{3}$/),
   discountMinor: z.number().int().nonnegative().default(0),
   taxRateBps: z.number().int().min(0).max(10_000).default(0),
@@ -39,6 +45,8 @@ const createSchema = z.object({
   // any date, and expiry is enforced at send/respond time (422
   // QUOTE_EXPIRED) and by the list/sweep — see quote-lifecycle tests.
   expiresAt: z.coerce.date().optional(),
+  assumptions: z.string().trim().max(4000).optional(),
+  exclusions: z.string().trim().max(4000).optional(),
   items: z.array(itemSchema).min(1).max(100),
 });
 const listSchema = z.object({
@@ -95,6 +103,37 @@ router.post(
     response
       .status(201)
       .json({ data: await createQuote(request.auth!, parsed.data) });
+  },
+);
+
+router.patch(
+  "/:quoteId",
+  requireAuth,
+  requireRole(...managerRoles),
+  async (request, response) => {
+    const parsed = createSchema.omit({ customerId: true, jobId: true, serviceRequestId: true }).safeParse(request.body);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    response.status(200).json({
+      data: await updateQuote(
+        request.auth!,
+        routeId(request.params.quoteId),
+        parsed.data,
+      ),
+    });
+  },
+);
+
+router.post(
+  "/:quoteId/revise",
+  requireAuth,
+  requireRole(...managerRoles),
+  async (request, response) => {
+    response.status(201).json({
+      data: await reviseQuote(request.auth!, routeId(request.params.quoteId)),
+    });
   },
 );
 

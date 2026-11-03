@@ -234,7 +234,8 @@ class DashboardScreen extends ConsumerWidget {
                             child: AeraMetricCard(
                               label: "Today's Jobs",
                               value: summary.jobsToday.toString(),
-                              sublabel: '${summary.unassignedJobs} unassigned',
+                              sublabel:
+                                  '${summary.unassignedJobs} unassigned · ${summary.openServiceRequests} requests',
                               icon: Icons.assignment_outlined,
                               onTap: () => context.go('/jobs'),
                             ),

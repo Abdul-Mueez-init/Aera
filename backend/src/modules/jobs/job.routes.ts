@@ -7,6 +7,10 @@ import {
   addJobPhoto,
   assignJob,
   completeJob,
+  addJobFinding,
+  listJobFindings,
+  reviewCompletedJob,
+  createJobChangeRequest,
   createJob,
   getJob,
   getJobHistory,
@@ -37,6 +41,13 @@ const statuses = [
 const priorities = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
 const visibilities = ["INTERNAL", "CUSTOMER"] as const;
 const photoKinds = ["BEFORE", "AFTER", "OTHER"] as const;
+const jobTypes = [
+  "DIAGNOSTIC",
+  "REPAIR",
+  "INSTALLATION",
+  "MAINTENANCE",
+  "OTHER",
+] as const;
 
 const jobSchema = z.object({
   customerId: z.string().uuid(),
@@ -44,6 +55,8 @@ const jobSchema = z.object({
   serviceType: z.string().trim().min(1).max(120),
   problemDescription: z.string().trim().min(1).max(4000),
   priority: z.enum(priorities).optional(),
+  serviceRequestId: z.string().uuid().optional(),
+  type: z.enum(jobTypes).optional(),
 });
 const updateJobSchema = jobSchema
   .partial()
@@ -99,6 +112,25 @@ const completionSchema = z.object({
   summary: z.string().trim().min(1).max(4000),
   autoInvoice: z.boolean().optional(),
   allowZeroAmountInvoice: z.boolean().optional(),
+});
+const findingSchema = z.object({
+  summary: z.string().trim().min(1).max(4000),
+  recommendedWork: z.string().trim().max(4000).optional(),
+  equipmentInfo: z.unknown().optional(),
+  likelyParts: z.unknown().optional(),
+  estimatedLaborMinutes: z.number().int().positive().max(100_000).optional(),
+  customerVisible: z.boolean().optional(),
+});
+const reviewSchema = z.object({
+  decision: z.enum(["APPROVED", "CHANGES_REQUESTED"]),
+  note: z.string().trim().max(2000).optional(),
+});
+const changeRequestSchema = z.object({
+  reason: z.string().trim().min(1).max(500),
+  description: z.string().trim().min(1).max(4000),
+  estimatedPriceMinor: z.number().int().nonnegative().max(1_000_000_000),
+  currency: z.string().regex(/^[A-Za-z]{3}$/),
+  evidencePhotoIds: z.array(z.string().uuid()).max(20).optional(),
 });
 const startJobSchema = z.object({
   code: z.string().regex(/^\d{6}$/, "Code must be 6 digits"),
@@ -258,6 +290,71 @@ router.post(
         request.auth!,
         routeId(request.params.jobId),
         parsed.data.reason,
+      ),
+    });
+  },
+);
+
+router.get("/:jobId/findings", requireAuth, async (request, response) => {
+  response.status(200).json({
+    data: await listJobFindings(
+      request.auth!,
+      routeId(request.params.jobId),
+      request.auth!.role !== "OWNER" && request.auth!.role !== "DISPATCHER",
+    ),
+  });
+});
+
+router.post("/:jobId/findings", requireAuth, async (request, response) => {
+  const parsed = findingSchema.safeParse(request.body);
+  if (!parsed.success) {
+    sendValidationError(response, parsed.error);
+    return;
+  }
+  response.status(201).json({
+    data: await addJobFinding(
+      request.auth!,
+      routeId(request.params.jobId),
+      parsed.data,
+    ),
+  });
+});
+
+router.post(
+  "/:jobId/review",
+  requireAuth,
+  requireRole(...managerRoles),
+  async (request, response) => {
+    const parsed = reviewSchema.safeParse(request.body);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    response.status(200).json({
+      data: await reviewCompletedJob(
+        request.auth!,
+        routeId(request.params.jobId),
+        parsed.data.decision,
+        parsed.data.note,
+      ),
+    });
+  },
+);
+
+router.post(
+  "/:jobId/change-requests",
+  requireAuth,
+  async (request, response) => {
+    const parsed = changeRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    response.status(201).json({
+      data: await createJobChangeRequest(
+        request.auth!,
+        routeId(request.params.jobId),
+        parsed.data,
       ),
     });
   },

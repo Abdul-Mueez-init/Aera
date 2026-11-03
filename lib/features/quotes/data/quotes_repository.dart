@@ -119,6 +119,10 @@ class Quote {
     required this.id,
     required this.customerId,
     this.jobId,
+    this.serviceRequestId,
+    this.kind = 'GENERAL',
+    this.assumptions,
+    this.exclusions,
     required this.status,
     required this.subtotalMinor,
     required this.discountMinor,
@@ -141,6 +145,10 @@ class Quote {
   final String id;
   final String customerId;
   final String? jobId;
+  final String? serviceRequestId;
+  final String kind;
+  final String? assumptions;
+  final String? exclusions;
   final String status;
   final int subtotalMinor;
   final int discountMinor;
@@ -163,6 +171,10 @@ class Quote {
     id: json['id'] as String,
     customerId: json['customerId'] as String? ?? '',
     jobId: json['jobId'] as String?,
+    serviceRequestId: json['serviceRequestId'] as String?,
+    kind: json['kind'] as String? ?? 'GENERAL',
+    assumptions: json['assumptions'] as String?,
+    exclusions: json['exclusions'] as String?,
     status: json['status'] as String? ?? 'DRAFT',
     // subtotalMinor/discountMinor/taxMinor/totalMinor are Postgres BigInt,
     // serialized as JSON strings.
@@ -233,28 +245,43 @@ class CreateQuoteInput {
   const CreateQuoteInput({
     required this.customerId,
     this.jobId,
+    this.serviceRequestId,
+    this.kind = 'GENERAL',
     required this.currency,
     this.discountMinor = 0,
     this.taxRateBps = 0,
     this.expiresAt,
+    this.assumptions,
+    this.exclusions,
     required this.items,
   });
 
   final String customerId;
   final String? jobId;
+  final String? serviceRequestId;
+  final String kind;
   final String currency;
   final num discountMinor;
   final num taxRateBps;
   final DateTime? expiresAt;
+  final String? assumptions;
+  final String? exclusions;
   final List<CreateQuoteItemInput> items;
 
   Map<String, dynamic> toJson() => {
     'customerId': customerId,
     if (jobId != null && jobId!.isNotEmpty) 'jobId': jobId,
+    if (serviceRequestId != null && serviceRequestId!.isNotEmpty)
+      'serviceRequestId': serviceRequestId,
+    'kind': kind,
     'currency': currency.toUpperCase(),
     'discountMinor': discountMinor,
     'taxRateBps': taxRateBps,
     if (expiresAt != null) 'expiresAt': expiresAt!.toUtc().toIso8601String(),
+    if (assumptions != null && assumptions!.trim().isNotEmpty)
+      'assumptions': assumptions!.trim(),
+    if (exclusions != null && exclusions!.trim().isNotEmpty)
+      'exclusions': exclusions!.trim(),
     'items': items.map((i) => i.toJson()).toList(),
   };
 }
@@ -281,8 +308,9 @@ class QuotesRepository {
       );
       final map = res as Map<String, dynamic>;
       quotes.addAll(
-        (map['items'] as List<dynamic>)
-            .map((q) => Quote.fromJson(q as Map<String, dynamic>)),
+        (map['items'] as List<dynamic>).map(
+          (q) => Quote.fromJson(q as Map<String, dynamic>),
+        ),
       );
       final meta = map['meta'] as Map<String, dynamic>?;
       final pageCount = (meta?['pageCount'] as num?)?.toInt() ?? page;
@@ -309,6 +337,11 @@ class QuotesRepository {
 
   Future<Quote> sendQuote(String quoteId) async {
     final res = await _client.post('/api/v1/quotes/$quoteId/send');
+    return Quote.fromJson(res as Map<String, dynamic>);
+  }
+
+  Future<Quote> reviseQuote(String quoteId) async {
+    final res = await _client.post('/api/v1/quotes/$quoteId/revise');
     return Quote.fromJson(res as Map<String, dynamic>);
   }
 

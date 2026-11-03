@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/network/api_response.dart';
 import '../../core/theme/aera_colors.dart';
@@ -43,6 +44,7 @@ class QuoteDetailScreen extends ConsumerStatefulWidget {
 class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   bool _sending = false;
   bool _responding = false;
+  bool _revising = false;
 
   Future<void> _respondQuote(bool approve) async {
     // Approving a job-linked quote advances the job server-side
@@ -106,6 +108,31 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
       }
     } finally {
       if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _reviseQuote() async {
+    setState(() => _revising = true);
+    try {
+      final revised = await ref
+          .read(quotesRepositoryProvider)
+          .reviseQuote(widget.quoteId);
+      ref.invalidate(quotesListProvider);
+      if (mounted) {
+        context.pushReplacement('/quotes/${revised.id}');
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is ApiException ? error.message : 'Could not revise quote',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _revising = false);
     }
   }
 
@@ -391,6 +418,20 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
                   onPressed: (_sending || _responding)
                       ? null
                       : () => _respondQuote(false),
+                ),
+              ],
+              if (quote.status == 'SENT' ||
+                  quote.status == 'APPROVED' ||
+                  quote.status == 'DECLINED' ||
+                  quote.status == 'EXPIRED') ...[
+                const SizedBox(height: 10),
+                AeraButton(
+                  text: 'Create Revision',
+                  icon: const Icon(Icons.copy_outlined, size: 18),
+                  isLoading: _revising,
+                  onPressed: (_revising || _sending || _responding)
+                      ? null
+                      : _reviseQuote,
                 ),
               ],
               const SizedBox(height: 20),

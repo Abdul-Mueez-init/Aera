@@ -13,11 +13,14 @@ import { customerRouter } from "./modules/customers/customer.routes.js";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
 import { jobRouter } from "./modules/jobs/job.routes.js";
 import { schedulingRouter } from "./modules/scheduling/scheduling.routes.js";
+import { bookingRouter } from "./modules/scheduling/booking.routes.js";
 import { quoteRouter } from "./modules/quotes/quote.routes.js";
 import { invoiceRouter } from "./modules/invoices/invoice.routes.js";
 import { portalRouter } from "./modules/portal/portal.routes.js";
 import { notificationRouter } from "./modules/notifications/notification.routes.js";
 import { aiRouter } from "./modules/ai/ai.routes.js";
+import { requestRouter } from "./modules/requests/request.routes.js";
+import { trackingRouter } from "./modules/tracking/tracking.routes.js";
 
 export function buildApp() {
   const app = express();
@@ -136,7 +139,14 @@ export function buildApp() {
   app.use("/api/v1/customers", customerRouter);
   app.use("/api/v1/dashboard", dashboardRouter);
   app.use("/api/v1/jobs", jobRouter);
+  app.use("/api/v1/jobs", trackingRouter);
+  if (env.REQUESTS_ENABLED) {
+    app.use("/api/v1/service-requests", requestRouter);
+  }
   app.use("/api/v1/schedule", schedulingRouter);
+  if (env.BOOKING_ENABLED) {
+    app.use("/api/v1/booking", bookingRouter);
+  }
   app.use("/api/v1/quotes", quoteRouter);
   app.use("/api/v1/invoices", invoiceRouter);
   app.use("/api/v1/portal", portalRouter);

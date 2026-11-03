@@ -1,6 +1,9 @@
 import { AppError } from "../../common/errors.js";
 import type { AuthContext } from "../../common/auth/auth.types.js";
 import { prisma } from "../../db/prisma.js";
+import { env } from "../../config/env.js";
+import { getNextJobNumber } from "../../common/counters/counter.service.js";
+import { assertRequestTransition } from "../requests/request.state.js";
 import { notificationPublisher } from "../notifications/notification.port.js";
 import {
   calculateLineItemTotal,
@@ -23,10 +26,14 @@ export interface QuoteItemInput {
 export interface CreateQuoteInput {
   customerId: string;
   jobId?: string;
+  serviceRequestId?: string;
+  kind?: "INSPECTION" | "REPAIR" | "INSTALLATION" | "CHANGE_ORDER" | "GENERAL";
   currency: string;
   discountMinor?: number;
   taxRateBps?: number;
   expiresAt?: Date;
+  assumptions?: string;
+  exclusions?: string;
   items: QuoteItemInput[];
 }
 
@@ -43,6 +50,11 @@ const quoteSelect = {
   companyId: true,
   customerId: true,
   jobId: true,
+  serviceRequestId: true,
+  supersedesQuoteId: true,
+  kind: true,
+  assumptions: true,
+  exclusions: true,
   status: true,
   subtotalMinor: true,
   discountMinor: true,
@@ -83,7 +95,7 @@ const quoteSelect = {
   },
 } as const;
 
-function calculateTotals(input: CreateQuoteInput) {
+export function computeQuoteTotals(input: Pick<CreateQuoteInput, "items" | "discountMinor" | "taxRateBps">) {
   // Use exact integer arithmetic for all money calculations
   const subtotalMinor = calculateSubtotal(
     input.items.map((item) => ({
@@ -138,7 +150,7 @@ async function assertQuoteReferences(
   }
 }
 
-function assertTotals(totals: ReturnType<typeof calculateTotals>) {
+function assertTotals(totals: ReturnType<typeof computeQuoteTotals>) {
   try {
     validateMonetaryCalculations(
       BigInt(totals.subtotalMinor),
@@ -155,7 +167,27 @@ export async function createQuote(
   input: CreateQuoteInput,
 ) {
   await assertQuoteReferences(context, input.customerId, input.jobId);
-  const totals = calculateTotals(input);
+  if (input.serviceRequestId) {
+    const request = await prisma.serviceRequest.findFirst({
+      where: {
+        id: input.serviceRequestId,
+        companyId: context.companyId,
+        customerId: input.customerId,
+      },
+      select: { id: true },
+    });
+    if (!request) {
+      throw new AppError("QUOTE_INVALID_REQUEST", "Service request not found", 422);
+    }
+  }
+  if (env.QUOTE_BEFORE_JOB_ENABLED && !input.jobId && !input.serviceRequestId) {
+    throw new AppError(
+      "QUOTE_REQUIRES_REQUEST",
+      "Quote must be linked to a service request or job",
+      422,
+    );
+  }
+  const totals = computeQuoteTotals(input);
   assertTotals(totals);
 
   const quote = await prisma.$transaction(async (transaction) => {
@@ -164,6 +196,10 @@ export async function createQuote(
         companyId: context.companyId,
         customerId: input.customerId,
         jobId: input.jobId,
+        serviceRequestId: input.serviceRequestId,
+        kind: input.kind ?? "GENERAL",
+        assumptions: input.assumptions?.trim(),
+        exclusions: input.exclusions?.trim(),
         currency: input.currency.toUpperCase(),
         expiresAt: input.expiresAt,
         ...totals,
@@ -256,6 +292,91 @@ export async function getQuote(context: AuthContext, quoteId: string) {
   return jsonSafe(quote);
 }
 
+export async function updateQuote(
+  context: AuthContext,
+  quoteId: string,
+  input: Omit<CreateQuoteInput, "customerId" | "jobId" | "serviceRequestId">,
+) {
+  const quote = await prisma.quote.findFirst({
+    where: { id: quoteId, companyId: context.companyId },
+    select: { id: true, status: true },
+  });
+  if (!quote) throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
+  if (quote.status !== "DRAFT") {
+    throw new AppError("QUOTE_NOT_EDITABLE", "Only draft quotes can be edited", 409);
+  }
+  const totals = computeQuoteTotals(input);
+  assertTotals(totals);
+  const updated = await prisma.$transaction(async (transaction) => {
+    await transaction.quoteItem.deleteMany({ where: { quoteId, companyId: context.companyId } });
+    return transaction.quote.update({
+      where: { id: quoteId },
+      data: {
+        currency: input.currency.toUpperCase(),
+        kind: input.kind ?? "GENERAL",
+        assumptions: input.assumptions?.trim(),
+        exclusions: input.exclusions?.trim(),
+        expiresAt: input.expiresAt,
+        ...totals,
+        items: {
+          create: input.items.map((item, index) => ({
+            companyId: context.companyId,
+            description: item.description.trim(),
+            quantity: item.quantity,
+            unitPriceMinor: BigInt(item.unitPriceMinor),
+            totalMinor: calculateLineItemTotal(BigInt(item.unitPriceMinor), item.quantity),
+            sortOrder: index,
+          })),
+        },
+      },
+      select: quoteSelect,
+    });
+  });
+  return jsonSafe(updated);
+}
+
+export async function reviseQuote(context: AuthContext, quoteId: string) {
+  const original = await prisma.quote.findFirst({
+    where: { id: quoteId, companyId: context.companyId },
+    include: { items: { orderBy: { sortOrder: "asc" } } },
+  });
+  if (!original) throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
+  if (!["SENT", "APPROVED", "DECLINED", "EXPIRED"].includes(original.status)) {
+    throw new AppError("QUOTE_NOT_REVISIONABLE", "Quote cannot be revised in its current state", 409);
+  }
+  const revision = await prisma.quote.create({
+    data: {
+      companyId: context.companyId,
+      customerId: original.customerId,
+      jobId: original.jobId,
+      serviceRequestId: original.serviceRequestId,
+      kind: original.kind,
+      supersedesQuoteId: original.id,
+      currency: original.currency,
+      assumptions: original.assumptions,
+      exclusions: original.exclusions,
+      subtotalMinor: original.subtotalMinor,
+      discountMinor: original.discountMinor,
+      taxMinor: original.taxMinor,
+      taxRateBps: original.taxRateBps,
+      totalMinor: original.totalMinor,
+      expiresAt: original.expiresAt,
+      items: {
+        create: original.items.map((item) => ({
+          companyId: context.companyId,
+          description: item.description,
+          quantity: item.quantity,
+          unitPriceMinor: item.unitPriceMinor,
+          totalMinor: item.totalMinor,
+          sortOrder: item.sortOrder,
+        })),
+      },
+    },
+    select: quoteSelect,
+  });
+  return jsonSafe(revision);
+}
+
 export async function sendQuote(context: AuthContext, quoteId: string) {
   const quote = await prisma.quote.findFirst({
     where: { id: quoteId, companyId: context.companyId },
@@ -263,6 +384,8 @@ export async function sendQuote(context: AuthContext, quoteId: string) {
       id: true,
       status: true,
       jobId: true,
+      serviceRequestId: true,
+      supersedesQuoteId: true,
       expiresAt: true,
     },
   });
@@ -276,9 +399,7 @@ export async function sendQuote(context: AuthContext, quoteId: string) {
       409,
     );
   }
-  // D4 decision (Moiz, 2026-10-26): the customer portal is job-scoped, so a
-  // quote with no job could never be shown to the customer. Block the send.
-  if (!quote.jobId) {
+  if (!env.QUOTE_BEFORE_JOB_ENABLED && !quote.jobId) {
     throw new AppError(
       "QUOTE_REQUIRES_JOB",
       "Connect this quote to a job first",
@@ -293,14 +414,56 @@ export async function sendQuote(context: AuthContext, quoteId: string) {
     );
   }
 
-  const sent = await prisma.quote.update({
-    where: { id: quoteId },
-    data: {
-      status: "SENT",
-      sentAt: new Date(),
-      declinedAt: null,
-    },
-    select: quoteSelect,
+  const sent = await prisma.$transaction(async (transaction) => {
+    const updated = await transaction.quote.update({
+      where: { id: quoteId },
+      data: {
+        status: "SENT",
+        sentAt: new Date(),
+        declinedAt: null,
+      },
+      select: quoteSelect,
+    });
+    if (quote.supersedesQuoteId) {
+      await transaction.quote.updateMany({
+        where: {
+          id: quote.supersedesQuoteId,
+          companyId: context.companyId,
+          status: "SENT",
+        },
+        data: {
+          status: "EXPIRED",
+          supersededByQuoteId: quoteId,
+        },
+      });
+    }
+    if (env.QUOTE_BEFORE_JOB_ENABLED && quote.serviceRequestId) {
+      const request = await transaction.serviceRequest.findFirstOrThrow({
+        where: {
+          id: quote.serviceRequestId!,
+          companyId: context.companyId,
+        },
+        select: { status: true },
+      });
+      if (request.status !== "QUOTED") {
+        assertRequestTransition(request.status, "QUOTED");
+        await transaction.serviceRequest.update({
+          where: { id: quote.serviceRequestId! },
+          data: { status: "QUOTED" },
+        });
+        await transaction.serviceRequestEvent.create({
+          data: {
+            companyId: context.companyId,
+            requestId: quote.serviceRequestId!,
+            actorUserId: context.userId,
+            type: "STATUS_CHANGED",
+            fromStatus: request.status,
+            toStatus: "QUOTED",
+          },
+        });
+      }
+    }
+    return updated;
   });
   void notificationPublisher.publish({
     type: "QUOTE_SENT",
@@ -318,6 +481,8 @@ export interface ProcessQuoteResponseOptions {
   source: "CUSTOMER" | "STAFF";
   actorUserId?: string;
   now?: Date;
+  portalSessionId?: string;
+  userAgentHash?: string;
 }
 
 /**
@@ -367,6 +532,32 @@ export async function processQuoteResponse(
       );
     }
 
+    const quote = await transaction.quote.findFirstOrThrow({
+      where: { id: quoteId, companyId },
+      select: {
+        customerId: true,
+        serviceRequestId: true,
+        kind: true,
+        assumptions: true,
+        exclusions: true,
+        subtotalMinor: true,
+        discountMinor: true,
+        taxMinor: true,
+        totalMinor: true,
+        currency: true,
+        items: {
+          orderBy: { sortOrder: "asc" },
+          select: {
+            description: true,
+            quantity: true,
+            unitPriceMinor: true,
+            totalMinor: true,
+            sortOrder: true,
+          },
+        },
+      },
+    });
+
     await transaction.quoteApprovalEvent.create({
       data: {
         companyId,
@@ -376,6 +567,146 @@ export async function processQuoteResponse(
         source,
       },
     });
+
+    if (action === "APPROVED") {
+      await transaction.quoteAcceptance.create({
+        data: {
+          quoteId,
+          companyId,
+          acceptedByType: source === "STAFF" ? "STAFF" : "PORTAL",
+          actorUserId: actorUserId ?? null,
+          portalSessionId: options.portalSessionId ?? null,
+          subtotalMinor: quote.subtotalMinor,
+          discountMinor: quote.discountMinor,
+          taxMinor: quote.taxMinor,
+          totalMinor: quote.totalMinor,
+          currency: quote.currency,
+          itemsSnapshot: quote.items.map((item) => ({
+            description: item.description,
+            quantity: item.quantity.toString(),
+            unitPriceMinor: item.unitPriceMinor.toString(),
+            totalMinor: item.totalMinor.toString(),
+            sortOrder: item.sortOrder,
+          })),
+          termsSnapshot: {
+            assumptions: quote.assumptions,
+            exclusions: quote.exclusions,
+          },
+          userAgentHash: options.userAgentHash,
+          acceptedAt: now,
+        },
+      });
+
+      if (quote.serviceRequestId) {
+        const request = await transaction.serviceRequest.findFirstOrThrow({
+          where: { id: quote.serviceRequestId, companyId },
+          select: {
+            id: true,
+            customerId: true,
+            serviceAddressId: true,
+            serviceCategory: true,
+            description: true,
+            priority: true,
+            status: true,
+          },
+        });
+        if (request.status !== "ACCEPTED") {
+          assertRequestTransition(request.status, "ACCEPTED");
+          await transaction.serviceRequest.update({
+            where: { id: request.id },
+            data: { status: "ACCEPTED" },
+          });
+          await transaction.serviceRequestEvent.create({
+            data: {
+              companyId,
+              requestId: request.id,
+              actorUserId: actorUserId ?? null,
+              type: "STATUS_CHANGED",
+              fromStatus: request.status,
+              toStatus: "ACCEPTED",
+            },
+          });
+        }
+
+        if (quote.kind !== "CHANGE_ORDER") {
+          const type =
+            quote.kind === "INSPECTION"
+              ? "DIAGNOSTIC"
+              : quote.kind === "REPAIR"
+                ? "REPAIR"
+                : quote.kind === "INSTALLATION"
+                  ? "INSTALLATION"
+                  : "OTHER";
+          const jobNumber = await getNextJobNumber(companyId, transaction);
+          const createdJob = await transaction.job.create({
+            data: {
+              companyId,
+              customerId: request.customerId,
+              serviceAddressId: request.serviceAddressId,
+              serviceRequestId: request.id,
+              sourceQuoteId: quoteId,
+              jobNumber,
+              type,
+              serviceType: request.serviceCategory,
+              problemDescription: request.description,
+              priority: request.priority,
+            },
+          });
+          const historyActorId =
+            actorUserId ??
+            (
+              await transaction.companyMember.findFirst({
+                where: { companyId, role: "OWNER", status: "ACTIVE" },
+                select: { userId: true },
+              })
+            )?.userId;
+          if (historyActorId) {
+            await transaction.jobStatusHistory.create({
+              data: {
+                companyId,
+                jobId: createdJob.id,
+                actorUserId: historyActorId,
+                toStatus: "NEW",
+                reason: "Created from accepted quote",
+              },
+            });
+          }
+        }
+      }
+    }
+    if (action === "DECLINED" && quote.serviceRequestId) {
+      const openQuote = await transaction.quote.findFirst({
+        where: {
+          serviceRequestId: quote.serviceRequestId,
+          companyId,
+          id: { not: quoteId },
+          status: { in: ["SENT", "APPROVED"] },
+        },
+        select: { id: true },
+      });
+      if (!openQuote) {
+        const request = await transaction.serviceRequest.findFirstOrThrow({
+          where: { id: quote.serviceRequestId, companyId },
+          select: { status: true },
+        });
+        if (request.status === "QUOTED") {
+          await transaction.serviceRequest.update({
+            where: { id: quote.serviceRequestId },
+            data: { status: "DECLINED" },
+          });
+          await transaction.serviceRequestEvent.create({
+            data: {
+              companyId,
+              requestId: quote.serviceRequestId,
+              actorUserId: actorUserId ?? null,
+              type: "STATUS_CHANGED",
+              fromStatus: "QUOTED",
+              toStatus: "DECLINED",
+            },
+          });
+        }
+      }
+    }
 
     if (action === "APPROVED" && jobId) {
       const job = await transaction.job.findFirst({

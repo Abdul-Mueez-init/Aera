@@ -139,6 +139,8 @@ class Invoice {
     required this.customerId,
     this.jobId,
     this.quoteId,
+    this.serviceRequestId,
+    this.kind = 'STANDARD',
     required this.invoiceNumber,
     required this.status,
     required this.subtotalMinor,
@@ -164,6 +166,8 @@ class Invoice {
   final String customerId;
   final String? jobId;
   final String? quoteId;
+  final String? serviceRequestId;
+  final String kind;
   final String invoiceNumber;
   final String status;
   final int subtotalMinor;
@@ -189,6 +193,8 @@ class Invoice {
     customerId: json['customerId'] as String? ?? '',
     jobId: json['jobId'] as String?,
     quoteId: json['quoteId'] as String?,
+    serviceRequestId: json['serviceRequestId'] as String?,
+    kind: json['kind'] as String? ?? 'STANDARD',
     invoiceNumber: json['invoiceNumber'] as String? ?? '',
     status: json['status'] as String? ?? 'DRAFT',
     // subtotalMinor/discountMinor/taxMinor/totalMinor/amountPaidMinor/

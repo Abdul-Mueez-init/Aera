@@ -17,7 +17,7 @@ export function isValidE164(phone: string | null | undefined): boolean {
 
 export interface PortalLinkMessageInput {
   companyName: string;
-  jobNumber: number;
+  jobNumber?: number;
   link: string;
 }
 
@@ -42,15 +42,18 @@ export interface EmailMessage {
 }
 
 export function portalLinkSms(input: PortalLinkMessageInput): string {
-  return `${input.companyName}: open your service portal for job #${input.jobNumber}: ${input.link} — use this phone. The link works once.`;
+  const serviceLabel = input.jobNumber
+    ? `for job #${input.jobNumber}`
+    : "for your service workspace";
+  return `${input.companyName}: open your service portal ${serviceLabel}: ${input.link} — use this phone. The link works once.`;
 }
 
 export function portalLinkEmail(input: PortalLinkEmailInput): EmailMessage {
-  const subject = `${input.companyName}: Your service portal for job #${input.jobNumber}`;
+  const subject = `${input.companyName}: Your service portal${input.jobNumber ? ` for job #${input.jobNumber}` : ""}`;
   const text = [
     `Hello ${input.customerFirstName},`,
     "",
-    `${input.companyName}: open your service portal for job #${input.jobNumber}: ${input.link}`,
+    `${input.companyName}: open your service portal${input.jobNumber ? ` for job #${input.jobNumber}` : ""}: ${input.link}`,
     "",
     "Use this phone or device — the link works once.",
     "",
@@ -58,7 +61,7 @@ export function portalLinkEmail(input: PortalLinkEmailInput): EmailMessage {
   ].join("\n");
   const html = [
     `<p>Hello ${escapeHtml(input.customerFirstName)},</p>`,
-    `<p>${escapeHtml(input.companyName)}: open your service portal for job #${input.jobNumber}: <a href="${escapeHtml(input.link)}">${escapeHtml(input.link)}</a></p>`,
+    `<p>${escapeHtml(input.companyName)}: open your service portal${input.jobNumber ? ` for job #${input.jobNumber}` : ""}: <a href="${escapeHtml(input.link)}">${escapeHtml(input.link)}</a></p>`,
     `<p>Use this phone or device — the link works once.</p>`,
     `<p>- ${escapeHtml(input.companyName)}</p>`,
   ].join("\n");

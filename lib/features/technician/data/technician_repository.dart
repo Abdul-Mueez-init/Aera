@@ -39,6 +39,22 @@ class TechnicianRepository {
 
   final ApiClient _client;
 
+  Future<void> updateLocation(
+    String jobId, {
+    required double latitude,
+    required double longitude,
+    double? accuracy,
+  }) async {
+    await _client.post(
+      '/api/v1/jobs/$jobId/location',
+      body: {
+        'latitude': latitude,
+        'longitude': longitude,
+        ...?accuracy == null ? null : {'accuracy': accuracy},
+      },
+    );
+  }
+
   /// Backs the Technician Home screen. Same `jobSelect()` shape as
   /// `GET /jobs/:jobId`, so plain `Job.fromJson` is safe here — no photos/
   /// parts/notes on this endpoint (those only appear on job detail), which

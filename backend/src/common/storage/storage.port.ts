@@ -28,3 +28,9 @@ export interface StoragePort {
   ): Promise<SignedUploadResult>;
   verifyUpload(request: VerifyUploadRequest): Promise<VerifyUploadResult>;
 }
+
+export interface RequestMediaUploadResult {
+  objectKey: string;
+  uploadUrl: string;
+  expiresAt: string;
+}

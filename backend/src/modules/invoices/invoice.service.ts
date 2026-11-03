@@ -43,6 +43,8 @@ const invoiceSelect = {
   customerId: true,
   jobId: true,
   quoteId: true,
+  serviceRequestId: true,
+  kind: true,
   invoiceNumber: true,
   status: true,
   subtotalMinor: true,
@@ -71,6 +73,8 @@ const invoiceSelect = {
       unitPriceMinor: true,
       totalMinor: true,
       sortOrder: true,
+      sourceType: true,
+      sourceId: true,
     },
   },
   payments: {
@@ -124,6 +128,7 @@ async function getCompletedJobSource(
       id: true,
       customerId: true,
       status: true,
+      reviewState: true,
       serviceType: true,
       problemDescription: true,
       assignedTechnicianId: true,
@@ -141,6 +146,7 @@ async function getCompletedJobSource(
           items: {
             orderBy: { sortOrder: "asc" },
             select: {
+              id: true,
               description: true,
               quantity: true,
               unitPriceMinor: true,
@@ -153,6 +159,7 @@ async function getCompletedJobSource(
       parts: {
         orderBy: { createdAt: "asc" },
         select: {
+          id: true,
           name: true,
           quantity: true,
           unitPriceMinor: true,
@@ -168,6 +175,13 @@ async function getCompletedJobSource(
     throw new AppError(
       "INVOICE_JOB_NOT_COMPLETED",
       "Only completed jobs can generate invoices",
+      422,
+    );
+  }
+  if (job.reviewState !== "NOT_REQUIRED" && job.reviewState !== "APPROVED") {
+    throw new AppError(
+      "INVOICE_REVIEW_REQUIRED",
+      "Completion review must be approved before invoicing",
       422,
     );
   }
@@ -199,6 +213,8 @@ export async function generateInvoiceFromJob(
     unitPriceMinor: bigint;
     totalMinor: bigint;
     sortOrder: number;
+    sourceType: "QUOTE_ITEM" | "JOB_PART" | "MANUAL";
+    sourceId?: string;
   };
 
   let items: InvoiceItemDraft[];
@@ -210,6 +226,8 @@ export async function generateInvoiceFromJob(
       unitPriceMinor: item.unitPriceMinor,
       totalMinor: item.totalMinor,
       sortOrder: item.sortOrder,
+      sourceType: "QUOTE_ITEM",
+      sourceId: item.id,
     }));
   } else if (job.parts.length > 0) {
     items = job.parts.map((part, index) => ({
@@ -221,6 +239,8 @@ export async function generateInvoiceFromJob(
         part.quantity.toString(),
       ),
       sortOrder: index,
+      sourceType: "JOB_PART",
+      sourceId: part.id,
     }));
   } else {
     if (!options.allowZeroAmount) {
@@ -237,6 +257,7 @@ export async function generateInvoiceFromJob(
         unitPriceMinor: BigInt(0),
         totalMinor: BigInt(0),
         sortOrder: 0,
+        sourceType: "MANUAL",
       },
     ];
   }
@@ -313,6 +334,8 @@ export async function generateInvoiceFromJob(
             unitPriceMinor: item.unitPriceMinor,
             totalMinor: item.totalMinor,
             sortOrder: item.sortOrder,
+            sourceType: item.sourceType,
+            sourceId: item.sourceId,
           })),
         },
       },
@@ -401,7 +424,12 @@ export async function listInvoicePayments(
 export async function issueInvoice(context: AuthContext, invoiceId: string) {
   const invoice = await prisma.invoice.findFirst({
     where: { id: invoiceId, companyId: context.companyId },
-    select: { id: true, status: true, dueAt: true },
+    select: {
+      id: true,
+      status: true,
+      dueAt: true,
+      job: { select: { reviewState: true } },
+    },
   });
   if (!invoice) {
     throw new AppError("RESOURCE_NOT_FOUND", "Invoice not found", 404);
@@ -415,6 +443,17 @@ export async function issueInvoice(context: AuthContext, invoiceId: string) {
   }
   if (invoice.status !== "DRAFT") {
     throw new AppError("INVOICE_NOT_ISSUABLE", "Invoice cannot be issued", 409);
+  }
+  if (
+    invoice.job &&
+    invoice.job.reviewState !== "NOT_REQUIRED" &&
+    invoice.job.reviewState !== "APPROVED"
+  ) {
+    throw new AppError(
+      "INVOICE_REVIEW_REQUIRED",
+      "Completion review must be approved before invoicing",
+      422,
+    );
   }
   const issuedAt = new Date();
   // Status-guarded claim: only the caller that actually flips DRAFT ->

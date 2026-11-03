@@ -115,6 +115,9 @@ void main() {
         '/technician/jobs/abc/brief',
         '/create-job',
         '/team',
+        '/service-requests',
+        '/service-requests/abc',
+        '/create-service-request',
       ]) {
         expect(_redirect(AuthGate.signedOut, path), '/welcome', reason: path);
       }

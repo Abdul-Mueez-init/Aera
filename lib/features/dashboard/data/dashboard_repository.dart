@@ -13,6 +13,8 @@ class DashboardSummary {
     required this.jobsToday,
     required this.jobsByStatus,
     required this.unassignedJobs,
+    this.openServiceRequests = 0,
+    this.needsInfoServiceRequests = 0,
     required this.outstandingInvoices,
     required this.revenueThisMonth,
   });
@@ -22,6 +24,8 @@ class DashboardSummary {
   final int jobsToday;
   final List<JobStatusCount> jobsByStatus;
   final int unassignedJobs;
+  final int openServiceRequests;
+  final int needsInfoServiceRequests;
   final OutstandingInvoices outstandingInvoices;
   final RevenueThisMonth revenueThisMonth;
 
@@ -36,6 +40,9 @@ class DashboardSummary {
                 .toList() ??
             [],
         unassignedJobs: json['unassignedJobs'] as int? ?? 0,
+        openServiceRequests: json['openServiceRequests'] as int? ?? 0,
+        needsInfoServiceRequests:
+            json['needsInfoServiceRequests'] as int? ?? 0,
         outstandingInvoices: OutstandingInvoices.fromJson(
           json['outstandingInvoices'] as Map<String, dynamic>? ?? {},
         ),

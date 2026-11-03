@@ -110,6 +110,13 @@ class MoreScreen extends ConsumerWidget {
           _sectionHeader('COMMERCIAL & REVENUE'),
           _navItem(
             context,
+            icon: Icons.assignment_outlined,
+            title: 'Service Requests',
+            subtitle: 'Triage new work before dispatch',
+            route: '/service-requests',
+          ),
+          _navItem(
+            context,
             icon: Icons.request_quote,
             title: 'Quotes & Proposals',
             subtitle: 'Create, send and track customer quotes',

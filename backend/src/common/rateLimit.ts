@@ -282,3 +282,21 @@ export const handshakeRateLimiter = rateLimit({
     );
   },
 });
+
+export const trackingRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 6,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === "test",
+  keyGenerator: (request) => request.auth?.userId ?? "unauthenticated",
+  handler: (_request, _response, next) => {
+    next(
+      new AppError(
+        "RATE_LIMITED",
+        "Location updates are limited to once every 10 seconds.",
+        429,
+      ),
+    );
+  },
+});

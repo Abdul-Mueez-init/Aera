@@ -43,4 +43,17 @@ describe("job API boundaries", () => {
       expect(response.body.error.code).toBe("AUTH_SESSION_EXPIRED");
     }
   });
+
+  it("rejects unauthenticated Phase 6 execution context commands", async () => {
+    const jobId = "00000000-0000-0000-0000-000000000000";
+    const [findings, review, changeRequest] = await Promise.all([
+      request(app).get(`/api/v1/jobs/${jobId}/findings`),
+      request(app).post(`/api/v1/jobs/${jobId}/review`).send({}),
+      request(app).post(`/api/v1/jobs/${jobId}/change-requests`).send({}),
+    ]);
+
+    expect(findings.status).toBe(401);
+    expect(review.status).toBe(401);
+    expect(changeRequest.status).toBe(401);
+  });
 });

@@ -12,6 +12,8 @@ import {
   listTokensForUsers,
   removeInvalidToken,
 } from "./device-token.service.js";
+import { env } from "../../config/env.js";
+import { enqueueNotificationOutbox } from "./notification-outbox.service.js";
 
 export type NotificationEventType =
   | "JOB_SCHEDULED"
@@ -294,6 +296,41 @@ inProcessQueue.registerHandler<NotificationEvent>(
 
 export const notificationPublisher: NotificationPublisher = {
   async publish(event: NotificationEvent): Promise<void> {
+    if (env.NOTIFICATION_OUTBOX_ENABLED) {
+      try {
+        const recipients = await resolveRecipients(event);
+        const payload = buildPayload(event);
+        const channels = ["IN_APP", "EMAIL", "PUSH", "SMS"] as const;
+        await Promise.all(
+          recipients.flatMap((recipient) =>
+            channels.map((channel) =>
+              enqueueNotificationOutbox({
+                companyId: event.companyId,
+                recipientUserId: recipient.userId,
+                channel,
+                template: event.type,
+                payload,
+                dedupeKey: [
+                  event.companyId,
+                  recipient.userId,
+                  channel,
+                  event.type,
+                  event.jobId ?? "",
+                  event.quoteId ?? "",
+                  event.invoiceId ?? "",
+                ].join(":"),
+              }),
+            ),
+          ),
+        );
+      } catch (error) {
+        logger.warn(
+          { err: error, eventType: event.type, companyId: event.companyId },
+          "Failed to persist notification outbox event",
+        );
+      }
+      return;
+    }
     // Notification delivery must never break the primary business
     // transaction that triggered it (architecture.md ADR-009). Enqueuing
     // keeps this off the request path; the queue adapter owns retries and

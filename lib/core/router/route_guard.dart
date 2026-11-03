@@ -68,6 +68,11 @@ const Set<String> _technicianExact = {
   '/notifications',
 };
 
+const Set<String> _managerOnlyExact = {
+  '/service-requests',
+  '/create-service-request',
+};
+
 const List<String> _technicianPrefixes = [
   '/technician/', // job brief, en route, work, evidence, complete
   '/jobs/', // job detail (opened from the job brief); NOT the '/jobs' list
@@ -187,6 +192,10 @@ String? resolveRedirect({
         return roleHome(role);
       }
       if (role == 'TECHNICIAN' && !isTechnicianAllowedPath(p)) {
+        return kTechnicianHomePath;
+      }
+      if (role == 'TECHNICIAN' &&
+          (_managerOnlyExact.contains(p) || p.startsWith('/service-requests/'))) {
         return kTechnicianHomePath;
       }
       return null;

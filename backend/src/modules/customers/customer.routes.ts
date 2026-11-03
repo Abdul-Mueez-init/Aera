@@ -11,6 +11,14 @@ import {
   listCustomers,
   updateCustomer,
 } from "./customer.service.js";
+import {
+  issueWorkspaceGrant,
+  reissueWorkspaceGrant,
+  revokeWorkspaceGrant,
+  getWorkspaceGrantStatus,
+} from "../portal/portal.grants.js";
+import { sendPortalLink } from "../portal/portal-delivery.service.js";
+import { portalWriteRateLimiter } from "../../common/rateLimit.js";
 
 const router = Router();
 const manageCustomers = ["OWNER", "DISPATCHER"] as const;
@@ -54,6 +62,13 @@ const customerJobsQuerySchema = z.object({
   pageSize: z.coerce.number().int().positive().max(100).default(20),
 });
 
+const portalAccessSchema = z.object({
+  channels: z
+    .array(z.enum(["SMS", "EMAIL"]))
+    .min(1)
+    .default(["SMS", "EMAIL"]),
+});
+
 function sendValidationError(response: Response, error: z.ZodError) {
   response.status(422).json({
     error: {
@@ -79,6 +94,102 @@ router.get(
         companyId: request.auth!.companyId,
         ...parsed.data,
       }),
+    });
+  },
+);
+
+router.post(
+  "/:customerId/portal-access",
+  requireAuth,
+  requireRole(...manageCustomers),
+  portalWriteRateLimiter,
+  async (request, response) => {
+    const parsed = portalAccessSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    const customerId = request.params.customerId as string;
+    const { grant, link } = await issueWorkspaceGrant(
+      request.auth!,
+      customerId,
+    );
+    const deliveries = await sendPortalLink({
+      companyId: request.auth!.companyId,
+      customerId,
+      grantId: grant.id,
+      link,
+      channels: parsed.data.channels,
+    });
+    response.status(201).json({
+      data: {
+        grantId: grant.id,
+        link,
+        linkExpiresAt: grant.linkExpiresAt,
+        deliveries,
+      },
+    });
+  },
+);
+
+router.post(
+  "/:customerId/portal-access/reissue",
+  requireAuth,
+  requireRole(...manageCustomers),
+  portalWriteRateLimiter,
+  async (request, response) => {
+    const parsed = portalAccessSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    const customerId = request.params.customerId as string;
+    const { grant, link } = await reissueWorkspaceGrant(
+      request.auth!,
+      customerId,
+    );
+    const deliveries = await sendPortalLink({
+      companyId: request.auth!.companyId,
+      customerId,
+      grantId: grant.id,
+      link,
+      channels: parsed.data.channels,
+    });
+    response.status(201).json({
+      data: {
+        grantId: grant.id,
+        link,
+        linkExpiresAt: grant.linkExpiresAt,
+        deliveries,
+      },
+    });
+  },
+);
+
+router.post(
+  "/:customerId/portal-access/revoke",
+  requireAuth,
+  requireRole(...manageCustomers),
+  portalWriteRateLimiter,
+  async (request, response) => {
+    await revokeWorkspaceGrant(
+      request.auth!,
+      request.params.customerId as string,
+    );
+    response.status(200).json({ data: { success: true } });
+  },
+);
+
+router.get(
+  "/:customerId/portal-access",
+  requireAuth,
+  requireRole(...manageCustomers),
+  async (request, response) => {
+    response.status(200).json({
+      data: await getWorkspaceGrantStatus(
+        request.auth!,
+        request.params.customerId as string,
+      ),
     });
   },
 );

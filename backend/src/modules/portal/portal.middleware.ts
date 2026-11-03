@@ -15,7 +15,8 @@ export interface PortalRequest extends Request {
     grantId: string;
     companyId: string;
     customerId: string;
-    jobId: string;
+    jobId: string | null;
+    scope: "JOB" | "WORKSPACE";
     expiresAt: Date;
   };
 }

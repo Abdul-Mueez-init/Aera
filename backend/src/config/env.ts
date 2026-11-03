@@ -36,6 +36,11 @@ const envSchema = z
     SUPABASE_URL: z.string().url(),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
     SUPABASE_JOB_PHOTOS_BUCKET: z.string().trim().min(1).default("job-photos"),
+    SUPABASE_REQUEST_MEDIA_BUCKET: z
+      .string()
+      .trim()
+      .min(1)
+      .default("request-media"),
     // OpenStreetMap configuration for geocoding and neighborhood discovery.
     // No API keys required; these are public services with usage policies.
     // OSM_USER_AGENT identifies the client to OSM services (required by policy).
@@ -191,6 +196,49 @@ const envSchema = z
     PORTAL_SWEEP_MINUTES: z.coerce.number().int().positive().default(60),
     HANDSHAKE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     HANDSHAKE_LOCK_MINUTES: z.coerce.number().int().positive().default(15),
+    REQUESTS_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PORTAL_REQUESTS_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    QUOTE_BEFORE_JOB_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    BOOKING_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    COMPLETION_REVIEW_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    INVOICE_FROM_SCOPE_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    LIVE_TRACKING_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    NOTIFICATION_OUTBOX_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    NOTIFICATION_OUTBOX_SWEEP_MINUTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(1),
+    NOTIFICATION_OUTBOX_MAX_ATTEMPTS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(20)
+      .default(5),
   })
   .superRefine((data, ctx) => {
     // Production/staging must fail closed: without these values the portal

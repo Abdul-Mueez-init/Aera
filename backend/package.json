@@ -18,7 +18,10 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "seed:demo": "tsx src/seed/seed-demo-data.ts"
+    "seed:demo": "tsx src/seed/seed-demo-data.ts",
+    "report:legacy-quotes": "tsx scripts/report-legacy-quotes.ts",
+    "backfill:legacy-requests": "tsx scripts/backfill-legacy-requests.ts --dry-run",
+    "check:phase8-integrity": "tsx scripts/check-phase8-integrity.ts"
   },
   "keywords": [],
   "author": "",

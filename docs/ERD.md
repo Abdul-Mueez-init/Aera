@@ -16,9 +16,27 @@ erDiagram
     Job ||--o{ JobNote : contains
     Job ||--o{ JobPhoto : contains
     Job ||--o{ JobPart : uses
+    Job ||--o{ JobFinding : records
+    Job ||--o{ JobChangeRequest : proposes
     Company ||--o{ Quote : owns
     Customer ||--o{ Quote : receives
     Job ||--o{ Quote : may_have
+    Company ||--o{ ServiceRequest : owns
+    Customer ||--o{ ServiceRequest : submits
+    ServiceAddress ||--o{ ServiceRequest : concerns
+    ServiceRequest ||--o{ ServiceRequestEvent : records
+    ServiceRequest ||--o{ Quote : receives
+    ServiceRequest ||--o{ Job : produces
+    Company ||--o{ CompanyBusinessHours : configures
+    Company ||--o{ TechnicianWorkingHours : configures
+    Company ||--o{ TechnicianTimeOff : blocks
+    User ||--o{ TechnicianSkill : qualifies
+    CompanyService ||--o{ TechnicianSkill : requires
+    ServiceRequest ||--o{ AppointmentProposal : receives
+    Job ||--o{ AppointmentProposal : schedules
+    Company ||--o{ AppointmentHold : owns
+    Job ||--o{ AppointmentHold : reserves
+    Quote ||--o| Job : sources
     Quote ||--o{ QuoteItem : contains
     Company ||--o{ Invoice : owns
     Customer ||--o{ Invoice : receives
@@ -26,6 +44,7 @@ erDiagram
     Quote ||--o{ Invoice : source
     Invoice ||--o{ InvoiceItem : contains
     Invoice ||--o{ Payment : receives
+    InvoiceItem }o--o| QuoteItem : sourced_from
     Company ||--o{ Notification : owns
     User ||--o{ Notification : receives
     Company ||--o{ ActivityEvent : records
@@ -52,7 +71,24 @@ The person/business requesting service.
 A customer can have more than one service location.
 
 ### Job
-The operational center of the product. Contains problem, priority, status, schedule and assignment.
+The operational center of the product. Contains problem, priority, status, schedule and assignment. New jobs may link to their service request and source quote.
+
+### ServiceRequest
+The tenant-scoped intake parent for phone, walk-in, portal and direct-dispatch work. It owns the request state and immutable event trail.
+
+### Booking
+`CompanyBusinessHours`, `TechnicianWorkingHours`, `TechnicianTimeOff` and
+`TechnicianSkill` provide availability inputs. `AppointmentProposal` stores up
+to three customer-facing windows; `AppointmentHold` reserves one window for a
+short period before atomic confirmation into a scheduled job.
+
+### Field execution and invoice scope
+`JobFinding` stores structured diagnostic results and customer visibility.
+`JobChangeRequest` records technician-requested extra work with evidence
+references and approval state. `Job.reviewState` gates invoice creation when
+company completion review is enabled. `InvoiceItem.sourceType` and `sourceId`
+retain whether a line came from an approved quote item, job part,
+authorization, or a manual staff line.
 
 ### Quote
 Commercial proposal attached to customer/job.
@@ -78,9 +114,14 @@ Stores user-facing AI interactions. Never use raw LLM text as an authorization s
 - One company has many members.
 - One customer belongs to one company.
 - One customer can have many service addresses.
-- One job belongs to one company and one customer.
+- One job belongs to one company and one customer, and may belong to one service request.
 - One job can have zero or one active technician assignment in MVP.
-- One quote belongs to one company and may attach to one job.
+- One quote belongs to one company and may attach to one job and one service request.
+- One service request can have many quotes and many jobs.
+- One company has many availability rules, proposals and holds; every booking
+  record is tenant-scoped.
+- A confirmed hold creates at most one scheduled job appointment because
+  confirmation rechecks conflicts under a PostgreSQL transaction lock.
 - One invoice belongs to one company and can contain many line items.
 - One invoice can have many payment events.
 

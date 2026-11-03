@@ -35,6 +35,19 @@ async function lockJobForPortalMutation(db: PrismaLike, jobId: string) {
   `;
 }
 
+async function lockCustomerForPortalMutation(
+  db: PrismaLike,
+  companyId: string,
+  customerId: string,
+) {
+  await db.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"
+    FROM "customers"
+    WHERE "id" = ${customerId} AND "companyId" = ${companyId}
+    FOR UPDATE
+  `;
+}
+
 /**
  * Load a job scoped to the caller's company, in the query itself.
  * A job in another company is indistinguishable from a missing job:
@@ -350,6 +363,236 @@ export async function getGrantStatus(context: AuthContext, jobId: string) {
     deactivatedReason: grant.deactivatedReason,
     recentEvents,
   };
+}
+
+async function loadCustomerInCompany(
+  db: PrismaLike,
+  companyId: string,
+  customerId: string,
+) {
+  const customer = await db.customer.findFirst({
+    where: { id: customerId, companyId, status: "ACTIVE" },
+    select: { id: true },
+  });
+  if (!customer) {
+    throw new AppError("RESOURCE_NOT_FOUND", "Customer not found", 404);
+  }
+  return customer;
+}
+
+function workspaceLink(linkToken: string) {
+  return `${env.PORTAL_PUBLIC_BASE_URL}/open#t=${linkToken}`;
+}
+
+export async function issueWorkspaceGrant(
+  context: AuthContext,
+  customerId: string,
+) {
+  await loadCustomerInCompany(prisma, context.companyId, customerId);
+  const linkToken = generateToken();
+  const linkTokenHash = hashToken(linkToken);
+  const linkExpiresAt = new Date(
+    Date.now() + env.PORTAL_LINK_UNUSED_TTL_HOURS * 60 * 60 * 1000,
+  );
+  try {
+    const grant = await prisma.$transaction(async (tx) => {
+      await lockCustomerForPortalMutation(tx, context.companyId, customerId);
+      const existing = await tx.portalAccessGrant.findFirst({
+        where: {
+          companyId: context.companyId,
+          customerId,
+          scope: "WORKSPACE",
+          status: "ACTIVE",
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new AppError(
+          "PORTAL_ACCESS_ALREADY_ACTIVE",
+          "Workspace access is already active for this customer",
+          409,
+        );
+      }
+      const created = await tx.portalAccessGrant.create({
+        data: {
+          companyId: context.companyId,
+          customerId,
+          scope: "WORKSPACE",
+          issuedBy: context.userId,
+          linkTokenHash,
+          linkExpiresAt,
+        },
+        select: { id: true, linkExpiresAt: true },
+      });
+      await tx.portalAuditEvent.create({
+        data: {
+          companyId: context.companyId,
+          customerId,
+          grantId: created.id,
+          actorUserId: context.userId,
+          action: "PORTAL_LINK_ISSUED",
+          resourceType: "WORKSPACE",
+          resourceId: customerId,
+        },
+      });
+      return created;
+    });
+    return { grant, link: workspaceLink(linkToken), customerId };
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "P2002"
+    ) {
+      throw new AppError(
+        "PORTAL_ACCESS_ALREADY_ACTIVE",
+        "Workspace access is already active for this customer",
+        409,
+      );
+    }
+    throw error;
+  }
+}
+
+export async function reissueWorkspaceGrant(
+  context: AuthContext,
+  customerId: string,
+) {
+  await loadCustomerInCompany(prisma, context.companyId, customerId);
+  const linkToken = generateToken();
+  const linkExpiresAt = new Date(
+    Date.now() + env.PORTAL_LINK_UNUSED_TTL_HOURS * 60 * 60 * 1000,
+  );
+  const grant = await prisma.$transaction(async (tx) => {
+    await lockCustomerForPortalMutation(tx, context.companyId, customerId);
+    const current = await tx.portalAccessGrant.findFirst({
+      where: {
+        companyId: context.companyId,
+        customerId,
+        scope: "WORKSPACE",
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
+    if (current) {
+      await tx.portalAccessGrant.update({
+        where: { id: current.id },
+        data: {
+          status: "DEACTIVATED",
+          deactivatedAt: new Date(),
+          deactivatedReason: "REISSUED",
+          deactivatedBy: context.userId,
+        },
+      });
+      await tx.portalSession.updateMany({
+        where: { grantId: current.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await tx.portalAuditEvent.create({
+        data: {
+          companyId: context.companyId,
+          customerId,
+          grantId: current.id,
+          actorUserId: context.userId,
+          action: "PORTAL_REISSUED",
+          resourceType: "WORKSPACE",
+          resourceId: customerId,
+        },
+      });
+    }
+    const created = await tx.portalAccessGrant.create({
+      data: {
+        companyId: context.companyId,
+        customerId,
+        scope: "WORKSPACE",
+        issuedBy: context.userId,
+        linkTokenHash: hashToken(linkToken),
+        linkExpiresAt,
+      },
+      select: { id: true, linkExpiresAt: true },
+    });
+    await tx.portalAuditEvent.create({
+      data: {
+        companyId: context.companyId,
+        customerId,
+        grantId: created.id,
+        actorUserId: context.userId,
+        action: "PORTAL_LINK_ISSUED",
+        resourceType: "WORKSPACE",
+        resourceId: customerId,
+      },
+    });
+    return created;
+  });
+  return { grant, link: workspaceLink(linkToken), customerId };
+}
+
+export async function revokeWorkspaceGrant(
+  context: AuthContext,
+  customerId: string,
+) {
+  await loadCustomerInCompany(prisma, context.companyId, customerId);
+  await prisma.$transaction(async (tx) => {
+    const grant = await tx.portalAccessGrant.findFirst({
+      where: {
+        companyId: context.companyId,
+        customerId,
+        scope: "WORKSPACE",
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
+    if (!grant) return;
+    await tx.portalAccessGrant.update({
+      where: { id: grant.id },
+      data: {
+        status: "DEACTIVATED",
+        deactivatedAt: new Date(),
+        deactivatedReason: "MANUAL",
+        deactivatedBy: context.userId,
+      },
+    });
+    await tx.portalSession.updateMany({
+      where: { grantId: grant.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    await tx.portalAuditEvent.create({
+      data: {
+        companyId: context.companyId,
+        customerId,
+        grantId: grant.id,
+        actorUserId: context.userId,
+        action: "PORTAL_DEACTIVATED",
+        resourceType: "WORKSPACE",
+        resourceId: customerId,
+      },
+    });
+  });
+}
+
+export async function getWorkspaceGrantStatus(
+  context: AuthContext,
+  customerId: string,
+) {
+  await loadCustomerInCompany(prisma, context.companyId, customerId);
+  return prisma.portalAccessGrant.findFirst({
+    where: {
+      companyId: context.companyId,
+      customerId,
+      scope: "WORKSPACE",
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      status: true,
+      createdAt: true,
+      linkConsumedAt: true,
+      linkExpiresAt: true,
+      deactivatedAt: true,
+      deactivatedReason: true,
+    },
+  });
 }
 
 /**

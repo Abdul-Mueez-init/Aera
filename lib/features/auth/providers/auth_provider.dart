@@ -13,6 +13,7 @@ import '../../team/providers/team_provider.dart';
 import '../../settings/providers/company_provider.dart';
 import '../../settings/providers/notifications_provider.dart';
 import '../../ai/providers/ai_provider.dart';
+import '../../requests/providers/requests_provider.dart';
 import '../../onboarding/providers/onboarding_wizard_provider.dart';
 
 final authNotifierProvider =
@@ -152,6 +153,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<AuthSession?>> {
   /// conversation selection, and the query/selection StateProviders.
   void _resetSessionScopedState() {
     _ref.invalidate(jobsListProvider);
+    _ref.invalidate(requestsListProvider);
+    _ref.invalidate(requestsQueryProvider);
     _ref.invalidate(technicianTodayProvider);
     _ref.invalidate(customersListProvider);
     _ref.invalidate(invoicesListProvider);

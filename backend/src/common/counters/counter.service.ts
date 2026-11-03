@@ -3,6 +3,7 @@ import { prisma } from "../../db/prisma.js";
 export interface CounterKind {
   JOB_NUMBER: "JOB_NUMBER";
   INVOICE_NUMBER: "INVOICE_NUMBER";
+  SERVICE_REQUEST: "SERVICE_REQUEST";
 }
 
 async function getNextCounterInTransaction(

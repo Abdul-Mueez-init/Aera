@@ -42,6 +42,77 @@ enum JobStatus {
   CANCELLED
 }
 
+enum JobType {
+  DIAGNOSTIC
+  REPAIR
+  INSTALLATION
+  MAINTENANCE
+  OTHER
+}
+
+enum BookingMode {
+  DISPATCHER_CONFIRMS
+  SELF_SERVE_WINDOWS
+}
+
+enum AppointmentProposalStatus {
+  OPEN
+  PICKED
+  EXPIRED
+  CANCELLED
+}
+
+enum AppointmentHoldStatus {
+  HELD
+  CONFIRMED
+  RELEASED
+  EXPIRED
+}
+
+enum ServiceRequestStatus {
+  SUBMITTED
+  NEEDS_INFO
+  QUOTING
+  QUOTED
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CANCELLED
+  CLOSED
+}
+
+enum ServiceRequestSource {
+  PHONE
+  WALK_IN
+  WEB_PORTAL
+  STAFF_DIRECT
+}
+
+enum ServiceRequestEventType {
+  CREATED
+  STATUS_CHANGED
+  INSPECTION_MARKED
+  CLOSED
+  CANCELLED
+  REOPENED
+}
+
+enum ServiceRequestUploaderType {
+  STAFF
+  PORTAL
+}
+
+enum ServiceRequestAttachmentKind {
+  PHOTO
+  VIDEO
+  DOCUMENT
+}
+
+enum ServiceRequestMessageAuthorType {
+  STAFF
+  CUSTOMER
+}
+
 enum JobNoteVisibility {
   INTERNAL
   CUSTOMER
@@ -51,6 +122,27 @@ enum JobPhotoKind {
   BEFORE
   AFTER
   OTHER
+}
+
+enum JobReviewState {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+enum JobChangeRequestStatus {
+  OPEN
+  QUOTED
+  DECLINED
+  WITHDRAWN
+}
+
+enum InvoiceItemSourceType {
+  QUOTE_ITEM
+  JOB_PART
+  AUTHORIZATION
+  MANUAL
 }
 
 enum QuoteStatus {
@@ -66,6 +158,11 @@ enum QuoteApprovalAction {
   DECLINED
 }
 
+enum QuoteAcceptanceActorType {
+  STAFF
+  PORTAL
+}
+
 enum InvoiceStatus {
   DRAFT
   ISSUED
@@ -75,11 +172,35 @@ enum InvoiceStatus {
   OVERDUE
 }
 
+enum InvoiceKind {
+  STANDARD
+  DEPOSIT
+}
+
 enum PaymentMethod {
   CASH
   CARD
   BANK_TRANSFER
   OTHER
+}
+
+enum PaymentOperationSource {
+  STAFF
+  PORTAL
+  WEBHOOK
+}
+
+enum PaymentSessionStatus {
+  OPEN
+  COMPLETED
+  EXPIRED
+  FAILED
+}
+
+enum RefundStatus {
+  PENDING
+  COMPLETED
+  FAILED
 }
 
 enum NotificationType {
@@ -104,6 +225,11 @@ enum PortalGrantStatus {
   DEACTIVATED
 }
 
+enum PortalGrantScope {
+  JOB
+  WORKSPACE
+}
+
 enum PortalDeactivationReason {
   AUTO_COMPLETED
   AUTO_CANCELLED
@@ -119,6 +245,21 @@ enum DeviceTokenPlatform {
   WEB
 }
 
+enum NotificationOutboxChannel {
+  IN_APP
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum NotificationOutboxStatus {
+  QUEUED
+  PROVIDER_ACCEPTED
+  DELIVERED
+  FAILED
+  DEAD
+}
+
 enum AiMessageRole {
   USER
   ASSISTANT
@@ -126,101 +267,255 @@ enum AiMessageRole {
 }
 
 model User {
-  id           String          @id @default(uuid()) @db.Uuid
-  email        String?         @unique
-  phone        String?         @unique
-  passwordHash String?
-  firstName    String
-  lastName     String
-  avatarUrl    String?
-  isActive     Boolean         @default(true)
-  memberships  CompanyMember[]
-  refreshSessions RefreshSession[]
-  passwordResetTokens PasswordResetToken[]
-  assignedJobs  Job[]             @relation("AssignedJobs")
-  statusChanges JobStatusHistory[] @relation("JobStatusActors")
-  authoredNotes JobNote[]         @relation("JobNoteAuthors")
-  uploadedPhotos JobPhoto[]       @relation("JobPhotoUploaders")
-  quoteApprovalEvents QuoteApprovalEvent[] @relation("QuoteApprovalActors")
-  createdInvoices Invoice[] @relation("InvoiceCreators")
-  createdPayments Payment[] @relation("PaymentCreators")
-  createdPortalTokens CustomerPortalToken[] @relation("PortalTokenCreators")
-  issuedPortalGrants PortalAccessGrant[] @relation("PortalGrantIssuers")
-   notifications Notification[] @relation("NotificationRecipients")
-  deviceTokens  DeviceToken[]  @relation("DeviceTokenOwners")
-  aiConversations AiConversation[] @relation("AiConversationOwners")
-  presignedUploads PresignedUpload[] @relation("PresignedUploadRequesters")
-  paymentOperations PaymentOperation[] @relation("PaymentOperationCreators")
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id                         String                     @id @default(uuid()) @db.Uuid
+  email                      String?                    @unique
+  phone                      String?                    @unique
+  passwordHash               String?
+  firstName                  String
+  lastName                   String
+  avatarUrl                  String?
+  isActive                   Boolean                    @default(true)
+  memberships                CompanyMember[]
+  refreshSessions            RefreshSession[]
+  passwordResetTokens        PasswordResetToken[]
+  assignedJobs               Job[]                      @relation("AssignedJobs")
+  workingHours               TechnicianWorkingHours[]
+  timeOff                    TechnicianTimeOff[]
+  skills                     TechnicianSkill[]
+  statusChanges              JobStatusHistory[]         @relation("JobStatusActors")
+  serviceRequestEvents       ServiceRequestEvent[]      @relation("ServiceRequestEventActors")
+  serviceRequestUploads      ServiceRequestUpload[]     @relation("ServiceRequestUploaders")
+  serviceRequestAttachments  ServiceRequestAttachment[] @relation("ServiceRequestAttachmentUploaders")
+  serviceRequestMessages     ServiceRequestMessage[]    @relation("ServiceRequestMessageAuthors")
+  authoredNotes              JobNote[]                  @relation("JobNoteAuthors")
+  uploadedPhotos             JobPhoto[]                 @relation("JobPhotoUploaders")
+  quoteApprovalEvents        QuoteApprovalEvent[]       @relation("QuoteApprovalActors")
+  quoteAcceptanceActors      QuoteAcceptance[]          @relation("QuoteAcceptanceActors")
+  createdInvoices            Invoice[]                  @relation("InvoiceCreators")
+  createdPayments            Payment[]                  @relation("PaymentCreators")
+  createdRefunds             Refund[]                   @relation("RefundCreators")
+  createdPortalTokens        CustomerPortalToken[]      @relation("PortalTokenCreators")
+  issuedPortalGrants         PortalAccessGrant[]        @relation("PortalGrantIssuers")
+  notifications              Notification[]             @relation("NotificationRecipients")
+  deviceTokens               DeviceToken[]              @relation("DeviceTokenOwners")
+  notificationOutbox         NotificationOutbox[]       @relation("NotificationOutboxRecipients")
+  aiConversations            AiConversation[]           @relation("AiConversationOwners")
+  presignedUploads           PresignedUpload[]          @relation("PresignedUploadRequesters")
+  paymentOperations          PaymentOperation[]         @relation("PaymentOperationCreators")
+  authoredFindings           JobFinding[]               @relation("JobFindingAuthors")
+  assignedChangeRequests     JobChangeRequest[]         @relation("JobChangeRequestTechnicians")
+  authorizedChangeRequests   JobChangeRequest[]         @relation("JobChangeRequestAuthorizers")
+  reviewedJobs               Job[]                      @relation("JobReviewers")
+  pickedAppointmentProposals AppointmentProposal[]      @relation("ProposalPicker")
+  technicianAppointmentHolds AppointmentHold[]          @relation("HoldTechnician")
+  createdAppointmentHolds    AppointmentHold[]          @relation("HoldCreator")
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
 
   @@map("users")
 }
 
 model Company {
-  id           String          @id @default(uuid()) @db.Uuid
-  name         String
-  slug         String          @unique
-  timezone     String          @default("UTC")
-  defaultCurrency String       @default("USD") @db.Char(3)
-  phone                 String?
-  taxId                 String?
-  logoObjectKey         String?
-  headquartersAddress   String?
-  headquartersLatitude  Decimal?              @db.Decimal(10, 7)
-  headquartersLongitude Decimal?              @db.Decimal(10, 7)
-  serviceRadiusKm       Int?
+  id                            String                     @id @default(uuid()) @db.Uuid
+  name                          String
+  slug                          String                     @unique
+  timezone                      String                     @default("UTC")
+  travelBufferMinutes           Int                        @default(0)
+  bookingMode                   BookingMode                @default(DISPATCHER_CONFIRMS)
+  requireCompletionReview       Boolean                    @default(false)
+  emergencyAuthorizationAllowed Boolean                    @default(false)
+  defaultCurrency               String                     @default("USD") @db.Char(3)
+  phone                         String?
+  taxId                         String?
+  logoObjectKey                 String?
+  headquartersAddress           String?
+  headquartersLatitude          Decimal?                   @db.Decimal(10, 7)
+  headquartersLongitude         Decimal?                   @db.Decimal(10, 7)
+  serviceRadiusKm               Int?
   // DEPRECATED: No longer used. Onboarding is now all-or-nothing with atomic commit.
   // Kept for backward compatibility with existing data. Will be dropped in a future migration.
-  onboardingStep        Int                   @default(1)
-  onboardingCompletedAt DateTime?
-  memberships  CompanyMember[]
-  refreshSessions RefreshSession[]
-  customers      Customer[]
-  serviceAddresses ServiceAddress[]
-  jobs           Job[]
-  quotes          Quote[]
-  jobStatusHistories JobStatusHistory[]
-  jobNotes       JobNote[]
-  jobPhotos      JobPhoto[]
-  jobParts       JobPart[]
-  quoteItems     QuoteItem[]
-  invoiceItems   InvoiceItem[]
-  quoteApprovalEvents QuoteApprovalEvent[]
-  invoices       Invoice[]
-  payments       Payment[]
-  reviews         CustomerReview[]
-  portalTokens   CustomerPortalToken[]
-  portalGrants   PortalAccessGrant[]
-  notifications  Notification[]
-  deviceTokens   DeviceToken[]
-  aiConversations AiConversation[]
-  counters       CompanyCounter[]
-  presignedUploads PresignedUpload[]
-  paymentOperations PaymentOperation[]
-  services              CompanyService[]
-  serviceZones          CompanyServiceZone[]
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  onboardingStep                Int                        @default(1)
+  onboardingCompletedAt         DateTime?
+  memberships                   CompanyMember[]
+  refreshSessions               RefreshSession[]
+  customers                     Customer[]
+  serviceAddresses              ServiceAddress[]
+  jobs                          Job[]
+  serviceRequests               ServiceRequest[]
+  serviceRequestEvents          ServiceRequestEvent[]
+  serviceRequestUploads         ServiceRequestUpload[]
+  serviceRequestAttachments     ServiceRequestAttachment[]
+  serviceRequestMessages        ServiceRequestMessage[]
+  appointmentProposals          AppointmentProposal[]
+  appointmentHolds              AppointmentHold[]
+  quotes                        Quote[]
+  jobStatusHistories            JobStatusHistory[]
+  jobNotes                      JobNote[]
+  jobPhotos                     JobPhoto[]
+  jobParts                      JobPart[]
+  quoteItems                    QuoteItem[]
+  invoiceItems                  InvoiceItem[]
+  quoteApprovalEvents           QuoteApprovalEvent[]
+  invoices                      Invoice[]
+  invoiceCreditApplications     InvoiceCreditApplication[]
+  refunds                       Refund[]
+  paymentSessions               PaymentSession[]
+  providerWebhookEvents         ProviderWebhookEvent[]
+  payments                      Payment[]
+  reviews                       CustomerReview[]
+  portalTokens                  CustomerPortalToken[]
+  portalGrants                  PortalAccessGrant[]
+  portalSessions                PortalSession[]
+  portalAuditEvents             PortalAuditEvent[]
+  notifications                 Notification[]
+  deviceTokens                  DeviceToken[]
+  notificationOutbox             NotificationOutbox[]
+  jobTrackingStates              JobTrackingState[]
+  aiConversations               AiConversation[]
+  counters                      CompanyCounter[]
+  presignedUploads              PresignedUpload[]
+  paymentOperations             PaymentOperation[]
+  invoiceReminderClaims         InvoiceReminderClaim[]
+  quoteAcceptances              QuoteAcceptance[]
+  services                      CompanyService[]
+  serviceZones                  CompanyServiceZone[]
+  businessHours                 CompanyBusinessHours[]
+  technicianWorkingHours        TechnicianWorkingHours[]
+  technicianTimeOff             TechnicianTimeOff[]
+  technicianSkills              TechnicianSkill[]
+  findings                      JobFinding[]
+  changeRequests                JobChangeRequest[]
+  createdAt                     DateTime                   @default(now())
+  updatedAt                     DateTime                   @updatedAt
 
   @@map("companies")
 }
 
 model CompanyService {
-  id             String   @id @default(uuid()) @db.Uuid
-  companyId      String   @db.Uuid
-  serviceKey     String?
-  name           String
-  normalizedName String
-  iconKey        String
-  isCustom       Boolean  @default(false)
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                     String            @id @default(uuid()) @db.Uuid
+  companyId              String            @db.Uuid
+  serviceKey             String?
+  name                   String
+  normalizedName         String
+  iconKey                String
+  defaultDurationMinutes Int               @default(60)
+  isCustom               Boolean           @default(false)
+  company                Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  technicianSkills       TechnicianSkill[]
 
   @@unique([companyId, normalizedName])
   @@index([companyId, createdAt])
   @@map("company_services")
+}
+
+model CompanyBusinessHours {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @db.Uuid
+  weekday   Int
+  open      String
+  close     String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, weekday])
+  @@index([companyId, weekday])
+  @@map("company_business_hours")
+}
+
+model TechnicianWorkingHours {
+  id           String  @id @default(uuid()) @db.Uuid
+  companyId    String  @db.Uuid
+  technicianId String  @db.Uuid
+  weekday      Int
+  open         String
+  close        String
+  company      Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  technician   User    @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, technicianId, weekday])
+  @@index([companyId, technicianId, weekday])
+  @@map("technician_working_hours")
+}
+
+model TechnicianTimeOff {
+  id           String   @id @default(uuid()) @db.Uuid
+  companyId    String   @db.Uuid
+  technicianId String   @db.Uuid
+  startsAt     DateTime
+  endsAt       DateTime
+  reason       String?
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  technician   User     @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, technicianId, startsAt, endsAt])
+  @@map("technician_time_off")
+}
+
+model TechnicianSkill {
+  id           String         @id @default(uuid()) @db.Uuid
+  companyId    String         @db.Uuid
+  technicianId String         @db.Uuid
+  serviceId    String         @db.Uuid
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  technician   User           @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  service      CompanyService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, technicianId, serviceId])
+  @@index([companyId, serviceId])
+  @@map("technician_skills")
+}
+
+model AppointmentProposal {
+  id             String                    @id @default(uuid()) @db.Uuid
+  companyId      String                    @db.Uuid
+  requestId      String?                   @db.Uuid
+  jobId          String?                   @db.Uuid
+  quoteId        String?                   @db.Uuid
+  windows        Json
+  pickedWindow   Json?
+  status         AppointmentProposalStatus @default(OPEN)
+  expiresAt      DateTime
+  pickedAt       DateTime?
+  pickedByUserId String?                   @db.Uuid
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  company        Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  request        ServiceRequest?           @relation(fields: [requestId, companyId], references: [id, companyId], onDelete: Cascade)
+  job            Job?                      @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Cascade)
+  quote          Quote?                    @relation(fields: [quoteId, companyId], references: [id, companyId], onDelete: Cascade)
+  pickedBy       User?                     @relation("ProposalPicker", fields: [pickedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, expiresAt])
+  @@index([companyId, requestId])
+  @@map("appointment_proposals")
+}
+
+model AppointmentHold {
+  id              String                @id @default(uuid()) @db.Uuid
+  companyId       String                @db.Uuid
+  requestId       String?               @db.Uuid
+  jobId           String?               @db.Uuid
+  quoteId         String?               @db.Uuid
+  technicianId    String?               @db.Uuid
+  windowStart     DateTime
+  windowEnd       DateTime
+  expiresAt       DateTime
+  status          AppointmentHoldStatus @default(HELD)
+  createdByUserId String?               @db.Uuid
+  confirmedAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  company         Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  request         ServiceRequest?       @relation(fields: [requestId, companyId], references: [id, companyId], onDelete: Cascade)
+  job             Job?                  @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Cascade)
+  quote           Quote?                @relation(fields: [quoteId, companyId], references: [id, companyId], onDelete: Cascade)
+  technician      User?                 @relation("HoldTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+  createdBy       User?                 @relation("HoldCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, windowStart, windowEnd])
+  @@index([companyId, jobId])
+  @@map("appointment_holds")
 }
 
 model CompanyServiceZone {
@@ -259,17 +554,17 @@ model CompanyMember {
 }
 
 model RefreshSession {
-  id                 String    @id @default(uuid()) @db.Uuid
-  companyId          String    @db.Uuid
-  userId             String    @db.Uuid
-  tokenHash          String    @unique
-  expiresAt          DateTime
-  revokedAt          DateTime?
+  id                  String    @id @default(uuid()) @db.Uuid
+  companyId           String    @db.Uuid
+  userId              String    @db.Uuid
+  tokenHash           String    @unique
+  expiresAt           DateTime
+  revokedAt           DateTime?
   replacedBySessionId String?   @db.Uuid
-  createdAt          DateTime   @default(now())
-  lastUsedAt         DateTime?
-  company            Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt           DateTime  @default(now())
+  lastUsedAt          DateTime?
+  company             Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, revokedAt, expiresAt])
   @@map("refresh_sessions")
@@ -294,91 +589,119 @@ model PasswordResetToken {
 }
 
 model Customer {
-  id              String         @id @default(uuid()) @db.Uuid
-  companyId       String         @db.Uuid
-  firstName       String
-  lastName        String
-  email           String?
-  phone           String?
-  notes           String?
-  status          CustomerStatus @default(ACTIVE)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  deletedAt       DateTime?
-  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  serviceAddresses ServiceAddress[]
-  jobs            Job[]
-  quotes          Quote[]
-  invoices        Invoice[]
-  portalTokens    CustomerPortalToken[]
-  portalGrants    PortalAccessGrant[]
-  reviews         CustomerReview[]
+  id                        String                     @id @default(uuid()) @db.Uuid
+  companyId                 String                     @db.Uuid
+  firstName                 String
+  lastName                  String
+  email                     String?
+  phone                     String?
+  notes                     String?
+  status                    CustomerStatus             @default(ACTIVE)
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  deletedAt                 DateTime?
+  company                   Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  serviceAddresses          ServiceAddress[]
+  jobs                      Job[]
+  quotes                    Quote[]
+  invoices                  Invoice[]
+  portalTokens              CustomerPortalToken[]
+  portalGrants              PortalAccessGrant[]
+  portalSessions            PortalSession[]
+  portalAuditEvents         PortalAuditEvent[]
+  reviews                   CustomerReview[]
+  serviceRequests           ServiceRequest[]
+  serviceRequestUploads     ServiceRequestUpload[]
+  serviceRequestAttachments ServiceRequestAttachment[]
+  serviceRequestMessages    ServiceRequestMessage[]
 
+  @@unique([id, companyId])
   @@index([companyId, status])
   @@index([companyId, createdAt(sort: Desc)])
   @@map("customers")
 }
 
 model ServiceAddress {
-  id         String   @id @default(uuid()) @db.Uuid
-  companyId  String   @db.Uuid
-  customerId String   @db.Uuid
-  label      String
-  line1      String
-  line2      String?
-  city       String
-  region     String?
-  postalCode String?
-  countryCode String  @db.Char(2)
-  lat        Decimal?
-  lng        Decimal?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  jobs       Job[]
+  id              String           @id @default(uuid()) @db.Uuid
+  companyId       String           @db.Uuid
+  customerId      String           @db.Uuid
+  label           String
+  line1           String
+  line2           String?
+  city            String
+  region          String?
+  postalCode      String?
+  countryCode     String           @db.Char(2)
+  lat             Decimal?
+  lng             Decimal?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  jobs            Job[]
+  serviceRequests ServiceRequest[]
 
+  @@unique([id, companyId])
   @@index([companyId, customerId])
   @@map("service_addresses")
 }
 
 model Job {
-  id                    String          @id @default(uuid()) @db.Uuid
-  companyId             String          @db.Uuid
-  customerId            String          @db.Uuid
-  serviceAddressId      String          @db.Uuid
-  assignedTechnicianId  String?         @db.Uuid
-  jobNumber             Int
-  serviceType           String
-  problemDescription    String
-  priority              JobPriority     @default(NORMAL)
-  status                JobStatus       @default(NEW)
-  scheduledStart        DateTime?
-  scheduledEnd          DateTime?
-  startedAt             DateTime?
-  completedAt           DateTime?
-  completionSummary     String?
-  handshakeVersion       Int             @default(0)
-  handshakeFailedAttempts Int           @default(0)
-  handshakeLockedUntil  DateTime?
-  handshakeVerifiedAt   DateTime?
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
-  company               Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customer              Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  serviceAddress        ServiceAddress  @relation(fields: [serviceAddressId], references: [id], onDelete: Restrict)
-  assignedTechnician    User?           @relation("AssignedJobs", fields: [assignedTechnicianId], references: [id], onDelete: SetNull)
-  statusHistory         JobStatusHistory[]
-  notes                 JobNote[]
-  photos                JobPhoto[]
-  parts                 JobPart[]
-  quotes                Quote[]
-  invoices              Invoice[]
-  reviews               CustomerReview[]
-  presignedUploads      PresignedUpload[]
-  portalGrants          PortalAccessGrant[]
+  id                      String                @id @default(uuid()) @db.Uuid
+  companyId               String                @db.Uuid
+  customerId              String                @db.Uuid
+  serviceAddressId        String                @db.Uuid
+  serviceRequestId        String?               @db.Uuid
+  type                    JobType               @default(OTHER)
+  reviewState             JobReviewState        @default(NOT_REQUIRED)
+  reviewedBy              String?               @db.Uuid
+  reviewedAt              DateTime?
+  reviewNote              String?
+  sourceQuoteId           String?               @unique @db.Uuid
+  assignedTechnicianId    String?               @db.Uuid
+  jobNumber               Int
+  serviceType             String
+  problemDescription      String
+  priority                JobPriority           @default(NORMAL)
+  status                  JobStatus             @default(NEW)
+  scheduledStart          DateTime?
+  scheduledEnd            DateTime?
+  startedAt               DateTime?
+  completedAt             DateTime?
+  completionSummary       String?
+  handshakeVersion        Int                   @default(0)
+  handshakeFailedAttempts Int                   @default(0)
+  handshakeLockedUntil    DateTime?
+  handshakeVerifiedAt     DateTime?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  company                 Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer                Customer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  serviceAddress          ServiceAddress        @relation(fields: [serviceAddressId], references: [id], onDelete: Restrict)
+  assignedTechnician      User?                 @relation("AssignedJobs", fields: [assignedTechnicianId], references: [id], onDelete: SetNull)
+  statusHistory           JobStatusHistory[]
+  notes                   JobNote[]
+  photos                  JobPhoto[]
+  parts                   JobPart[]
+  quotes                  Quote[]               @relation("JobQuotes")
+  invoices                Invoice[]
+  reviews                 CustomerReview[]
+  presignedUploads        PresignedUpload[]
+  portalGrants            PortalAccessGrant[]
+  portalSessions          PortalSession[]
+  trackingState           JobTrackingState?
+  portalAuditEvents       PortalAuditEvent[]
+  serviceRequest          ServiceRequest?       @relation(fields: [serviceRequestId, companyId], references: [id, companyId], onDelete: Restrict)
+  sourceQuote             Quote?                @relation("QuoteSourceJob", fields: [sourceQuoteId, companyId], references: [id, companyId], onDelete: Restrict)
+  basisQuotes             Quote[]               @relation("QuoteBasisJob")
+  appointmentProposals    AppointmentProposal[]
+  appointmentHolds        AppointmentHold[]
+  findings                JobFinding[]
+  changeRequests          JobChangeRequest[]
+  reviewer                User?                 @relation("JobReviewers", fields: [reviewedBy], references: [id], onDelete: SetNull)
 
   @@unique([companyId, jobNumber])
+  @@unique([id, companyId])
   @@index([companyId, status, scheduledStart])
   @@index([companyId, assignedTechnicianId, scheduledStart])
   @@index([companyId, customerId])
@@ -387,17 +710,17 @@ model Job {
 }
 
 model JobStatusHistory {
-  id          String    @id @default(uuid()) @db.Uuid
-  companyId   String    @db.Uuid
-  jobId       String    @db.Uuid
-  actorUserId String    @db.Uuid
+  id          String     @id @default(uuid()) @db.Uuid
+  companyId   String     @db.Uuid
+  jobId       String     @db.Uuid
+  actorUserId String     @db.Uuid
   fromStatus  JobStatus?
   toStatus    JobStatus
   reason      String?
-  createdAt   DateTime  @default(now())
-  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  actor       User      @relation("JobStatusActors", fields: [actorUserId], references: [id], onDelete: Restrict)
+  createdAt   DateTime   @default(now())
+  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  job         Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  actor       User       @relation("JobStatusActors", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([companyId, jobId, createdAt(sort: Desc)])
   @@index([companyId, actorUserId])
@@ -405,17 +728,17 @@ model JobStatusHistory {
 }
 
 model JobNote {
-  id          String            @id @default(uuid()) @db.Uuid
-  companyId   String            @db.Uuid
-  jobId       String            @db.Uuid
-  authorUserId String           @db.Uuid
-  body        String
-  visibility  JobNoteVisibility @default(INTERNAL)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  job         Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  author      User              @relation("JobNoteAuthors", fields: [authorUserId], references: [id], onDelete: Restrict)
+  id           String            @id @default(uuid()) @db.Uuid
+  companyId    String            @db.Uuid
+  jobId        String            @db.Uuid
+  authorUserId String            @db.Uuid
+  body         String
+  visibility   JobNoteVisibility @default(INTERNAL)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  company      Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  job          Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  author       User              @relation("JobNoteAuthors", fields: [authorUserId], references: [id], onDelete: Restrict)
 
   @@index([companyId, jobId, createdAt(sort: Desc)])
   @@index([companyId, authorUserId])
@@ -458,49 +781,278 @@ model JobPart {
   @@map("job_parts")
 }
 
-model Quote {
-  id             String      @id @default(uuid()) @db.Uuid
-  companyId      String      @db.Uuid
-  customerId     String      @db.Uuid
-  jobId          String?     @db.Uuid
-  status         QuoteStatus @default(DRAFT)
-  subtotalMinor  BigInt
-  discountMinor  BigInt     @default(0)
-  taxMinor       BigInt     @default(0)
-  taxRateBps     Int        @default(0)
-  totalMinor     BigInt
-  currency       String      @db.Char(3)
-  expiresAt      DateTime?
-  sentAt         DateTime?
-  approvedAt     DateTime?
-  declinedAt     DateTime?
-  shareToken     String?     @unique
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  company        Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customer       Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  job            Job?        @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  items          QuoteItem[]
-  approvalEvents QuoteApprovalEvent[]
-  invoices       Invoice[]
+model JobFinding {
+  id                    String   @id @default(uuid()) @db.Uuid
+  companyId             String   @db.Uuid
+  jobId                 String   @db.Uuid
+  authorUserId          String   @db.Uuid
+  summary               String
+  recommendedWork       String?
+  equipmentInfo         Json?
+  likelyParts           Json?
+  estimatedLaborMinutes Int?
+  customerVisible       Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  company               Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  job                   Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  author                User     @relation("JobFindingAuthors", fields: [authorUserId], references: [id], onDelete: Restrict)
 
+  @@index([companyId, jobId, createdAt(sort: Desc)])
+  @@map("job_findings")
+}
+
+model JobChangeRequest {
+  id                  String                 @id @default(uuid()) @db.Uuid
+  companyId           String                 @db.Uuid
+  jobId               String                 @db.Uuid
+  technicianId        String                 @db.Uuid
+  reason              String
+  description         String
+  estimatedPriceMinor BigInt
+  currency            String                 @db.Char(3)
+  status              JobChangeRequestStatus @default(OPEN)
+  evidencePhotoIds    Json?
+  authorizationReason String?
+  authorizedBy        String?                @db.Uuid
+  authorizedAt        DateTime?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  company             Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  job                 Job                    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  technician          User                   @relation("JobChangeRequestTechnicians", fields: [technicianId], references: [id], onDelete: Restrict)
+  authorizer          User?                  @relation("JobChangeRequestAuthorizers", fields: [authorizedBy], references: [id], onDelete: SetNull)
+
+  @@index([companyId, jobId, status, createdAt(sort: Desc)])
+  @@map("job_change_requests")
+}
+
+model Quote {
+  id                   String                @id @default(uuid()) @db.Uuid
+  companyId            String                @db.Uuid
+  customerId           String                @db.Uuid
+  jobId                String?               @db.Uuid
+  serviceRequestId     String?               @db.Uuid
+  kind                 QuoteKind             @default(GENERAL)
+  basisJobId           String?               @db.Uuid
+  supersedesQuoteId    String?               @db.Uuid
+  supersededByQuoteId  String?               @db.Uuid
+  status               QuoteStatus           @default(DRAFT)
+  assumptions          String?
+  exclusions           String?
+  subtotalMinor        BigInt
+  discountMinor        BigInt                @default(0)
+  taxMinor             BigInt                @default(0)
+  taxRateBps           Int                   @default(0)
+  totalMinor           BigInt
+  currency             String                @db.Char(3)
+  expiresAt            DateTime?
+  sentAt               DateTime?
+  approvedAt           DateTime?
+  declinedAt           DateTime?
+  shareToken           String?               @unique
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer             Customer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  job                  Job?                  @relation("JobQuotes", fields: [jobId], references: [id], onDelete: SetNull)
+  serviceRequest       ServiceRequest?       @relation(fields: [serviceRequestId, companyId], references: [id, companyId], onDelete: Restrict)
+  basisJob             Job?                  @relation("QuoteBasisJob", fields: [basisJobId, companyId], references: [id, companyId], onDelete: Restrict)
+  sourceJobs           Job[]                 @relation("QuoteSourceJob")
+  appointmentProposals AppointmentProposal[]
+  appointmentHolds     AppointmentHold[]
+  supersedesQuote      Quote?                @relation("QuoteRevisions", fields: [supersedesQuoteId, companyId], references: [id, companyId], onDelete: Restrict)
+  revisedQuotes        Quote[]               @relation("QuoteRevisions")
+  supersededByQuote    Quote?                @relation("QuoteSupersededBy", fields: [supersededByQuoteId, companyId], references: [id, companyId], onDelete: Restrict)
+  supersedingQuotes    Quote[]               @relation("QuoteSupersededBy")
+  items                QuoteItem[]
+  approvalEvents       QuoteApprovalEvent[]
+  acceptance           QuoteAcceptance?
+  invoices             Invoice[]
+
+  @@unique([id, companyId])
   @@index([companyId, status, createdAt(sort: Desc)])
   @@index([companyId, customerId, createdAt(sort: Desc)])
   @@index([companyId, jobId])
+  @@index([companyId, serviceRequestId])
   @@map("quotes")
 }
 
+model QuoteAcceptance {
+  id              String                   @id @default(uuid()) @db.Uuid
+  quoteId         String                   @unique @db.Uuid
+  companyId       String                   @db.Uuid
+  acceptedByType  QuoteAcceptanceActorType
+  actorUserId     String?                  @db.Uuid
+  portalSessionId String?                  @db.Uuid
+  subtotalMinor   BigInt
+  discountMinor   BigInt
+  taxMinor        BigInt
+  totalMinor      BigInt
+  currency        String                   @db.Char(3)
+  itemsSnapshot   Json
+  termsSnapshot   Json
+  userAgentHash   String?
+  acceptedAt      DateTime                 @default(now())
+  company         Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  quote           Quote                    @relation(fields: [quoteId, companyId], references: [id, companyId], onDelete: Cascade)
+  actorUser       User?                    @relation("QuoteAcceptanceActors", fields: [actorUserId], references: [id], onDelete: SetNull)
+  portalSession   PortalSession?           @relation(fields: [portalSessionId], references: [id], onDelete: SetNull)
+
+  @@unique([quoteId, companyId])
+  @@index([companyId, acceptedAt])
+  @@map("quote_acceptances")
+}
+
+enum QuoteKind {
+  INSPECTION
+  REPAIR
+  INSTALLATION
+  CHANGE_ORDER
+  GENERAL
+}
+
+model ServiceRequest {
+  id                   String                     @id @default(uuid()) @db.Uuid
+  companyId            String                     @db.Uuid
+  customerId           String                     @db.Uuid
+  serviceAddressId     String                     @db.Uuid
+  requestNumber        Int
+  title                String
+  description          String
+  serviceCategory      String
+  priority             JobPriority                @default(NORMAL)
+  status               ServiceRequestStatus       @default(SUBMITTED)
+  requiresInspection   Boolean                    @default(false)
+  source               ServiceRequestSource
+  submissionKey        String?
+  preferredWindows     Json?
+  budgetMinMinor       BigInt?
+  budgetMaxMinor       BigInt?
+  budgetCurrency       String?                    @db.Char(3)
+  closedAt             DateTime?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  company              Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer             Customer                   @relation(fields: [customerId, companyId], references: [id, companyId], onDelete: Restrict)
+  serviceAddress       ServiceAddress             @relation(fields: [serviceAddressId, companyId], references: [id, companyId], onDelete: Restrict)
+  events               ServiceRequestEvent[]
+  uploads              ServiceRequestUpload[]
+  attachments          ServiceRequestAttachment[]
+  messages             ServiceRequestMessage[]
+  jobs                 Job[]
+  quotes               Quote[]
+  invoices             Invoice[]
+  appointmentProposals AppointmentProposal[]
+  appointmentHolds     AppointmentHold[]
+
+  @@unique([id, companyId])
+  @@unique([companyId, requestNumber])
+  @@unique([companyId, customerId, submissionKey])
+  @@index([companyId, status, createdAt(sort: Desc)])
+  @@index([companyId, customerId])
+  @@map("service_requests")
+}
+
+model ServiceRequestEvent {
+  id          String                  @id @default(uuid()) @db.Uuid
+  companyId   String                  @db.Uuid
+  requestId   String                  @db.Uuid
+  actorUserId String?                 @db.Uuid
+  type        ServiceRequestEventType
+  fromStatus  ServiceRequestStatus?
+  toStatus    ServiceRequestStatus?
+  metadata    Json?
+  createdAt   DateTime                @default(now())
+  company     Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  request     ServiceRequest          @relation(fields: [requestId, companyId], references: [id, companyId], onDelete: Cascade)
+  actor       User?                   @relation("ServiceRequestEventActors", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, requestId, createdAt(sort: Desc)])
+  @@map("service_request_events")
+}
+
+model ServiceRequestUpload {
+  id              String                     @id @default(uuid()) @db.Uuid
+  companyId       String                     @db.Uuid
+  requestId       String                     @db.Uuid
+  uploaderType    ServiceRequestUploaderType
+  uploaderUserId  String?                    @db.Uuid
+  portalSessionId String?                    @db.Uuid
+  objectKey       String                     @unique
+  mimeType        String
+  expiresAt       DateTime
+  confirmedAt     DateTime?
+  createdAt       DateTime                   @default(now())
+  company         Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  request         ServiceRequest             @relation(fields: [requestId, companyId], references: [id, companyId], onDelete: Cascade)
+  uploaderUser    User?                      @relation("ServiceRequestUploaders", fields: [uploaderUserId], references: [id], onDelete: Restrict)
+  portalSession   PortalSession?             @relation(fields: [portalSessionId], references: [id], onDelete: Cascade)
+  customer        Customer?                  @relation(fields: [customerId], references: [id])
+  customerId      String?                    @db.Uuid
+
+  @@unique([id, companyId])
+  @@index([companyId, requestId])
+  @@index([expiresAt, confirmedAt])
+  @@map("service_request_uploads")
+}
+
+model ServiceRequestAttachment {
+  id              String                       @id @default(uuid()) @db.Uuid
+  companyId       String                       @db.Uuid
+  requestId       String                       @db.Uuid
+  uploaderType    ServiceRequestUploaderType
+  uploaderUserId  String?                      @db.Uuid
+  portalSessionId String?                      @db.Uuid
+  objectKey       String
+  mimeType        String
+  sizeBytes       BigInt
+  kind            ServiceRequestAttachmentKind
+  caption         String?
+  createdAt       DateTime                     @default(now())
+  company         Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  request         ServiceRequest               @relation(fields: [requestId, companyId], references: [id, companyId], onDelete: Cascade)
+  uploaderUser    User?                        @relation("ServiceRequestAttachmentUploaders", fields: [uploaderUserId], references: [id], onDelete: Restrict)
+  portalSession   PortalSession?               @relation(fields: [portalSessionId], references: [id], onDelete: Cascade)
+  customer        Customer?                    @relation(fields: [customerId], references: [id])
+  customerId      String?                      @db.Uuid
+
+  @@unique([companyId, objectKey])
+  @@index([companyId, requestId, createdAt(sort: Desc)])
+  @@map("service_request_attachments")
+}
+
+model ServiceRequestMessage {
+  id              String                          @id @default(uuid()) @db.Uuid
+  companyId       String                          @db.Uuid
+  requestId       String                          @db.Uuid
+  authorType      ServiceRequestMessageAuthorType
+  authorUserId    String?                         @db.Uuid
+  portalSessionId String?                         @db.Uuid
+  body            String
+  createdAt       DateTime                        @default(now())
+  company         Company                         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  request         ServiceRequest                  @relation(fields: [requestId, companyId], references: [id, companyId], onDelete: Cascade)
+  authorUser      User?                           @relation("ServiceRequestMessageAuthors", fields: [authorUserId], references: [id], onDelete: Restrict)
+  portalSession   PortalSession?                  @relation(fields: [portalSessionId], references: [id], onDelete: Cascade)
+  customer        Customer?                       @relation(fields: [customerId], references: [id])
+  customerId      String?                         @db.Uuid
+
+  @@index([companyId, requestId, createdAt(sort: Desc)])
+  @@map("service_request_messages")
+}
+
 model QuoteItem {
-  id             String   @id @default(uuid()) @db.Uuid
-  companyId      String   @db.Uuid
-  quoteId        String   @db.Uuid
+  id             String  @id @default(uuid()) @db.Uuid
+  companyId      String  @db.Uuid
+  quoteId        String  @db.Uuid
   description    String
-  quantity       Decimal  @db.Decimal(10, 2)
+  quantity       Decimal @db.Decimal(10, 2)
   unitPriceMinor BigInt
   totalMinor     BigInt
   sortOrder      Int
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  quote          Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  quote          Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
   @@index([companyId, quoteId, sortOrder])
   @@map("quote_items")
@@ -523,54 +1075,65 @@ model QuoteApprovalEvent {
 }
 
 model Invoice {
-  id              String        @id @default(uuid()) @db.Uuid
-  companyId       String        @db.Uuid
-  customerId      String        @db.Uuid
-  jobId           String?       @db.Uuid
-  quoteId         String?       @db.Uuid
-  createdBy       String?       @db.Uuid
-  invoiceNumber   String
-  status          InvoiceStatus @default(DRAFT)
-  subtotalMinor   BigInt
-  discountMinor   BigInt        @default(0)
-  taxMinor        BigInt        @default(0)
-  totalMinor      BigInt
-  amountPaidMinor BigInt        @default(0)
-  balanceDueMinor BigInt
-  currency        String        @db.Char(3)
-  dueAt           DateTime?
-  issuedAt        DateTime?
-  paidAt          DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customer        Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  job             Job?          @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  quote           Quote?        @relation(fields: [quoteId], references: [id], onDelete: SetNull)
-  creator         User?         @relation("InvoiceCreators", fields: [createdBy], references: [id], onDelete: SetNull)
-  items           InvoiceItem[]
-  payments        Payment[]
+  id                String                     @id @default(uuid()) @db.Uuid
+  companyId         String                     @db.Uuid
+  customerId        String                     @db.Uuid
+  jobId             String?                    @db.Uuid
+  quoteId           String?                    @db.Uuid
+  serviceRequestId  String?                    @db.Uuid
+  createdBy         String?                    @db.Uuid
+  invoiceNumber     String
+  kind              InvoiceKind                @default(STANDARD)
+  status            InvoiceStatus              @default(DRAFT)
+  subtotalMinor     BigInt
+  discountMinor     BigInt                     @default(0)
+  taxMinor          BigInt                     @default(0)
+  totalMinor        BigInt
+  amountPaidMinor   BigInt                     @default(0)
+  balanceDueMinor   BigInt
+  currency          String                     @db.Char(3)
+  dueAt             DateTime?
+  issuedAt          DateTime?
+  paidAt            DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  company           Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer          Customer                   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  job               Job?                       @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  quote             Quote?                     @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  serviceRequest    ServiceRequest?            @relation(fields: [serviceRequestId, companyId], references: [id, companyId], onDelete: SetNull)
+  creator           User?                      @relation("InvoiceCreators", fields: [createdBy], references: [id], onDelete: SetNull)
+  items             InvoiceItem[]
+  payments          Payment[]
   paymentOperations PaymentOperation[]
+  reminderClaims    InvoiceReminderClaim[]
+  creditSources     InvoiceCreditApplication[] @relation("CreditSource")
+  creditTargets     InvoiceCreditApplication[] @relation("CreditTarget")
+  refunds           Refund[]
+  paymentSessions   PaymentSession[]
 
   @@unique([companyId, invoiceNumber])
   @@unique([companyId, jobId])
   @@index([companyId, status, dueAt])
   @@index([companyId, jobId])
+  @@index([companyId, serviceRequestId])
   @@index([companyId, createdBy])
   @@map("invoices")
 }
 
 model InvoiceItem {
-  id             String   @id @default(uuid()) @db.Uuid
-  companyId      String   @db.Uuid
-  invoiceId      String   @db.Uuid
+  id             String                 @id @default(uuid()) @db.Uuid
+  companyId      String                 @db.Uuid
+  invoiceId      String                 @db.Uuid
   description    String
-  quantity       Decimal  @db.Decimal(10, 2)
+  quantity       Decimal                @db.Decimal(10, 2)
   unitPriceMinor BigInt
   totalMinor     BigInt
   sortOrder      Int
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  invoice        Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  sourceType     InvoiceItemSourceType?
+  sourceId       String?
+  company        Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice        Invoice                @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@index([companyId, invoiceId, sortOrder])
   @@map("invoice_items")
@@ -588,11 +1151,12 @@ model Payment {
   providerPaymentId String?
   reference         String?
   idempotencyKey    String
-  receivedAt       DateTime      @default(now())
+  receivedAt        DateTime      @default(now())
   createdAt         DateTime      @default(now())
   company           Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   invoice           Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   creator           User?         @relation("PaymentCreators", fields: [createdBy], references: [id], onDelete: SetNull)
+  refunds           Refund[]
 
   // Idempotency is enforced by PaymentOperation's unique constraint on (companyId, idempotencyKey).
   // Payment retains idempotencyKey for traceability but does not enforce uniqueness separately.
@@ -601,18 +1165,97 @@ model Payment {
   @@map("payments")
 }
 
+model InvoiceCreditApplication {
+  id              String   @id @default(uuid()) @db.Uuid
+  companyId       String   @db.Uuid
+  sourceInvoiceId String   @db.Uuid
+  targetInvoiceId String   @db.Uuid
+  amountMinor     BigInt
+  createdAt       DateTime @default(now())
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceInvoice   Invoice  @relation("CreditSource", fields: [sourceInvoiceId], references: [id], onDelete: Restrict)
+  targetInvoice   Invoice  @relation("CreditTarget", fields: [targetInvoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceInvoiceId, targetInvoiceId])
+  @@index([companyId, sourceInvoiceId])
+  @@index([companyId, targetInvoiceId])
+  @@map("invoice_credit_applications")
+}
+
+model Refund {
+  id               String       @id @default(uuid()) @db.Uuid
+  companyId        String       @db.Uuid
+  paymentId        String       @db.Uuid
+  amountMinor      BigInt
+  reason           String
+  providerRefundId String?
+  status           RefundStatus @default(PENDING)
+  createdBy        String?      @db.Uuid
+  createdAt        DateTime     @default(now())
+  company          Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  payment          Payment      @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  creator          User?        @relation("RefundCreators", fields: [createdBy], references: [id], onDelete: SetNull)
+  invoice          Invoice?     @relation(fields: [invoiceId], references: [id])
+  invoiceId        String?      @db.Uuid
+
+  @@index([companyId, paymentId, createdAt(sort: Desc)])
+  @@map("refunds")
+}
+
+model PaymentSession {
+  id                String               @id @default(uuid()) @db.Uuid
+  companyId         String               @db.Uuid
+  invoiceId         String               @db.Uuid
+  provider          String
+  providerSessionId String               @unique
+  amountMinor       BigInt
+  currency          String               @db.Char(3)
+  status            PaymentSessionStatus @default(OPEN)
+  expiresAt         DateTime
+  idempotencyKey    String
+  portalSessionId   String?              @db.Uuid
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  company           Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice           Invoice              @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  portalSession     PortalSession?       @relation(fields: [portalSessionId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, invoiceId, status])
+  @@index([status, expiresAt])
+  @@map("payment_sessions")
+}
+
+model ProviderWebhookEvent {
+  id          String    @id @default(uuid()) @db.Uuid
+  companyId   String?   @db.Uuid
+  provider    String
+  eventId     String
+  type        String
+  payloadHash String
+  payload     Json?
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  outcome     String?
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, eventId])
+  @@index([provider, receivedAt])
+  @@map("provider_webhook_events")
+}
+
 model CustomerPortalToken {
-  id          String   @id @default(uuid()) @db.Uuid
-  companyId   String   @db.Uuid
-  customerId  String   @db.Uuid
-  createdBy   String?  @db.Uuid
-  token       String   @unique
-  expiresAt   DateTime
-  revokedAt   DateTime?
-  createdAt   DateTime @default(now())
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  creator     User?    @relation("PortalTokenCreators", fields: [createdBy], references: [id], onDelete: SetNull)
+  id         String    @id @default(uuid()) @db.Uuid
+  companyId  String    @db.Uuid
+  customerId String    @db.Uuid
+  createdBy  String?   @db.Uuid
+  token      String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  creator    User?     @relation("PortalTokenCreators", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@index([companyId, customerId, revokedAt, expiresAt])
   @@index([companyId, createdBy])
@@ -670,6 +1313,48 @@ model DeviceToken {
   @@map("device_tokens")
 }
 
+model NotificationOutbox {
+  id                String                    @id @default(uuid()) @db.Uuid
+  companyId         String                    @db.Uuid
+  recipientUserId   String?                   @db.Uuid
+  channel           NotificationOutboxChannel
+  template          String
+  payload           Json
+  dedupeKey         String                    @unique
+  status            NotificationOutboxStatus   @default(QUEUED)
+  attempts          Int                       @default(0)
+  nextAttemptAt     DateTime                  @default(now())
+  providerMessageId String?
+  lastError         String?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  company           Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  recipient         User?                     @relation("NotificationOutboxRecipients", fields: [recipientUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, nextAttemptAt])
+  @@index([companyId, recipientUserId, createdAt(sort: Desc)])
+  @@map("notification_outbox")
+}
+
+model JobTrackingState {
+  id            String   @id @default(uuid()) @db.Uuid
+  companyId     String   @db.Uuid
+  jobId         String   @unique @db.Uuid
+  lastLat       Float
+  lastLng       Float
+  accuracy      Float?
+  updatedAt     DateTime @updatedAt
+  etaMinutes    Int?
+  sharingActive Boolean  @default(true)
+  consentAt     DateTime?
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  job           Job      @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Cascade)
+
+  @@index([companyId, updatedAt])
+  @@unique([jobId, companyId])
+  @@map("job_tracking_states")
+}
+
 model AiConversation {
   id        String      @id @default(uuid()) @db.Uuid
   companyId String      @db.Uuid
@@ -715,18 +1400,18 @@ model CompanyCounter {
 }
 
 model PresignedUpload {
-  id         String    @id @default(uuid()) @db.Uuid
-  companyId  String    @db.Uuid
-  jobId      String    @db.Uuid
-  userId     String    @db.Uuid
-  objectKey  String
-  mimeType   String
-  expiresAt  DateTime
+  id          String    @id @default(uuid()) @db.Uuid
+  companyId   String    @db.Uuid
+  jobId       String    @db.Uuid
+  userId      String    @db.Uuid
+  objectKey   String
+  mimeType    String
+  expiresAt   DateTime
   confirmedAt DateTime?
-  createdAt  DateTime  @default(now())
-  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  user       User      @relation("PresignedUploadRequesters", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user        User      @relation("PresignedUploadRequesters", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([objectKey])
   @@index([companyId, jobId, expiresAt])
@@ -743,39 +1428,57 @@ enum PaymentOperationStatus {
 }
 
 model PaymentOperation {
-  id              String                 @id @default(uuid()) @db.Uuid
-  companyId       String                 @db.Uuid
-  invoiceId       String                 @db.Uuid
-  userId          String                 @db.Uuid
-  amountMinor     BigInt
-  currency        String                 @db.Char(3)
-  method          PaymentMethod
-  provider        String
-  reference       String?
-  idempotencyKey  String
-  status          PaymentOperationStatus @default(PENDING)
+  id                String                 @id @default(uuid()) @db.Uuid
+  companyId         String                 @db.Uuid
+  invoiceId         String                 @db.Uuid
+  userId            String?                @db.Uuid
+  amountMinor       BigInt
+  currency          String                 @db.Char(3)
+  method            PaymentMethod
+  provider          String
+  source            PaymentOperationSource @default(STAFF)
+  reference         String?
+  idempotencyKey    String
+  status            PaymentOperationStatus @default(PENDING)
   providerPaymentId String?
-  ledgerPaymentId String?
-  errorMessage    String?
-  retryCount      Int                    @default(0)
-  completedAt     DateTime?
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  invoice         Invoice                @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  user            User                   @relation("PaymentOperationCreators", fields: [userId], references: [id], onDelete: Cascade)
+  ledgerPaymentId   String?
+  errorMessage      String?
+  retryCount        Int                    @default(0)
+  nextRetryAt       DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  company           Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice           Invoice                @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  user              User?                  @relation("PaymentOperationCreators", fields: [userId], references: [id], onDelete: SetNull)
 
   @@unique([companyId, idempotencyKey])
   @@index([companyId, invoiceId, status])
   @@index([status, createdAt])
+  @@index([status, nextRetryAt])
   @@map("payment_operations")
+}
+
+model InvoiceReminderClaim {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @db.Uuid
+  invoiceId   String   @db.Uuid
+  windowStart DateTime
+  createdAt   DateTime @default(now())
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, invoiceId, windowStart])
+  @@index([companyId, createdAt])
+  @@map("invoice_reminder_claims")
 }
 
 model PortalAccessGrant {
   id                String                    @id @default(uuid()) @db.Uuid
   companyId         String                    @db.Uuid
   customerId        String                    @db.Uuid
-  jobId             String                    @db.Uuid
+  jobId             String?                   @db.Uuid
+  scope             PortalGrantScope          @default(JOB)
   issuedBy          String?                   @db.Uuid
   linkTokenHash     String                    @unique
   linkExpiresAt     DateTime
@@ -787,45 +1490,61 @@ model PortalAccessGrant {
   createdAt         DateTime                  @default(now())
   company           Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   customer          Customer                  @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  job               Job                       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job               Job?                      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   issuer            User?                     @relation("PortalGrantIssuers", fields: [issuedBy], references: [id], onDelete: SetNull)
   sessions          PortalSession[]
 
   @@index([companyId, jobId, status])
+  @@index([companyId, customerId, scope, status])
   @@index([status, linkExpiresAt])
   @@map("portal_access_grants")
 }
 
 model PortalSession {
-  id               String    @id @default(uuid()) @db.Uuid
-  grantId          String    @db.Uuid
-  companyId        String    @db.Uuid
-  customerId       String    @db.Uuid
-  jobId            String    @db.Uuid
-  sessionTokenHash String    @unique
-  userAgentHash    String?
-  createdAt        DateTime  @default(now())
-  lastSeenAt       DateTime  @default(now())
-  expiresAt        DateTime
-  revokedAt        DateTime?
-  grant            PortalAccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  id                        String                     @id @default(uuid()) @db.Uuid
+  grantId                   String                     @db.Uuid
+  companyId                 String                     @db.Uuid
+  customerId                String                     @db.Uuid
+  jobId                     String?                    @db.Uuid
+  scope                     PortalGrantScope           @default(JOB)
+  sessionTokenHash          String                     @unique
+  userAgentHash             String?
+  createdAt                 DateTime                   @default(now())
+  lastSeenAt                DateTime                   @default(now())
+  expiresAt                 DateTime
+  revokedAt                 DateTime?
+  grant                     PortalAccessGrant          @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  company                   Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer                  Customer                   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  job                       Job?                       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  serviceRequestUploads     ServiceRequestUpload[]
+  serviceRequestAttachments ServiceRequestAttachment[]
+  serviceRequestMessages    ServiceRequestMessage[]
+  quoteAcceptances          QuoteAcceptance[]
+  paymentSessions           PaymentSession[]
 
   @@index([grantId, revokedAt])
   @@map("portal_sessions")
 }
 
 model PortalAuditEvent {
-  id          String   @id @default(uuid()) @db.Uuid
-  companyId   String   @db.Uuid
-  jobId       String   @db.Uuid
-  customerId  String?  @db.Uuid
-  grantId     String?  @db.Uuid
-  actorUserId String?  @db.Uuid
-  action      String
-  metadata    Json?
-  createdAt   DateTime @default(now())
+  id           String    @id @default(uuid()) @db.Uuid
+  companyId    String    @db.Uuid
+  jobId        String?   @db.Uuid
+  customerId   String?   @db.Uuid
+  grantId      String?   @db.Uuid
+  actorUserId  String?   @db.Uuid
+  action       String
+  resourceType String?
+  resourceId   String?   @db.Uuid
+  metadata     Json?
+  createdAt    DateTime  @default(now())
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer     Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  job          Job?      @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([companyId, jobId, createdAt(sort: Desc)])
   @@index([companyId, customerId, createdAt(sort: Desc)])
+  @@index([companyId, resourceType, resourceId])
   @@map("portal_audit_events")
 }

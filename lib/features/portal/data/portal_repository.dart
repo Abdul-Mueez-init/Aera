@@ -59,11 +59,17 @@ sealed class PortalResult {
 /// The session is alive. [snapshot] is set by `job()`; [quote] by
 /// `respondToQuote()`; [review] by `submitReview()`.
 final class PortalSessionActive extends PortalResult {
-  const PortalSessionActive({this.snapshot, this.quote, this.review});
+  const PortalSessionActive({
+    this.snapshot,
+    this.quote,
+    this.review,
+    this.workspace,
+  });
 
   final PortalSnapshot? snapshot;
   final PortalQuote? quote;
   final PortalReview? review;
+  final Map<String, dynamic>? workspace;
 }
 
 /// The portal is closed for this customer. [variant] is one of
@@ -195,7 +201,10 @@ class PortalJobAddress {
 }
 
 class PortalTechnicianRef {
-  const PortalTechnicianRef({required this.firstName, required this.lastInitial});
+  const PortalTechnicianRef({
+    required this.firstName,
+    required this.lastInitial,
+  });
 
   final String firstName;
 
@@ -651,6 +660,7 @@ class PortalRepository {
     } catch (_) {
       return const PortalFailure('Could not reach the server');
     }
+
     final data = _dataOrNull(response);
     if (data == null) return _errorResult(response);
     try {
@@ -660,6 +670,117 @@ class PortalRepository {
     } catch (_) {
       return const PortalFailure('Received an unexpected response');
     }
+  }
+
+  Future<PortalResult> workspace() async {
+    final http.Response response;
+    try {
+      response = await _client.get(
+        _buildUri('/api/v1/portal/me'),
+        headers: await _headers(),
+      );
+    } catch (_) {
+      return const PortalFailure('Could not reach the server');
+    }
+    final data = _dataOrNull(response);
+    if (data == null) return _errorResult(response);
+    if (data is! Map<String, dynamic>) {
+      return const PortalFailure('Received an unexpected response');
+    }
+    return PortalSessionActive(workspace: data);
+  }
+
+  Future<PortalResult> workspaceResource(String path) async {
+    final http.Response response;
+    try {
+      response = await _client.get(
+        _buildUri('/api/v1/portal/$path'),
+        headers: await _headers(),
+      );
+    } catch (_) {
+      return const PortalFailure('Could not reach the server');
+    }
+    final data = _dataOrNull(response);
+    if (data == null) return _errorResult(response);
+    if (data is! Map<String, dynamic>) {
+      return const PortalFailure('Received an unexpected response');
+    }
+    return PortalSessionActive(workspace: data);
+  }
+
+  Future<PortalResult> workspaceAction(
+    String path, {
+    Map<String, dynamic> body = const {},
+  }) async {
+    final http.Response response;
+    try {
+      response = await _client.post(
+        _buildUri('/api/v1/portal/$path'),
+        headers: await _headers(),
+        body: jsonEncode(body),
+      );
+    } catch (_) {
+      return const PortalFailure('Could not reach the server');
+    }
+    final data = _dataOrNull(response);
+    if (data == null) return _errorResult(response);
+    if (data is! Map<String, dynamic>) {
+      return const PortalFailure('Received an unexpected response');
+    }
+    return PortalSessionActive(workspace: data);
+  }
+
+  Future<PortalResult> tracking(String jobId) async {
+    final http.Response response;
+    try {
+      response = await _client.get(
+        _buildUri('/api/v1/portal/jobs/$jobId/tracking'),
+        headers: await _headers(),
+      );
+    } catch (_) {
+      return const PortalFailure('Could not reach the server');
+    }
+    final data = _dataOrNull(response);
+    if (data is Map<String, dynamic>) {
+      return PortalSessionActive(workspace: data);
+    }
+    return data == null
+        ? _errorResult(response)
+        : const PortalFailure('Received an unexpected response');
+  }
+
+  Future<PortalResult> createWorkspaceRequest({
+    required String submissionKey,
+    required String serviceAddressId,
+    required String title,
+    required String description,
+    required String serviceCategory,
+    String priority = 'NORMAL',
+    bool requiresInspection = false,
+  }) async {
+    final http.Response response;
+    try {
+      response = await _client.post(
+        _buildUri('/api/v1/portal/requests'),
+        headers: await _headers(),
+        body: jsonEncode({
+          'submissionKey': submissionKey,
+          'serviceAddressId': serviceAddressId,
+          'title': title,
+          'description': description,
+          'serviceCategory': serviceCategory,
+          'priority': priority,
+          'requiresInspection': requiresInspection,
+        }),
+      );
+    } catch (_) {
+      return const PortalFailure('Could not reach the server');
+    }
+    final data = _dataOrNull(response);
+    if (data is Map<String, dynamic>) {
+      return PortalSessionActive(workspace: data);
+    }
+    return _errorResult(response);
   }
 
   /// Approves or declines a quote in the snapshot. [action] is
@@ -677,15 +798,24 @@ class PortalRepository {
     }
     final data = _dataOrNull(response);
     if (data == null) return _errorResult(response);
-    try {
-      final map = data as Map<String, dynamic>;
-      final quoteJson = map['quote'] is Map<String, dynamic>
-          ? map['quote'] as Map<String, dynamic>
-          : map;
-      return PortalSessionActive(quote: PortalQuote.fromJson(quoteJson));
-    } catch (_) {
-      return const PortalFailure('Received an unexpected response');
-    }
+    return PortalSessionActive(
+      workspace: data is Map<String, dynamic> ? data : null,
+    );
+  }
+
+  Future<PortalResult> submitWorkspaceReview(
+    String jobId,
+    int rating,
+    String? comment,
+  ) {
+    return workspaceAction(
+      'jobs/$jobId/review',
+      body: {
+        'rating': rating,
+        if (comment != null && comment.trim().isNotEmpty)
+          'comment': comment.trim(),
+      },
+    );
   }
 
   /// Submits the review for the session job (job is taken from the session

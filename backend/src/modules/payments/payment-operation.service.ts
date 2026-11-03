@@ -10,17 +10,25 @@ import {
 import { closePortalIfDone } from "../portal/portal.grants.js";
 
 const MAX_RETRIES = 3;
+const RETRY_BACKOFF_MS = [30_000, 120_000] as const;
+
+function nextRetryAt(retryCount: number, now: Date): Date {
+  const delay =
+    RETRY_BACKOFF_MS[Math.min(retryCount - 1, RETRY_BACKOFF_MS.length - 1)];
+  return new Date(now.getTime() + delay);
+}
 
 export async function createPaymentOperation(
   companyId: string,
   invoiceId: string,
-  userId: string,
+  userId: string | null,
   amountMinor: bigint,
   currency: string,
   method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER",
   provider: string,
   reference: string | undefined,
   idempotencyKey: string,
+  source: "STAFF" | "PORTAL" | "WEBHOOK" = "STAFF",
 ) {
   return await prisma.paymentOperation.create({
     data: {
@@ -31,9 +39,11 @@ export async function createPaymentOperation(
       currency,
       method,
       provider,
+      source,
       reference,
       idempotencyKey,
       status: "PENDING",
+      nextRetryAt: null,
     },
   });
 }
@@ -49,6 +59,7 @@ export async function processPaymentOperation(
       id: operationId,
       status: { in: ["PENDING", "FAILED"] },
       retryCount: { lt: MAX_RETRIES },
+      OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: new Date() } }],
     },
     data: {
       status: "PROCESSING",
@@ -93,6 +104,7 @@ export async function processPaymentOperation(
       currency: operation.currency,
       method: operation.method as "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER",
       reference: operation.reference ?? undefined,
+      idempotencyKey: operation.idempotencyKey,
     };
 
     const result = await provider.recordPayment(request);
@@ -103,6 +115,7 @@ export async function processPaymentOperation(
       data: {
         status: "PROVIDER_ACCEPTED",
         providerPaymentId: result.providerPaymentId,
+        nextRetryAt: null,
         updatedAt: new Date(),
       },
     });
@@ -114,6 +127,10 @@ export async function processPaymentOperation(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const newRetryCount = operation.retryCount + 1;
+    const retryAt =
+      newRetryCount < MAX_RETRIES
+        ? nextRetryAt(newRetryCount, new Date())
+        : null;
 
     if (newRetryCount >= MAX_RETRIES) {
       // Mark as permanently failed
@@ -123,6 +140,7 @@ export async function processPaymentOperation(
           status: "FAILED",
           errorMessage,
           retryCount: newRetryCount,
+          nextRetryAt: retryAt,
           updatedAt: new Date(),
         },
       });
@@ -143,6 +161,7 @@ export async function processPaymentOperation(
           status: "FAILED",
           errorMessage,
           retryCount: newRetryCount,
+          nextRetryAt: retryAt,
           updatedAt: new Date(),
         },
       });
@@ -165,6 +184,7 @@ export async function processPendingPaymentOperations(
     where: {
       status: { in: ["PENDING", "FAILED"] },
       retryCount: { lt: MAX_RETRIES },
+      OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: new Date() } }],
       // Never re-run the provider for an operation that already produced a
       // provider payment id: the provider accepted money for it, and a
       // re-run could double-charge. Such operations need ledger recovery

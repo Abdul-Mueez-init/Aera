@@ -125,6 +125,30 @@ To experience the full Aera workflow with demo data:
 
 For a detailed breakdown of demo data structure, see [docs/phase_H1_demo_seed_data.md](docs/phase_H1_demo_seed_data.md).
 
+## Phase 8 rollout
+
+Phase 8 adds flag-gated live technician tracking and a durable in-app
+notification outbox. Keep both flags disabled while applying and verifying the
+migration, then enable them independently in staging before production:
+
+- `LIVE_TRACKING_ENABLED=false`
+- `NOTIFICATION_OUTBOX_ENABLED=false`
+
+Tracking stores only the latest location, is limited to assigned technicians
+while a job is `EN_ROUTE`, and hides coordinates after two minutes without an
+update. Turning either flag off is the application rollback; the additive
+schema remains in place. Before any contract migration, take a Supabase
+backup and use the forward-fix procedure documented in
+[docs/phase_8_release_runbook.md](docs/phase_8_release_runbook.md).
+
+Run the Phase 8 checks from `backend/`:
+
+```powershell
+pnpm check:phase8-integrity
+pnpm report:legacy-quotes
+pnpm backfill:legacy-requests
+```
+
 ## Run Locally
 
 ### Start Backend

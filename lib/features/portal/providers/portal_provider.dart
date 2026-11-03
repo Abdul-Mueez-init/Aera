@@ -103,6 +103,11 @@ class PortalSessionController
   }
 
   Future<PortalBootstrapOutcome> _loadJob() async {
+    final workspaceResult = await _repository.workspace();
+    if (workspaceResult is PortalSessionActive &&
+        workspaceResult.workspace != null) {
+      return PortalBootstrapOutcome.active;
+    }
     final result = await _repository.job();
     if (result is PortalSessionActive && result.snapshot != null) {
       state = AsyncValue.data(result.snapshot!);

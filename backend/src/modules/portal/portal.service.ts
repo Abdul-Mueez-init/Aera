@@ -323,17 +323,18 @@ export async function getPortalJob(
 export async function respondToQuote(
   companyId: string,
   customerId: string,
-  jobId: string,
+  jobId: string | null,
   quoteId: string,
   action: "APPROVED" | "DECLINED",
+  portalSessionId?: string,
 ) {
   // Verify quote belongs to the session's job and company
   const quote = await prisma.quote.findFirst({
     where: {
       id: quoteId,
       companyId,
-      jobId,
       customerId,
+      ...(jobId ? { jobId } : {}),
     },
     select: {
       id: true,
@@ -392,6 +393,7 @@ export async function respondToQuote(
     action,
     source: "CUSTOMER",
     now,
+    portalSessionId,
   });
 
   await prisma.portalAuditEvent.create({

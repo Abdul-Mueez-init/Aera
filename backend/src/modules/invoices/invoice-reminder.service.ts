@@ -8,6 +8,11 @@ const DAY_MS = 86_400_000;
 const PAGE_SIZE = 200;
 const INITIAL_DELAY_MS = 30_000;
 
+function reminderWindowStart(now: Date, intervalDays: number): Date {
+  const intervalMs = intervalDays * DAY_MS;
+  return new Date(Math.floor(now.getTime() / intervalMs) * intervalMs);
+}
+
 export interface InvoiceReminderSweepOptions {
   intervalDays?: number;
   termsDays?: number;
@@ -48,6 +53,7 @@ export async function runInvoiceReminderSweep(
   const termsDays = options.termsDays ?? env.INVOICE_PAYMENT_TERMS_DAYS;
   const legacyIssuedBefore = new Date(now.getTime() - termsDays * DAY_MS);
   const dedupeSince = new Date(now.getTime() - intervalDays * DAY_MS);
+  const windowStart = reminderWindowStart(now, intervalDays);
 
   let overdueMarked = 0;
   let remindersEnqueued = 0;
@@ -103,46 +109,53 @@ export async function runInvoiceReminderSweep(
     for (const invoice of page) {
       if (alreadyReminded.has(invoice.id)) continue;
 
-      // Use a transaction to atomically check-and-send
-      // This reduces the race window but doesn't eliminate it entirely
-      // Full elimination requires a distributed lock or durable queue
-      await prisma.$transaction(async (tx) => {
-        // Re-check within transaction. Must scan ALL recent reminder
-        // rows for the company: the old findFirst compared one
-        // arbitrary row's invoiceId, so a reminder for invoice A never
-        // deduped when the "first" recent row happened to be invoice B.
-        const concurrent = await tx.notification.findMany({
-          where: {
-            type: "INVOICE_PAYMENT_REMINDER",
-            companyId: invoice.companyId,
-            createdAt: { gte: dedupeSince },
-          },
-          select: { payload: true },
-        });
-
-        if (
-          concurrent.some(
-            (row) => invoiceIdFromPayload(row.payload) === invoice.id,
-          )
-        ) {
-          // Another transaction already sent this
-          return;
-        }
-
-        // Send the reminder
-        await notificationPublisher.publish({
+      const recentReminder = await prisma.notification.findFirst({
+        where: {
           type: "INVOICE_PAYMENT_REMINDER",
           companyId: invoice.companyId,
-          invoiceId: invoice.id,
-        });
-        remindersEnqueued += 1;
+          createdAt: { gte: dedupeSince },
+          payload: { path: ["invoiceId"], equals: invoice.id },
+        },
+        select: { id: true },
       });
+      if (recentReminder) continue;
+
+      let claimed = false;
+      try {
+        await prisma.invoiceReminderClaim.create({
+          data: {
+            companyId: invoice.companyId,
+            invoiceId: invoice.id,
+            windowStart,
+          },
+        });
+        claimed = true;
+      } catch (error) {
+        if (!isUniqueConstraintError(error)) throw error;
+      }
+      if (!claimed) continue;
+
+      await notificationPublisher.publish({
+        type: "INVOICE_PAYMENT_REMINDER",
+        companyId: invoice.companyId,
+        invoiceId: invoice.id,
+      });
+      remindersEnqueued += 1;
     }
 
     if (page.length < PAGE_SIZE) break;
   }
 
   return { overdueMarked, remindersEnqueued };
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "P2002"
+  );
 }
 
 /**

@@ -25,6 +25,13 @@ const MIME_EXTENSIONS: Record<string, string> = {
   "image/webp": "webp",
 };
 
+const REQUEST_MEDIA_EXTENSIONS: Record<string, string> = {
+  ...MIME_EXTENSIONS,
+  "image/heic": "heic",
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+};
+
 let cachedClient: SupabaseClient | null = null;
 
 function getServiceRoleClient(): SupabaseClient {
@@ -263,5 +270,94 @@ export async function createCompanyLogoReadUrl(
       "Could not load the company logo",
       502,
     );
+  return data.signedUrl;
+}
+
+export async function createRequestMediaUploadUrl(
+  companyId: string,
+  requestId: string,
+  mimeType: string,
+): Promise<SignedUploadResult> {
+  const extension = REQUEST_MEDIA_EXTENSIONS[mimeType];
+  if (!extension) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Unsupported request media type",
+      422,
+    );
+  }
+  const objectKey = `companies/${companyId}/requests/${requestId}/${randomUUID()}.${extension}`;
+  const { data, error } = await getServiceRoleClient()
+    .storage.from(env.SUPABASE_REQUEST_MEDIA_BUCKET)
+    .createSignedUploadUrl(objectKey);
+  if (error || !data) {
+    logger.error(
+      { err: error, objectKey },
+      "Failed to create request media upload URL",
+    );
+    throw new AppError(
+      "STORAGE_UNAVAILABLE",
+      "Could not prepare the media upload; try again",
+      502,
+    );
+  }
+  return {
+    objectKey: data.path,
+    uploadUrl: data.signedUrl,
+    expiresAt: new Date(
+      Date.now() + SIGNED_UPLOAD_TTL_SECONDS * 1000,
+    ).toISOString(),
+  };
+}
+
+export async function verifyRequestMediaUpload(
+  objectKey: string,
+  expectedMimeType: string,
+  expectedMaxSizeBytes: number,
+): Promise<VerifyUploadResult> {
+  void expectedMaxSizeBytes;
+  const { data, error } = await getServiceRoleClient()
+    .storage.from(env.SUPABASE_REQUEST_MEDIA_BUCKET)
+    .createSignedUrl(objectKey, 60);
+  if (error || !data)
+    return { exists: false, mimeType: expectedMimeType, sizeBytes: 0 };
+  let head: Response;
+  try {
+    head = await fetch(data.signedUrl, {
+      method: "HEAD",
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch (fetchError) {
+    logger.warn(
+      { err: fetchError, objectKey },
+      "Could not verify request media upload",
+    );
+    return { exists: false, mimeType: expectedMimeType, sizeBytes: 0 };
+  }
+  if (!head.ok)
+    return { exists: false, mimeType: expectedMimeType, sizeBytes: 0 };
+  const sizeBytes = Number(head.headers.get("content-length"));
+  const actualMime =
+    head.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
+  return {
+    exists: true,
+    mimeType: actualMime,
+    sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : 0,
+  };
+}
+
+export async function createRequestMediaReadUrl(
+  objectKey: string,
+): Promise<string> {
+  const { data, error } = await getServiceRoleClient()
+    .storage.from(env.SUPABASE_REQUEST_MEDIA_BUCKET)
+    .createSignedUrl(objectKey, 60 * 15);
+  if (error || !data) {
+    throw new AppError(
+      "STORAGE_UNAVAILABLE",
+      "Could not prepare the media URL",
+      502,
+    );
+  }
   return data.signedUrl;
 }

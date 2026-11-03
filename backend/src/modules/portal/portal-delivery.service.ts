@@ -45,9 +45,9 @@ const LINK_DELIVERY_MAX_ATTEMPTS = 3;
 interface PortalLinkDeliveryJob {
   companyId: string;
   customerId: string;
-  jobId: string;
+  jobId?: string;
   grantId: string;
-  jobNumber: number;
+  jobNumber?: number;
   channel: DeliveryChannel;
   /** Plaintext link — memory only (the queue is in-process and payloads
    * are never logged); needed so retries send the same single-use link. */
@@ -59,7 +59,7 @@ interface PortalLinkDeliveryJob {
 
 async function writeDeliveryAudit(input: {
   companyId: string;
-  jobId: string;
+  jobId?: string;
   customerId: string;
   grantId?: string;
   action: "PORTAL_LINK_SENT" | "PORTAL_LINK_SEND_FAILED";
@@ -142,9 +142,9 @@ inProcessQueue.registerHandler<PortalLinkDeliveryJob>(
 export interface SendPortalLinkInput {
   companyId: string;
   customerId: string;
-  jobId: string;
+  jobId?: string;
   grantId: string;
-  jobNumber: number;
+  jobNumber?: number;
   link: string;
   channels: DeliveryChannel[];
 }

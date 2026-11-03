@@ -4,7 +4,9 @@ import { logger } from "./common/logger.js";
 import { startInvoiceReminderScheduler } from "./modules/invoices/invoice-reminder.service.js";
 import { startPortalSweepScheduler } from "./modules/portal/portal-sweep.service.js";
 import { startPaymentOperationScheduler } from "./modules/payments/payment-operation.service.js";
+import { startBookingSweepScheduler } from "./modules/scheduling/booking.service.js";
 import { inProcessQueue } from "./queue/in-process-queue.adapter.js";
+import { startNotificationOutboxScheduler } from "./modules/notifications/notification-outbox.service.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -13,6 +15,8 @@ const app = buildApp();
 let stopInvoiceReminders: (() => void) | undefined;
 let stopPortalSweep: (() => void) | undefined;
 let stopPaymentOperations: (() => void) | undefined;
+let stopBookingSweep: (() => void) | undefined;
+let stopNotificationOutbox: (() => void) | undefined;
 
 const server = app.listen(env.PORT, env.HOST, () => {
   logger.info(
@@ -31,6 +35,13 @@ const server = app.listen(env.PORT, env.HOST, () => {
 
   if (env.PAYMENT_OPERATIONS_ENABLED) {
     stopPaymentOperations = startPaymentOperationScheduler();
+  }
+
+  if (env.BOOKING_ENABLED) {
+    stopBookingSweep = startBookingSweepScheduler();
+  }
+  if (env.NOTIFICATION_OUTBOX_ENABLED) {
+    stopNotificationOutbox = startNotificationOutboxScheduler();
   }
 });
 
@@ -62,6 +73,8 @@ const shutdown = async (signal: string): Promise<void> => {
   stopInvoiceReminders?.();
   stopPortalSweep?.();
   stopPaymentOperations?.();
+  stopBookingSweep?.();
+  stopNotificationOutbox?.();
 
   // Stop accepting new connections. server.close() only resolves once every
   // connection ends, and idle keep-alive sockets would otherwise hold it open
