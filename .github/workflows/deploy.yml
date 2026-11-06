@@ -16,8 +16,30 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /home/ubuntu/Aera/backend
-            git pull origin main
-            npm install --production
+            set -e
+            cd /home/ubuntu/Aera
+
+            # Hard-sync to origin/main so stray server-side edits or
+            # leftover files can never block or corrupt a deploy.
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Remove artifacts left by the old npm-based deploy — pnpm
+            # manages its own node_modules layout and a stale npm tree
+            # would shadow it.
+            rm -rf backend/node_modules package-lock.json backend/package-lock.json
+
+            # pnpm via Corepack (ships with Node 22+).
+            corepack enable
+            corepack prepare pnpm@12.3.4 --activate
+
+            pnpm install --frozen-lockfile
+
+            # Prisma client is gitignored — it must be generated on the
+            # server, then migrations applied before the app restarts.
+            pnpm --filter backend prisma:generate
+            pnpm --filter backend prisma:migrate:deploy
+
             sudo systemctl restart aera
-            sudo systemctl status aera
+            sleep 3
+            sudo systemctl status aera --no-pager
