@@ -46,8 +46,7 @@ export async function recomputeInvoiceBalance(
 
   const amountPaidMinor = paidAgg._sum.amountMinor ?? 0n;
   const creditAppliedMinor = creditAgg._sum.amountMinor ?? 0n;
-  const rawBalance =
-    invoice.totalMinor - amountPaidMinor - creditAppliedMinor;
+  const rawBalance = invoice.totalMinor - amountPaidMinor - creditAppliedMinor;
   const balanceDueMinor = rawBalance > 0n ? rawBalance : 0n;
 
   const settled = amountPaidMinor + creditAppliedMinor;
@@ -66,8 +65,7 @@ export async function recomputeInvoiceBalance(
     status = invoice.status === "OVERDUE" ? "OVERDUE" : "ISSUED";
   }
 
-  const paidAt =
-    status === "PAID" ? (invoice.paidAt ?? new Date()) : null;
+  const paidAt = status === "PAID" ? (invoice.paidAt ?? new Date()) : null;
 
   await tx.invoice.update({
     where: { id: invoiceId },

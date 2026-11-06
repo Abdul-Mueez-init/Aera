@@ -7,7 +7,15 @@
  * matching photo-upload-security.test.ts — no real storage is touched.
  */
 import request from "supertest";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 process.env.REQUESTS_ENABLED = "true";
 process.env.WORKSPACE_PORTAL_ENABLED = "true";
@@ -624,9 +632,8 @@ describe("request media pipeline (3.2)", () => {
 
 describe("request upload sweeper (3.2)", () => {
   it("deletes expired unconfirmed uploads and keeps referenced ones", async () => {
-    const { sweepExpiredRequestUploads } = await import(
-      "../src/modules/requests/request.media.js"
-    );
+    const { sweepExpiredRequestUploads } =
+      await import("../src/modules/requests/request.media.js");
     const created = await request(app)
       .post("/api/v1/portal/requests")
       .set(portalHeaders(sessionA))
@@ -639,11 +646,9 @@ describe("request upload sweeper (3.2)", () => {
         companyId: fx.companyId,
         requestId,
         uploaderType: "PORTAL",
-        portalSessionId: (
-          await prisma.portalSession.findFirst({
-            where: { customerId: fx.customerId },
-          })
-        )!.id,
+        portalSessionId: (await prisma.portalSession.findFirst({
+          where: { customerId: fx.customerId },
+        }))!.id,
         objectKey: `companies/${fx.companyId}/requests/${requestId}/stale.jpg`,
         mimeType: "image/jpeg",
         expiresAt: new Date(Date.now() - 48 * 60 * 60 * 1000),

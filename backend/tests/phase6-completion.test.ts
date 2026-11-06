@@ -36,13 +36,15 @@ interface Fixture {
 }
 
 async function seedCompany(): Promise<Fixture> {
-  const res = await request(app).post("/api/v1/auth/register").send({
-    email: `p6-${suffix()}@example.com`,
-    password: "correct-horse-battery-staple",
-    firstName: "Owner",
-    lastName: "P6",
-    companyName: `P6 ${suffix()}`,
-  });
+  const res = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `p6-${suffix()}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Owner",
+      lastName: "P6",
+      companyName: `P6 ${suffix()}`,
+    });
   expect(res.status).toBe(201);
   const companyId = res.body.data.company.id as string;
   const userId = res.body.data.user.id as string;

@@ -119,7 +119,9 @@ router.patch(
   requireAuth,
   requireRole(...managerRoles),
   async (request, response) => {
-    const parsed = createSchema.omit({ customerId: true, jobId: true, serviceRequestId: true }).safeParse(request.body);
+    const parsed = createSchema
+      .omit({ customerId: true, jobId: true, serviceRequestId: true })
+      .safeParse(request.body);
     if (!parsed.success) {
       sendValidationError(response, parsed.error);
       return;

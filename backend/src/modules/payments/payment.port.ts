@@ -43,8 +43,15 @@ export interface PaymentProvider {
     providerPaymentId?: string;
   }>;
   createCheckout?(request: CheckoutRequest): Promise<CheckoutResult>;
-  verifyWebhook?(rawBody: Buffer, headers: Record<string, string | undefined>): VerifiedWebhook;
-  refund?(paymentId: string, amountMinor: bigint, reason: string): Promise<{
+  verifyWebhook?(
+    rawBody: Buffer,
+    headers: Record<string, string | undefined>,
+  ): VerifiedWebhook;
+  refund?(
+    paymentId: string,
+    amountMinor: bigint,
+    reason: string,
+  ): Promise<{
     providerRefundId?: string;
   }>;
   /**
@@ -69,7 +76,9 @@ export const manualPaymentProvider: PaymentProvider = {
     throw new Error("Webhooks are not supported by the manual provider");
   },
   async refund() {
-    throw new Error("Provider refunds are not supported by the manual provider");
+    throw new Error(
+      "Provider refunds are not supported by the manual provider",
+    );
   },
   async retrieveCheckout() {
     return { status: "EXPIRED" as const };

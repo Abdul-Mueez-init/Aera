@@ -8,13 +8,15 @@ const app = buildApp();
 
 async function seedQuote(kind: "GENERAL" | "INSPECTION") {
   const suffix = `${kind.toLowerCase()}-${Date.now()}-${Math.random()}`;
-  const response = await request(app).post("/api/v1/auth/register").send({
-    email: `owner-${suffix}@example.com`,
-    password: "correct-horse-battery-staple",
-    firstName: "Owner",
-    lastName: "Acceptance",
-    companyName: `Company ${suffix}`,
-  });
+  const response = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `owner-${suffix}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Owner",
+      lastName: "Acceptance",
+      companyName: `Company ${suffix}`,
+    });
   expect(response.status).toBe(201);
   const companyId = response.body.data.company.id as string;
   const userId = response.body.data.user.id as string;
@@ -96,7 +98,9 @@ describe("quote acceptance orchestration", () => {
       expect(jobs).toHaveLength(1);
       expect(jobs[0]?.type).toBe(expectedType);
       expect(
-        await prisma.quoteAcceptance.count({ where: { quoteId: seed.quoteId } }),
+        await prisma.quoteAcceptance.count({
+          where: { quoteId: seed.quoteId },
+        }),
       ).toBe(1);
       expect(
         await prisma.serviceRequest.count({

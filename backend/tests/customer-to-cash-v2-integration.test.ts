@@ -57,13 +57,15 @@ interface Fixture {
 }
 
 async function seedCompany(): Promise<Fixture> {
-  const res = await request(app).post("/api/v1/auth/register").send({
-    email: `v2-${suffix()}@example.com`,
-    password: "correct-horse-battery-staple",
-    firstName: "Owner",
-    lastName: "V2",
-    companyName: `V2 ${suffix()}`,
-  });
+  const res = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `v2-${suffix()}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Owner",
+      lastName: "V2",
+      companyName: `V2 ${suffix()}`,
+    });
   expect(res.status).toBe(201);
   const companyId = res.body.data.company.id as string;
   const userId = res.body.data.user.id as string;
@@ -327,16 +329,13 @@ describe("Branch B — staff direct job", () => {
       where: { id: fx.customerId },
     });
     void customer;
-    const created = await request(app)
-      .post("/api/v1/jobs")
-      .set(fx.auth)
-      .send({
-        customerId: fx.customerId,
-        serviceAddressId: fx.addressId,
-        serviceType: "HVAC Repair",
-        problemDescription: "No cooling",
-        priority: "NORMAL",
-      });
+    const created = await request(app).post("/api/v1/jobs").set(fx.auth).send({
+      customerId: fx.customerId,
+      serviceAddressId: fx.addressId,
+      serviceType: "HVAC Repair",
+      problemDescription: "No cooling",
+      priority: "NORMAL",
+    });
     expect(created.status).toBe(201);
     const jobId = created.body.data.id as string;
 
@@ -410,9 +409,7 @@ describe("Change order — field request to invoice", () => {
         ],
       });
     const baseQuoteId = baseQuote.body.data.id as string;
-    await request(app)
-      .post(`/api/v1/quotes/${baseQuoteId}/send`)
-      .set(fx.auth);
+    await request(app).post(`/api/v1/quotes/${baseQuoteId}/send`).set(fx.auth);
     await request(app)
       .post(`/api/v1/portal/quotes/${baseQuoteId}/respond`)
       .set(portal)
@@ -447,9 +444,7 @@ describe("Change order — field request to invoice", () => {
     expect(coQuote.status).toBe(201);
     expect(coQuote.body.data.kind).toBe("CHANGE_ORDER");
     const coQuoteId = coQuote.body.data.id as string;
-    await request(app)
-      .post(`/api/v1/quotes/${coQuoteId}/send`)
-      .set(fx.auth);
+    await request(app).post(`/api/v1/quotes/${coQuoteId}/send`).set(fx.auth);
 
     // Customer approves the change order in the workspace.
     const coApprove = await request(app)

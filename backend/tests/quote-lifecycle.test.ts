@@ -135,7 +135,12 @@ async function portalRespond(
     .post(`/api/v1/portal/quotes/${quoteId}/respond`)
     .set("Cookie", cookie)
     .set("X-Aera-Portal", "1")
-    .send({ action, ...(action === "APPROVED" ? { reason: "Customer approved by phone" } : {}) });
+    .send({
+      action,
+      ...(action === "APPROVED"
+        ? { reason: "Customer approved by phone" }
+        : {}),
+    });
 }
 
 async function staffRespond(
@@ -143,11 +148,13 @@ async function staffRespond(
   quoteId: string,
   action: "APPROVED" | "DECLINED",
 ) {
-  return request(app)
-    .post(`/api/v1/quotes/${quoteId}/respond`)
-    .set(auth)
-    // Staff approvals on behalf of the customer require an audit reason.
-    .send({ action, reason: "Customer confirmed by phone" });
+  return (
+    request(app)
+      .post(`/api/v1/quotes/${quoteId}/respond`)
+      .set(auth)
+      // Staff approvals on behalf of the customer require an audit reason.
+      .send({ action, reason: "Customer confirmed by phone" })
+  );
 }
 
 // Formats an instant as an ISO string in a fixed UTC offset notation

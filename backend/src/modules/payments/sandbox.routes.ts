@@ -11,9 +11,7 @@ import { settlePaymentSession } from "./payment-session.service.js";
 const router = Router();
 
 function sandboxEnabled(): boolean {
-  return (
-    env.ONLINE_PAYMENTS_ENABLED && env.PAYMENT_PROVIDER === "sandbox"
-  );
+  return env.ONLINE_PAYMENTS_ENABLED && env.PAYMENT_PROVIDER === "sandbox";
 }
 
 function escapeHtml(value: string): string {
@@ -51,11 +49,8 @@ router.get("/checkout/:providerSessionId", async (request, response) => {
     throw new AppError("RESOURCE_NOT_FOUND", "Checkout session not found", 404);
   }
   const amount = (Number(session.amountMinor) / 100).toFixed(2);
-  const payable =
-    session.status === "OPEN" && session.expiresAt > new Date();
-  response
-    .status(200)
-    .type("html")
+  const payable = session.status === "OPEN" && session.expiresAt > new Date();
+  response.status(200).type("html")
     .send(`<!doctype html><html><head><title>Sandbox checkout</title></head>
 <body style="font-family:sans-serif;max-width:420px;margin:4rem auto">
 <h1>Sandbox checkout</h1>

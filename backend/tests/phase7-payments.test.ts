@@ -43,9 +43,8 @@ beforeAll(async () => {
   generateToken = portalTokens.generateToken;
   hashToken = portalTokens.hashToken;
   sandbox = await import("../src/modules/payments/sandbox.provider.js");
-  sessionService = await import(
-    "../src/modules/payments/payment-session.service.js"
-  );
+  sessionService =
+    await import("../src/modules/payments/payment-session.service.js");
 }, 60000);
 
 function suffix() {
@@ -61,13 +60,15 @@ interface Fixture {
 }
 
 async function seedCompany(): Promise<Fixture> {
-  const res = await request(app).post("/api/v1/auth/register").send({
-    email: `p7-${suffix()}@example.com`,
-    password: "correct-horse-battery-staple",
-    firstName: "Owner",
-    lastName: "P7",
-    companyName: `P7 ${suffix()}`,
-  });
+  const res = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `p7-${suffix()}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Owner",
+      lastName: "P7",
+      companyName: `P7 ${suffix()}`,
+    });
   expect(res.status).toBe(201);
   const companyId = res.body.data.company.id as string;
   const userId = res.body.data.user.id as string;
@@ -160,7 +161,11 @@ async function seedRequest(fx: Fixture) {
 
 async function seedIssuedInvoice(
   fx: Fixture,
-  opts: { totalMinor?: bigint; status?: string; kind?: "STANDARD" | "DEPOSIT" } = {},
+  opts: {
+    totalMinor?: bigint;
+    status?: string;
+    kind?: "STANDARD" | "DEPOSIT";
+  } = {},
 ) {
   const total = opts.totalMinor ?? 20_000n;
   return prisma.invoice.create({
@@ -276,7 +281,7 @@ beforeEach(async () => {
 describe("7.2 webhook security", () => {
   it("rejects a forged signature and a stale timestamp", async () => {
     const invoice = await seedIssuedInvoice(fx);
-    const pay = await payViaPortal(fx, invoice.id);
+    await payViaPortal(fx, invoice.id);
     expect(pay.status).toBe(201);
     const session = await prisma.paymentSession.findFirstOrThrow({
       where: { invoiceId: invoice.id },
@@ -303,7 +308,7 @@ describe("7.2 webhook security", () => {
 
   it("settles on a valid webhook and ignores replays", async () => {
     const invoice = await seedIssuedInvoice(fx, { totalMinor: 20_000n });
-    const pay = await payViaPortal(fx, invoice.id);
+    await payViaPortal(fx, invoice.id);
     expect(pay.status).toBe(201);
     const session = await prisma.paymentSession.findFirstOrThrow({
       where: { invoiceId: invoice.id },
@@ -350,7 +355,7 @@ describe("7.2 webhook security", () => {
 
   it("rejects amount/currency mismatch and logs unknown event types", async () => {
     const invoice = await seedIssuedInvoice(fx);
-    const pay = await payViaPortal(fx, invoice.id);
+    await payViaPortal(fx, invoice.id);
     const session = await prisma.paymentSession.findFirstOrThrow({
       where: { invoiceId: invoice.id },
     });
@@ -399,9 +404,11 @@ describe("7.2 webhook security", () => {
 describe("7.3 checkout + reconciliation", () => {
   it("a redirect without a webhook leaves the invoice unpaid until reconcile", async () => {
     const invoice = await seedIssuedInvoice(fx);
-    const pay = await payViaPortal(fx, invoice.id);
+    await payViaPortal(fx, invoice.id);
     expect(pay.status).toBe(201);
-    expect(pay.body.data.checkoutUrl).toContain("/api/v1/payments/sandbox/checkout/");
+    expect(pay.body.data.checkoutUrl).toContain(
+      "/api/v1/payments/sandbox/checkout/",
+    );
 
     // Customer "paid" at the provider but the webhook was lost.
     const session = await prisma.paymentSession.findFirstOrThrow({
@@ -433,7 +440,7 @@ describe("7.3 checkout + reconciliation", () => {
 
   it("sandbox checkout page + pay button settles through the same path", async () => {
     const invoice = await seedIssuedInvoice(fx, { totalMinor: 12_345n });
-    const pay = await payViaPortal(fx, invoice.id);
+    await payViaPortal(fx, invoice.id);
     const checkoutUrl = pay.body.data.checkoutUrl as string;
     const providerSessionId = checkoutUrl.split("/").pop() as string;
 
@@ -499,7 +506,11 @@ describe("7.4 deposits", () => {
       where: { sourceQuoteId: created.body.data.id },
     });
     expect(job).toBeNull();
-    return { requestRow, quoteId: created.body.data.id as string, depositInvoice };
+    return {
+      requestRow,
+      quoteId: created.body.data.id as string,
+      depositInvoice,
+    };
   }
 
   it("acceptance issues a DEPOSIT invoice; paying it creates the job once", async () => {
@@ -508,7 +519,7 @@ describe("7.4 deposits", () => {
     expect(depositInvoice.status).toBe("ISSUED");
     expect(depositInvoice.balanceDueMinor).toBe(5000n);
 
-    const pay = await payViaPortal(fx, depositInvoice.id);
+    await payViaPortal(fx, depositInvoice.id);
     expect(pay.status).toBe(201);
     const session = await prisma.paymentSession.findFirstOrThrow({
       where: { invoiceId: depositInvoice.id },
@@ -594,7 +605,7 @@ describe("7.5 credits and refunds", () => {
     const depositInvoice = await prisma.invoice.findFirstOrThrow({
       where: { kind: "DEPOSIT", quoteId: quote.body.data.id },
     });
-    const pay = await payViaPortal(fx, depositInvoice.id);
+    await payViaPortal(fx, depositInvoice.id);
     const session = await prisma.paymentSession.findFirstOrThrow({
       where: { invoiceId: depositInvoice.id },
     });
@@ -677,13 +688,15 @@ describe("7.5 credits and refunds", () => {
     expect(tooMuch.status).toBe(422);
 
     // A dispatcher cannot refund.
-    const techRes = await request(app).post("/api/v1/auth/register").send({
-      email: `p7-disp-${suffix()}@example.com`,
-      password: "correct-horse-battery-staple",
-      firstName: "Disp",
-      lastName: "Patch",
-      companyName: `Tmp ${suffix()}`,
-    });
+    const techRes = await request(app)
+      .post("/api/v1/auth/register")
+      .send({
+        email: `p7-disp-${suffix()}@example.com`,
+        password: "correct-horse-battery-staple",
+        firstName: "Disp",
+        lastName: "Patch",
+        companyName: `Tmp ${suffix()}`,
+      });
     const dispUserId = techRes.body.data.user.id as string;
     const tmpCompanyId = techRes.body.data.company.id as string;
     await prisma.companyMember.deleteMany({ where: { userId: dispUserId } });
@@ -699,12 +712,10 @@ describe("7.5 credits and refunds", () => {
     const dispEmail = (
       await prisma.user.findUniqueOrThrow({ where: { id: dispUserId } })
     ).email;
-    const login = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        email: dispEmail,
-        password: "correct-horse-battery-staple",
-      });
+    const login = await request(app).post("/api/v1/auth/login").send({
+      email: dispEmail,
+      password: "correct-horse-battery-staple",
+    });
     expect(login.status).toBe(200);
     const denied = await request(app)
       .post(`/api/v1/invoices/${invoice.id}/refunds`)

@@ -129,7 +129,11 @@ export async function exchangeToken(token: string, userAgent?: string) {
     // delivery token itself rather than the grant link state.
     if (deliveryTokenId) {
       const tokenBurn = await tx.portalDeliveryToken.updateMany({
-        where: { id: deliveryTokenId, consumedAt: null, expiresAt: { gt: now } },
+        where: {
+          id: deliveryTokenId,
+          consumedAt: null,
+          expiresAt: { gt: now },
+        },
         data: { consumedAt: now },
       });
       if (tokenBurn.count !== 1) return null;
@@ -158,8 +162,7 @@ export async function exchangeToken(token: string, userAgent?: string) {
         customerId: grant.customerId,
         grantId: grant.id,
         action: "PORTAL_LINK_EXCHANGED",
-        resourceType:
-          grant.scope === "WORKSPACE" ? "WORKSPACE" : grant.scope,
+        resourceType: grant.scope === "WORKSPACE" ? "WORKSPACE" : grant.scope,
         resourceId:
           grant.scope === "WORKSPACE" ? grant.customerId : grant.jobId,
       },

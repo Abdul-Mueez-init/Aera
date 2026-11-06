@@ -1,4 +1,9 @@
-import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
 import { env } from "../../config/env.js";
 import { AppError } from "../../common/errors.js";
 import type {
@@ -58,9 +63,9 @@ export function sandboxSignature(
 }
 
 /** Test/dev helper: marks a sandbox checkout paid provider-side. */
-export function markSandboxCheckoutPaid(
-  providerSessionId: string,
-): { paymentId: string } {
+export function markSandboxCheckoutPaid(providerSessionId: string): {
+  paymentId: string;
+} {
   const checkout = checkouts.get(providerSessionId);
   if (!checkout) {
     throw new AppError("RESOURCE_NOT_FOUND", "Checkout session not found", 404);
@@ -147,12 +152,13 @@ export const sandboxPaymentProvider: PaymentProvider = {
 
     let payload: Record<string, unknown>;
     try {
-      payload = JSON.parse(rawBody.toString("utf8")) as Record<
-        string,
-        unknown
-      >;
+      payload = JSON.parse(rawBody.toString("utf8")) as Record<string, unknown>;
     } catch {
-      throw new AppError("WEBHOOK_PAYLOAD_INVALID", "Invalid webhook payload", 400);
+      throw new AppError(
+        "WEBHOOK_PAYLOAD_INVALID",
+        "Invalid webhook payload",
+        400,
+      );
     }
     const data =
       payload.data && typeof payload.data === "object"
@@ -161,7 +167,11 @@ export const sandboxPaymentProvider: PaymentProvider = {
     const eventId = payload.eventId ?? payload.id;
     const type = payload.type;
     if (typeof eventId !== "string" || typeof type !== "string") {
-      throw new AppError("WEBHOOK_PAYLOAD_INVALID", "Webhook missing eventId/type", 400);
+      throw new AppError(
+        "WEBHOOK_PAYLOAD_INVALID",
+        "Webhook missing eventId/type",
+        400,
+      );
     }
     return {
       eventId,
@@ -170,7 +180,8 @@ export const sandboxPaymentProvider: PaymentProvider = {
         typeof data.providerSessionId === "string"
           ? data.providerSessionId
           : undefined,
-      paymentId: typeof data.paymentId === "string" ? data.paymentId : undefined,
+      paymentId:
+        typeof data.paymentId === "string" ? data.paymentId : undefined,
       refundId: typeof data.refundId === "string" ? data.refundId : undefined,
       amountMinor:
         typeof data.amountMinor === "string" ||
@@ -185,7 +196,9 @@ export const sandboxPaymentProvider: PaymentProvider = {
     return { providerRefundId: `re_sbx_${randomUUID()}` };
   },
 
-  async retrieveCheckout(providerSessionId: string): Promise<CheckoutSessionStatus> {
+  async retrieveCheckout(
+    providerSessionId: string,
+  ): Promise<CheckoutSessionStatus> {
     const checkout = checkouts.get(providerSessionId);
     if (!checkout) {
       return { status: "EXPIRED" };

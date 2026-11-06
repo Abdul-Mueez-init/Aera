@@ -234,15 +234,22 @@ router.get(
   },
 );
 
-
-
 const completeSchema = z.object({
   business: businessSchema,
   area: areaSchema,
   services: serviceSchema,
   logoObjectKey: z.string().trim().min(1).max(500).optional().nullable(),
-  logoMimeType: z.enum(["image/jpeg", "image/png", "image/webp"]).optional().nullable(),
-  logoSizeBytes: z.number().int().positive().max(5_000_000).optional().nullable(),
+  logoMimeType: z
+    .enum(["image/jpeg", "image/png", "image/webp"])
+    .optional()
+    .nullable(),
+  logoSizeBytes: z
+    .number()
+    .int()
+    .positive()
+    .max(5_000_000)
+    .optional()
+    .nullable(),
 });
 
 router.post("/complete", async (request, response) => {
@@ -263,8 +270,7 @@ router.post("/complete", async (request, response) => {
     );
   }
 
-  const { business, area, services, logoObjectKey, logoMimeType } =
-    parsed.data;
+  const { business, area, services, logoObjectKey, logoMimeType } = parsed.data;
 
   // Verify logo if provided
   if (logoObjectKey) {
@@ -286,7 +292,12 @@ router.post("/complete", async (request, response) => {
   }
 
   let resolvedAddress: string;
-  let nearbyPlaces: { placeId: string; name: string; latitude: number; longitude: number }[] = [];
+  let nearbyPlaces: {
+    placeId: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+  }[] = [];
   try {
     [resolvedAddress, nearbyPlaces] = await Promise.all([
       reverseGeocode(area.latitude, area.longitude),
@@ -325,7 +336,12 @@ router.post("/complete", async (request, response) => {
     if (!customByKey.has(key)) customByKey.set(key, name);
   }
 
-  let customZones: Array<{ placeId: string; name: string; latitude: number; longitude: number }>;
+  let customZones: Array<{
+    placeId: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+  }>;
   try {
     customZones = await Promise.all(
       [...customByKey.entries()].map(async ([key, name]) => ({
@@ -394,7 +410,10 @@ router.post("/complete", async (request, response) => {
     };
   });
 
-  if (new Set(prepared.map((item) => item.normalizedName)).size !== prepared.length) {
+  if (
+    new Set(prepared.map((item) => item.normalizedName)).size !==
+    prepared.length
+  ) {
     throw new AppError(
       "SERVICE_DUPLICATE",
       "Service names must be unique, ignoring letter case",

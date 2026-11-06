@@ -93,14 +93,12 @@ export async function ensureDepositInvoice(
  * no job until the deposit invoice is paid, at which point the payment
  * settlement path resumes job creation.
  */
-export async function evaluateDepositGate(
-  ctx: {
-    companyId: string;
-    quoteId: string;
-    serviceRequestId: string | null;
-    transaction?: Tx;
-  },
-): Promise<{ result: "PASS" | "WAIT"; reason?: string }> {
+export async function evaluateDepositGate(ctx: {
+  companyId: string;
+  quoteId: string;
+  serviceRequestId: string | null;
+  transaction?: Tx;
+}): Promise<{ result: "PASS" | "WAIT"; reason?: string }> {
   const db = ctx.transaction ?? prisma;
   const acceptance = await db.quoteAcceptance.findUnique({
     where: {

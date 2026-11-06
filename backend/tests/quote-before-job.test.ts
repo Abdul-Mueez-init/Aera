@@ -47,13 +47,15 @@ interface Fixture {
 }
 
 async function seedCompany(): Promise<Fixture> {
-  const res = await request(app).post("/api/v1/auth/register").send({
-    email: `p4-${suffix()}@example.com`,
-    password: "correct-horse-battery-staple",
-    firstName: "Owner",
-    lastName: "P4",
-    companyName: `P4 ${suffix()}`,
-  });
+  const res = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `p4-${suffix()}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Owner",
+      lastName: "P4",
+      companyName: `P4 ${suffix()}`,
+    });
   expect(res.status).toBe(201);
   const companyId = res.body.data.company.id as string;
   const userId = res.body.data.user.id as string;
@@ -384,9 +386,8 @@ describe("4.5 decline, question and expiry", () => {
   });
 
   it("sweep expiry moves the request QUOTED → EXPIRED when no quote remains", async () => {
-    const { sweepExpiredQuotes } = await import(
-      "../src/modules/quotes/quote.service.js"
-    );
+    const { sweepExpiredQuotes } =
+      await import("../src/modules/quotes/quote.service.js");
     const requestRow = await seedRequest(fx, "QUOTED");
     const created = await createQuote(fx, {
       serviceRequestId: requestRow.id,

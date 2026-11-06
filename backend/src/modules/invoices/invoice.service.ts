@@ -226,8 +226,7 @@ export async function generateInvoiceFromJob(
   // the latest. getCompletedJobSource already filters to APPROVED.
   const quotes = job.quotes;
   const primaryQuote = quotes[0];
-  const currency =
-    primaryQuote?.currency ?? job.parts[0]?.currency ?? "USD";
+  const currency = primaryQuote?.currency ?? job.parts[0]?.currency ?? "USD";
 
   type InvoiceItemDraft = {
     description: string;
@@ -328,11 +327,7 @@ export async function generateInvoiceFromJob(
 
   // Diagnostic-fee credit: a paid diagnostic invoice on the same service
   // request becomes a negative line on the follow-up job's invoice.
-  if (
-    scopeLinesEnabled &&
-    job.type !== "DIAGNOSTIC" &&
-    job.serviceRequestId
-  ) {
+  if (scopeLinesEnabled && job.type !== "DIAGNOSTIC" && job.serviceRequestId) {
     const diagnosticInvoice = await db.invoice.findFirst({
       where: {
         companyId: context.companyId,
@@ -387,8 +382,7 @@ export async function generateInvoiceFromJob(
     totalMinor !== subtotalMinor - discountMinor + taxMinor ||
     items.some(
       (item) =>
-        (!item.credit &&
-          (item.totalMinor < 0n || item.unitPriceMinor < 0n)) ||
+        (!item.credit && (item.totalMinor < 0n || item.unitPriceMinor < 0n)) ||
         (item.credit && item.totalMinor > 0n),
     )
   ) {
@@ -613,8 +607,7 @@ export async function addInvoiceManualItem(
     const subtotalMinor =
       existing.reduce((sum, item) => sum + item.totalMinor, BigInt(0)) +
       lineTotal;
-    const totalMinor =
-      subtotalMinor - invoice.discountMinor + invoice.taxMinor;
+    const totalMinor = subtotalMinor - invoice.discountMinor + invoice.taxMinor;
     if (subtotalMinor < 0n || totalMinor < 0n) {
       throw new AppError(
         "INVOICE_INVALID_TOTALS",

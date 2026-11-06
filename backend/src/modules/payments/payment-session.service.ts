@@ -409,7 +409,10 @@ export async function processWebhookEvent(
     } else if (verified.type === "checkout.expired") {
       if (verified.providerSessionId) {
         const updated = await prisma.paymentSession.updateMany({
-          where: { providerSessionId: verified.providerSessionId, status: "OPEN" },
+          where: {
+            providerSessionId: verified.providerSessionId,
+            status: "OPEN",
+          },
           data: { status: "EXPIRED" },
         });
         outcome = updated.count === 1 ? "expired" : "ignored";
@@ -486,14 +489,11 @@ export async function sweepStalePaymentSessions(
           session.providerSessionId,
         );
         if (remote.status === "COMPLETED") {
-          const result = await settlePaymentSession(
-            session.providerSessionId,
-            {
-              paymentId: remote.paymentId,
-              amountMinor: remote.amountMinor,
-              currency: remote.currency,
-            },
-          );
+          const result = await settlePaymentSession(session.providerSessionId, {
+            paymentId: remote.paymentId,
+            amountMinor: remote.amountMinor,
+            currency: remote.currency,
+          });
           if (result.settled) settled += 1;
           continue;
         }

@@ -435,7 +435,9 @@ describe("workspace grant lifecycle (staff API)", () => {
     const results = await Promise.allSettled(
       Array.from({ length: 4 }, () =>
         request(app)
-          .post(`/api/v1/customers/${companyA.customerId}/portal-access/reissue`)
+          .post(
+            `/api/v1/customers/${companyA.customerId}/portal-access/reissue`,
+          )
           .set({ Authorization: companyA.owner.Authorization })
           .send({ channels: [] }),
       ),
@@ -560,7 +562,10 @@ describe("workspace read APIs + IDOR matrix", () => {
 
     // Same company, different customer.
     const otherCustomerJob = await prisma.job.findFirstOrThrow({
-      where: { companyId: companyA.companyId, customerId: companyA.customer2Id },
+      where: {
+        companyId: companyA.companyId,
+        customerId: companyA.customer2Id,
+      },
     });
     const res = await request(app)
       .get(`/api/v1/portal/jobs/${otherCustomerJob.id}`)
@@ -590,17 +595,13 @@ describe("workspace read APIs + IDOR matrix", () => {
     const token = await seedPortalSession(companyA, { scope: "WORKSPACE" });
     // /portal/job is the legacy JOB-scope snapshot: a workspace session has
     // no single job, so it must not leak one.
-    const res = await request(app)
-      .get("/api/v1/portal/job")
-      .set(portal(token));
+    const res = await request(app).get("/api/v1/portal/job").set(portal(token));
     expect([403, 404, 410]).toContain(res.status);
   });
 
   it("JOB session still reads its own job snapshot (legacy compat)", async () => {
     const token = await seedPortalSession(companyA, { scope: "JOB" });
-    const res = await request(app)
-      .get("/api/v1/portal/job")
-      .set(portal(token));
+    const res = await request(app).get("/api/v1/portal/job").set(portal(token));
     expect(res.status).toBe(200);
     expect(res.body.data.job.jobNumber).toBe(companyA.jobNumber);
   });

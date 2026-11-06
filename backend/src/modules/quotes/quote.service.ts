@@ -105,7 +105,9 @@ const quoteSelect = {
   },
 } as const;
 
-export function computeQuoteTotals(input: Pick<CreateQuoteInput, "items" | "discountMinor" | "taxRateBps">) {
+export function computeQuoteTotals(
+  input: Pick<CreateQuoteInput, "items" | "discountMinor" | "taxRateBps">,
+) {
   // Use exact integer arithmetic for all money calculations
   const subtotalMinor = calculateSubtotal(
     input.items.map((item) => ({
@@ -225,7 +227,11 @@ export async function createQuote(
       select: { id: true },
     });
     if (!request) {
-      throw new AppError("QUOTE_INVALID_REQUEST", "Service request not found", 422);
+      throw new AppError(
+        "QUOTE_INVALID_REQUEST",
+        "Service request not found",
+        422,
+      );
     }
   }
   if (input.basisJobId) {
@@ -384,7 +390,11 @@ export async function updateQuote(
   });
   if (!quote) throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
   if (quote.status !== "DRAFT") {
-    throw new AppError("QUOTE_NOT_EDITABLE", "Only draft quotes can be edited", 409);
+    throw new AppError(
+      "QUOTE_NOT_EDITABLE",
+      "Only draft quotes can be edited",
+      409,
+    );
   }
   const totals = computeQuoteTotals(input);
   assertTotals(totals);
@@ -392,7 +402,9 @@ export async function updateQuote(
   const depositValue = BigInt(input.depositValue ?? 0);
   assertDepositTerms(depositType, depositValue);
   const updated = await prisma.$transaction(async (transaction) => {
-    await transaction.quoteItem.deleteMany({ where: { quoteId, companyId: context.companyId } });
+    await transaction.quoteItem.deleteMany({
+      where: { quoteId, companyId: context.companyId },
+    });
     return transaction.quote.update({
       where: { id: quoteId },
       data: {
@@ -411,7 +423,10 @@ export async function updateQuote(
             description: item.description.trim(),
             quantity: item.quantity,
             unitPriceMinor: BigInt(item.unitPriceMinor),
-            totalMinor: calculateLineItemTotal(BigInt(item.unitPriceMinor), item.quantity),
+            totalMinor: calculateLineItemTotal(
+              BigInt(item.unitPriceMinor),
+              item.quantity,
+            ),
             sortOrder: index,
           })),
         },
@@ -427,9 +442,14 @@ export async function reviseQuote(context: AuthContext, quoteId: string) {
     where: { id: quoteId, companyId: context.companyId },
     include: { items: { orderBy: { sortOrder: "asc" } } },
   });
-  if (!original) throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
+  if (!original)
+    throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
   if (!["SENT", "APPROVED", "DECLINED", "EXPIRED"].includes(original.status)) {
-    throw new AppError("QUOTE_NOT_REVISIONABLE", "Quote cannot be revised in its current state", 409);
+    throw new AppError(
+      "QUOTE_NOT_REVISIONABLE",
+      "Quote cannot be revised in its current state",
+      409,
+    );
   }
   const revision = await prisma.quote.create({
     data: {

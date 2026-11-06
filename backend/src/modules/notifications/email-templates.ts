@@ -282,8 +282,7 @@ export async function buildNotificationEmail(
             },
           })
         : null;
-      const invoiceNumber =
-        dispute?.invoice.invoiceNumber ?? event.invoiceId;
+      const invoiceNumber = dispute?.invoice.invoiceNumber ?? event.invoiceId;
       const opened = event.type === "INVOICE_DISPUTE_OPENED";
       const subject = opened
         ? `Dispute opened on invoice ${invoiceNumber}`

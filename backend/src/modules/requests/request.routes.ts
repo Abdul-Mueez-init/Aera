@@ -92,14 +92,9 @@ router.get(
   requireAuth,
   requireRole(...managerRoles),
   async (request, response) => {
-    response
-      .status(200)
-      .json({
-        data: await getRequest(
-          request.auth!,
-          routeId(request.params.requestId),
-        ),
-      });
+    response.status(200).json({
+      data: await getRequest(request.auth!, routeId(request.params.requestId)),
+    });
   },
 );
 
@@ -108,14 +103,12 @@ router.get(
   requireAuth,
   requireRole(...managerRoles),
   async (request, response) => {
-    response
-      .status(200)
-      .json({
-        data: await listRequestMedia(
-          request.auth!,
-          routeId(request.params.requestId),
-        ),
-      });
+    response.status(200).json({
+      data: await listRequestMedia(
+        request.auth!,
+        routeId(request.params.requestId),
+      ),
+    });
   },
 );
 

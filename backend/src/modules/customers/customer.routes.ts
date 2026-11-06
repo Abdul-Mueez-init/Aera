@@ -66,9 +66,7 @@ const customerJobsQuerySchema = z.object({
 const portalAccessSchema = z.object({
   // Empty array = copy-link only (staff pastes the returned link manually);
   // SMS/EMAIL queue delivery through the notification outbox.
-  channels: z
-    .array(z.enum(["SMS", "EMAIL"]))
-    .default(["SMS", "EMAIL"]),
+  channels: z.array(z.enum(["SMS", "EMAIL"])).default(["SMS", "EMAIL"]),
 });
 
 function sendValidationError(response: Response, error: z.ZodError) {

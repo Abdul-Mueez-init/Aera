@@ -23,7 +23,12 @@ const updateCompanySchema = z
     defaultCurrency: z.string().trim().length(3).toUpperCase().optional(),
     // Phase 7.4/7.7 — company-wide deposit defaults prefilled on quotes.
     defaultDepositType: z.enum(["NONE", "FIXED", "PERCENT"]).optional(),
-    defaultDepositValue: z.number().int().nonnegative().max(100_000_000).optional(),
+    defaultDepositValue: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(100_000_000)
+      .optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
@@ -234,7 +239,6 @@ const companySelect = {
   defaultDepositType: true,
   defaultDepositValue: true,
 } as const;
-
 
 // defaultDepositValue is BigInt in Prisma; the public DTO carries it as a
 // JSON-safe number (bounded to <= 100_000_000 by the update schema).

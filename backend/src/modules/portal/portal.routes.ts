@@ -388,8 +388,7 @@ router.post(
         },
         request.params.jobId as string,
         parsed.data.windows,
-        parsed.data.expiresAt ??
-          new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        parsed.data.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       ),
     });
   },
@@ -684,7 +683,11 @@ router.get(
   async (request: PortalRequest, response: Response) => {
     const context = workspaceContext(request);
     response.status(200).json({
-      data: await getJobTracking(context.companyId, context.customerId, request.params.jobId as string),
+      data: await getJobTracking(
+        context.companyId,
+        context.customerId,
+        request.params.jobId as string,
+      ),
     });
   },
 );

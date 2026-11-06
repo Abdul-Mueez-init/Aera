@@ -73,13 +73,15 @@ beforeEach(async () => {
     prisma.user.deleteMany(),
     prisma.company.deleteMany(),
   ]);
-  const res = await request(app).post("/api/v1/auth/register").send({
-    email: `p6off-${suffix()}@example.com`,
-    password: "correct-horse-battery-staple",
-    firstName: "Owner",
-    lastName: "Off",
-    companyName: `P6Off ${suffix()}`,
-  });
+  const res = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `p6off-${suffix()}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Owner",
+      lastName: "Off",
+      companyName: `P6Off ${suffix()}`,
+    });
   expect(res.status).toBe(201);
   fx = {
     companyId: res.body.data.company.id as string,

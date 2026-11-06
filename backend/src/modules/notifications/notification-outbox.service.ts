@@ -15,10 +15,7 @@ import {
   listTokensForUsers,
 } from "./device-token.service.js";
 import { generateToken, hashToken } from "../portal/portal.tokens.js";
-import {
-  portalLinkEmail,
-  portalLinkSms,
-} from "../portal/portal-messages.js";
+import { portalLinkEmail, portalLinkSms } from "../portal/portal-messages.js";
 
 const OUTBOX_JOB_TYPE = "notification.outbox";
 // Phase 8.1 — portal link deliveries ride the same durable outbox. The
@@ -26,14 +23,12 @@ const OUTBOX_JOB_TYPE = "notification.outbox";
 // minted here at send time and never persisted.
 const PORTAL_LINK_TEMPLATE = "PORTAL_LINK";
 
-async function processPortalLinkOutbox(
-  row: {
-    id: string;
-    companyId: string;
-    channel: string;
-    payload: unknown;
-  },
-): Promise<void> {
+async function processPortalLinkOutbox(row: {
+  id: string;
+  companyId: string;
+  channel: string;
+  payload: unknown;
+}): Promise<void> {
   const payload = (row.payload ?? {}) as Record<string, string>;
   const grantId = payload.grantId;
   const destination = payload.destination;
@@ -65,9 +60,7 @@ async function processPortalLinkOutbox(
     link,
     companyName: payload.companyName ?? "",
     customerFirstName: payload.customerFirstName ?? "",
-    jobNumber: payload.jobNumber
-      ? Number(payload.jobNumber)
-      : undefined,
+    jobNumber: payload.jobNumber ? Number(payload.jobNumber) : undefined,
   };
   if (row.channel === "SMS") {
     await textbeeSmsAdapter.send({
@@ -159,99 +152,101 @@ async function processOutbox(): Promise<void> {
       if (row.template === PORTAL_LINK_TEMPLATE) {
         await processPortalLinkOutbox(row);
       } else {
-      if (!row.recipientUserId)
-        throw new Error("Outbox recipient no longer exists");
-      const event = {
-        type: row.template as
-          | "JOB_SCHEDULED"
-          | "JOB_RESCHEDULED"
-          | "JOB_ASSIGNED"
-          | "QUOTE_SENT"
-          | "QUOTE_APPROVED"
-          | "QUOTE_DECLINED"
-          | "INVOICE_ISSUED"
-          | "INVOICE_PAYMENT_REMINDER"
-          | "REQUEST_SUBMITTED"
-          | "REQUEST_INFO_PROVIDED"
-          | "REQUEST_STATUS_CHANGED"
-          | "JOB_CHANGE_REQUEST_SUBMITTED"
-          | "JOB_REVIEW_CHANGES_REQUESTED",
-        companyId: row.companyId,
-        ...(typeof row.payload === "object" && row.payload !== null
-          ? row.payload
-          : {}),
-      } as {
-        type: Parameters<typeof buildNotificationEmail>[0]["type"];
-        companyId: string;
-        jobId?: string;
-        quoteId?: string;
-        invoiceId?: string;
-        requestId?: string;
-      };
+        if (!row.recipientUserId)
+          throw new Error("Outbox recipient no longer exists");
+        const event = {
+          type: row.template as
+            | "JOB_SCHEDULED"
+            | "JOB_RESCHEDULED"
+            | "JOB_ASSIGNED"
+            | "QUOTE_SENT"
+            | "QUOTE_APPROVED"
+            | "QUOTE_DECLINED"
+            | "INVOICE_ISSUED"
+            | "INVOICE_PAYMENT_REMINDER"
+            | "REQUEST_SUBMITTED"
+            | "REQUEST_INFO_PROVIDED"
+            | "REQUEST_STATUS_CHANGED"
+            | "JOB_CHANGE_REQUEST_SUBMITTED"
+            | "JOB_REVIEW_CHANGES_REQUESTED",
+          companyId: row.companyId,
+          ...(typeof row.payload === "object" && row.payload !== null
+            ? row.payload
+            : {}),
+        } as {
+          type: Parameters<typeof buildNotificationEmail>[0]["type"];
+          companyId: string;
+          jobId?: string;
+          quoteId?: string;
+          invoiceId?: string;
+          requestId?: string;
+        };
 
-      const recipient = row.recipientUserId
-        ? await prisma.companyMember.findFirst({
-            where: {
-              companyId: row.companyId,
-              userId: row.recipientUserId,
-              status: "ACTIVE",
-            },
-            select: {
-              user: {
-                select: {
-                  id: true,
-                  email: true,
-                  phone: true,
-                  firstName: true,
+        const recipient = row.recipientUserId
+          ? await prisma.companyMember.findFirst({
+              where: {
+                companyId: row.companyId,
+                userId: row.recipientUserId,
+                status: "ACTIVE",
+              },
+              select: {
+                user: {
+                  select: {
+                    id: true,
+                    email: true,
+                    phone: true,
+                    firstName: true,
+                  },
                 },
               },
-            },
-          })
-        : null;
-      if (!recipient) throw new Error("Outbox recipient is no longer active");
+            })
+          : null;
+        if (!recipient) throw new Error("Outbox recipient is no longer active");
 
-      if (row.channel === "IN_APP") {
-        await prisma.notification.create({
-          data: {
-            companyId: row.companyId,
-            recipientUserId: recipient.user.id,
-            type: event.type,
-            payload: row.payload ?? {},
-          },
-        });
-      } else if (row.channel === "EMAIL" && recipient.user.email) {
-        const message = await buildNotificationEmail(event, {
-          email: recipient.user.email,
-          firstName: recipient.user.firstName,
-        });
-        if (message) await resendEmailAdapter.send(message);
-      } else if (row.channel === "SMS" && recipient.user.phone) {
-        if (!/^\+[1-9]\d{6,14}$/.test(recipient.user.phone)) {
-          throw new Error("Outbox recipient phone is not a valid E.164 number");
-        }
-        const message = await buildSmsMessage(event);
-        if (message)
-          await textbeeSmsAdapter.send({
-            to: recipient.user.phone,
-            body: message.body,
+        if (row.channel === "IN_APP") {
+          await prisma.notification.create({
+            data: {
+              companyId: row.companyId,
+              recipientUserId: recipient.user.id,
+              type: event.type,
+              payload: row.payload ?? {},
+            },
           });
-      } else if (row.channel === "PUSH") {
-        const message = await buildPushMessage(event);
-        if (message) {
-          const tokens = await listTokensForUsers([recipient.user.id]);
-          for (const { token } of tokens) {
-            try {
-              await fcmPushAdapter.send({ ...message, token });
-            } catch (error) {
-              if (error instanceof PushTokenInvalidError) {
-                await removeInvalidToken(token);
-                continue;
+        } else if (row.channel === "EMAIL" && recipient.user.email) {
+          const message = await buildNotificationEmail(event, {
+            email: recipient.user.email,
+            firstName: recipient.user.firstName,
+          });
+          if (message) await resendEmailAdapter.send(message);
+        } else if (row.channel === "SMS" && recipient.user.phone) {
+          if (!/^\+[1-9]\d{6,14}$/.test(recipient.user.phone)) {
+            throw new Error(
+              "Outbox recipient phone is not a valid E.164 number",
+            );
+          }
+          const message = await buildSmsMessage(event);
+          if (message)
+            await textbeeSmsAdapter.send({
+              to: recipient.user.phone,
+              body: message.body,
+            });
+        } else if (row.channel === "PUSH") {
+          const message = await buildPushMessage(event);
+          if (message) {
+            const tokens = await listTokensForUsers([recipient.user.id]);
+            for (const { token } of tokens) {
+              try {
+                await fcmPushAdapter.send({ ...message, token });
+              } catch (error) {
+                if (error instanceof PushTokenInvalidError) {
+                  await removeInvalidToken(token);
+                  continue;
+                }
+                throw error;
               }
-              throw error;
             }
           }
         }
-      }
       }
       await prisma.notificationOutbox.update({
         where: { id: row.id },

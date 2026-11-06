@@ -35,7 +35,10 @@ const requestFields = z.object({
   equipmentInfo: z.string().trim().max(2000).optional(),
   budgetMinMinor: z.number().int().nonnegative().optional(),
   budgetMaxMinor: z.number().int().nonnegative().optional(),
-  budgetCurrency: z.string().regex(/^[A-Za-z]{3}$/).optional(),
+  budgetCurrency: z
+    .string()
+    .regex(/^[A-Za-z]{3}$/)
+    .optional(),
 });
 
 export const createRequestSchema = requestFields.refine(

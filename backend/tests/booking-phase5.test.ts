@@ -48,13 +48,15 @@ interface Fixture {
 }
 
 async function seedCompany(): Promise<Fixture> {
-  const res = await request(app).post("/api/v1/auth/register").send({
-    email: `p5-${suffix()}@example.com`,
-    password: "correct-horse-battery-staple",
-    firstName: "Owner",
-    lastName: "P5",
-    companyName: `P5 ${suffix()}`,
-  });
+  const res = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `p5-${suffix()}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Owner",
+      lastName: "P5",
+      companyName: `P5 ${suffix()}`,
+    });
   expect(res.status).toBe(201);
   const companyId = res.body.data.company.id as string;
   const userId = res.body.data.user.id as string;
@@ -88,13 +90,15 @@ async function seedCompany(): Promise<Fixture> {
 }
 
 async function seedTechnician(companyId: string) {
-  const res = await request(app).post("/api/v1/auth/register").send({
-    email: `p5-tech-${suffix()}@example.com`,
-    password: "correct-horse-battery-staple",
-    firstName: "Tech",
-    lastName: "Five",
-    companyName: `Temp ${suffix()}`,
-  });
+  const res = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `p5-tech-${suffix()}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Tech",
+      lastName: "Five",
+      companyName: `Temp ${suffix()}`,
+    });
   expect(res.status).toBe(201);
   const techUserId = res.body.data.user.id as string;
   const tempCompanyId = res.body.data.company.id as string;
@@ -356,14 +360,11 @@ describe("5.4 holds and atomic confirmation", () => {
 
     const holds = await Promise.all(
       Array.from({ length: 10 }, () =>
-        request(app)
-          .post("/api/v1/booking/holds")
-          .set(fx.auth)
-          .send({
-            requestId: requestRow.id,
-            windowStart,
-            windowEnd,
-          }),
+        request(app).post("/api/v1/booking/holds").set(fx.auth).send({
+          requestId: requestRow.id,
+          windowStart,
+          windowEnd,
+        }),
       ),
     );
     for (const hold of holds) expect(hold.status).toBe(201);
@@ -496,9 +497,9 @@ describe("5.5 BookingGate", () => {
       .post(`/api/v1/portal/booking/holds/${hold.body.data.id}/confirm`)
       .set(portal);
     expect(again.status).toBe(409);
-    expect(
-      await prisma.job.count({ where: { sourceQuoteId: quote.id } }),
-    ).toBe(1);
+    expect(await prisma.job.count({ where: { sourceQuoteId: quote.id } })).toBe(
+      1,
+    );
   });
 });
 

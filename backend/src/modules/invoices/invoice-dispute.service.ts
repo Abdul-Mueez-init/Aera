@@ -25,7 +25,12 @@ export async function createPortalDispute(
   context: DisputePortalContext,
   invoiceId: string,
   input: {
-    reason: "INCORRECT_AMOUNT" | "DUPLICATE_CHARGE" | "SERVICE_NOT_RENDERED" | "GOODS_NOT_RECEIVED" | "OTHER";
+    reason:
+      | "INCORRECT_AMOUNT"
+      | "DUPLICATE_CHARGE"
+      | "SERVICE_NOT_RENDERED"
+      | "GOODS_NOT_RECEIVED"
+      | "OTHER";
     message: string;
   },
 ) {
@@ -117,7 +122,9 @@ export async function listDisputes(
         resolutionNote: true,
         resolvedAt: true,
         createdAt: true,
-        invoice: { select: { invoiceNumber: true, totalMinor: true, currency: true } },
+        invoice: {
+          select: { invoiceNumber: true, totalMinor: true, currency: true },
+        },
         customer: { select: { id: true, firstName: true, lastName: true } },
       },
     }),
@@ -185,7 +192,11 @@ export async function resolveDispute(
 ) {
   const dispute = await getDisputeOrThrow(context, disputeId);
   if (dispute.status === "RESOLVED") {
-    throw new AppError("DISPUTE_ALREADY_RESOLVED", "Dispute is already resolved", 409);
+    throw new AppError(
+      "DISPUTE_ALREADY_RESOLVED",
+      "Dispute is already resolved",
+      409,
+    );
   }
   const fromStatus = dispute.status;
   const resolved = await prisma.$transaction(async (tx) => {

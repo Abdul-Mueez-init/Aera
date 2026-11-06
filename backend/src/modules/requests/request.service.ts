@@ -300,7 +300,10 @@ export async function createPortalRequest(
     customerId: string;
     sessionId: string;
   },
-  input: Omit<CreateRequestInput, "customerId" | "source" | "serviceAddressId"> & {
+  input: Omit<
+    CreateRequestInput,
+    "customerId" | "source" | "serviceAddressId"
+  > & {
     serviceAddressId?: string;
     newAddress?: PortalNewAddress;
     submissionKey: string;
@@ -345,84 +348,84 @@ export async function createPortalRequest(
   let request;
   try {
     request = await prisma.$transaction(async (transaction) => {
-    // Daily abuse cap per customer: a compromised session cannot flood the
-    // staff triage queue. Counted inside the transaction so concurrent
-    // submits cannot both slip under the limit.
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const todayCount = await transaction.serviceRequest.count({
-      where: {
-        companyId: context.companyId,
-        customerId: context.customerId,
-        createdAt: { gte: dayAgo },
-      },
-    });
-    if (todayCount >= PORTAL_REQUESTS_PER_DAY) {
-      throw new AppError(
-        "RATE_LIMITED",
-        "Daily request limit reached — please contact the office directly",
-        429,
+      // Daily abuse cap per customer: a compromised session cannot flood the
+      // staff triage queue. Counted inside the transaction so concurrent
+      // submits cannot both slip under the limit.
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const todayCount = await transaction.serviceRequest.count({
+        where: {
+          companyId: context.companyId,
+          customerId: context.customerId,
+          createdAt: { gte: dayAgo },
+        },
+      });
+      if (todayCount >= PORTAL_REQUESTS_PER_DAY) {
+        throw new AppError(
+          "RATE_LIMITED",
+          "Daily request limit reached — please contact the office directly",
+          429,
+        );
+      }
+      let serviceAddressId = input.serviceAddressId;
+      if (!serviceAddressId && input.newAddress) {
+        const address = await transaction.serviceAddress.create({
+          data: {
+            companyId: context.companyId,
+            customerId: context.customerId,
+            label: input.newAddress.label ?? "Service address",
+            line1: input.newAddress.line1,
+            line2: input.newAddress.line2,
+            city: input.newAddress.city,
+            region: input.newAddress.region,
+            postalCode: input.newAddress.postalCode,
+            countryCode: input.newAddress.countryCode.toUpperCase(),
+          },
+          select: { id: true },
+        });
+        serviceAddressId = address.id;
+      }
+      const requestNumber = await getNextCounter(
+        context.companyId,
+        "SERVICE_REQUEST",
+        transaction,
       );
-    }
-    let serviceAddressId = input.serviceAddressId;
-    if (!serviceAddressId && input.newAddress) {
-      const address = await transaction.serviceAddress.create({
+      const created = await transaction.serviceRequest.create({
         data: {
           companyId: context.companyId,
           customerId: context.customerId,
-          label: input.newAddress.label ?? "Service address",
-          line1: input.newAddress.line1,
-          line2: input.newAddress.line2,
-          city: input.newAddress.city,
-          region: input.newAddress.region,
-          postalCode: input.newAddress.postalCode,
-          countryCode: input.newAddress.countryCode.toUpperCase(),
+          serviceAddressId: serviceAddressId!,
+          requestNumber,
+          title: input.title,
+          description: input.description,
+          serviceCategory: input.serviceCategory,
+          priority: input.priority ?? "NORMAL",
+          requiresInspection: input.requiresInspection ?? false,
+          source: "WEB_PORTAL",
+          submissionKey: input.submissionKey,
+          preferredWindows: input.preferredWindows,
+          equipmentInfo: input.equipmentInfo,
+          budgetMinMinor:
+            input.budgetMinMinor === undefined
+              ? undefined
+              : BigInt(input.budgetMinMinor),
+          budgetMaxMinor:
+            input.budgetMaxMinor === undefined
+              ? undefined
+              : BigInt(input.budgetMaxMinor),
+          budgetCurrency: input.budgetCurrency?.toUpperCase(),
         },
-        select: { id: true },
+        select: requestSelect,
       });
-      serviceAddressId = address.id;
-    }
-    const requestNumber = await getNextCounter(
-      context.companyId,
-      "SERVICE_REQUEST",
-      transaction,
-    );
-    const created = await transaction.serviceRequest.create({
-      data: {
-        companyId: context.companyId,
-        customerId: context.customerId,
-        serviceAddressId: serviceAddressId!,
-        requestNumber,
-        title: input.title,
-        description: input.description,
-        serviceCategory: input.serviceCategory,
-        priority: input.priority ?? "NORMAL",
-        requiresInspection: input.requiresInspection ?? false,
-        source: "WEB_PORTAL",
-        submissionKey: input.submissionKey,
-        preferredWindows: input.preferredWindows,
-        equipmentInfo: input.equipmentInfo,
-        budgetMinMinor:
-          input.budgetMinMinor === undefined
-            ? undefined
-            : BigInt(input.budgetMinMinor),
-        budgetMaxMinor:
-          input.budgetMaxMinor === undefined
-            ? undefined
-            : BigInt(input.budgetMaxMinor),
-        budgetCurrency: input.budgetCurrency?.toUpperCase(),
-      },
-      select: requestSelect,
-    });
-    await transaction.serviceRequestEvent.create({
-      data: {
-        companyId: context.companyId,
-        requestId: created.id,
-        type: "CREATED",
-        toStatus: "SUBMITTED",
-        metadata: { portalSessionId: context.sessionId },
-      },
-    });
-    return created;
+      await transaction.serviceRequestEvent.create({
+        data: {
+          companyId: context.companyId,
+          requestId: created.id,
+          type: "CREATED",
+          toStatus: "SUBMITTED",
+          metadata: { portalSessionId: context.sessionId },
+        },
+      });
+      return created;
     });
   } catch (error) {
     // Lost a concurrent-submit race on the submissionKey unique index:

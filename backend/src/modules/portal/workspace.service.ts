@@ -572,7 +572,10 @@ export async function listWorkspacePayments(
 ) {
   const where = {
     companyId: context.companyId,
-    invoice: { customerId: context.customerId, status: { not: "DRAFT" as const } },
+    invoice: {
+      customerId: context.customerId,
+      status: { not: "DRAFT" as const },
+    },
   };
   const [items, total] = await prisma.$transaction([
     prisma.payment.findMany({

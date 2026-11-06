@@ -11,13 +11,19 @@ const app = buildApp();
 vi.mock("../src/modules/companies/osm-geo.service.js", () => ({
   reverseGeocode: vi.fn(() => Promise.resolve("123 Test St")),
   discoverNeighborhoods: vi.fn(() => Promise.resolve([])),
-  locateCustomArea: vi.fn(() => Promise.resolve({ latitude: 40.7128, longitude: -74.006, radiusKm: 15 })),
+  locateCustomArea: vi.fn(() =>
+    Promise.resolve({ latitude: 40.7128, longitude: -74.006, radiusKm: 15 }),
+  ),
   forwardGeocode: vi.fn(() => Promise.resolve([])),
 }));
 
 // Get mocked functions
-const mockReverseGeocode = osmGeoService.reverseGeocode as ReturnType<typeof vi.fn>;
-const mockLocateCustomArea = osmGeoService.locateCustomArea as ReturnType<typeof vi.fn>;
+const mockReverseGeocode = osmGeoService.reverseGeocode as ReturnType<
+  typeof vi.fn
+>;
+const mockLocateCustomArea = osmGeoService.locateCustomArea as ReturnType<
+  typeof vi.fn
+>;
 
 function uniqueSuffix(label: string) {
   return `${label}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -112,7 +118,7 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
       .post("/api/v1/companies/current/onboarding/complete")
       .send({
         business: { name: "Test", phone: "+1234567890" },
-        area: { lat: 40.7128, lng: -74.0060, radiusKm: 10 },
+        area: { lat: 40.7128, lng: -74.006, radiusKm: 10 },
         services: [{ id: "service-1", name: "AC Repair" }],
       });
 
@@ -127,7 +133,13 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
       .set("Authorization", `Bearer ${owner.accessToken}`)
       .send({
         business: { name: "", phone: "invalid", defaultCurrency: "USA" }, // Invalid: empty name, bad phone, bad currency
-        area: { latitude: 200, longitude: -200, radiusKm: 5, zonePlaceIds: [], customZones: [] }, // Invalid: bad coords
+        area: {
+          latitude: 200,
+          longitude: -200,
+          radiusKm: 5,
+          zonePlaceIds: [],
+          customZones: [],
+        }, // Invalid: bad coords
         services: { services: [] }, // Invalid: must have at least one service
       });
 
@@ -148,22 +160,35 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
       .post("/api/v1/companies/current/onboarding/complete")
       .set("Authorization", `Bearer ${owner.accessToken}`)
       .send({
-        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
+        business: {
+          name: "Test Co",
+          phone: "+1234567890",
+          defaultCurrency: "USD",
+        },
         area: {
           latitude: 40.7128,
-          longitude: -74.0060,
+          longitude: -74.006,
           radiusKm: 10,
           zonePlaceIds: ["nonexistent-zone-id"],
           customZones: [],
         },
         services: {
-          services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }],
+          services: [
+            {
+              serviceKey: "ac_repair",
+              name: "AC Repair",
+              iconKey: "air_conditioning",
+              isCustom: false,
+            },
+          ],
         },
       });
 
     expect(res.status).toBe(422);
     // Error code may be VALIDATION_FAILED or SERVICE_ZONE_INVALID depending on where validation fails
-    expect(["VALIDATION_FAILED", "SERVICE_ZONE_INVALID"]).toContain(res.body.error.code);
+    expect(["VALIDATION_FAILED", "SERVICE_ZONE_INVALID"]).toContain(
+      res.body.error.code,
+    );
 
     // Verify nothing was written
     const company = await prisma.company.findUnique({
@@ -174,15 +199,37 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
 
   it("rejects DISPATCHER with 403", async () => {
     const owner = await registerOwner("dispatcher-owner");
-    const dispatcher = await registerDispatcher("dispatcher-test", owner.company.id);
+    const dispatcher = await registerDispatcher(
+      "dispatcher-test",
+      owner.company.id,
+    );
 
     const res = await request(app)
       .post("/api/v1/companies/current/onboarding/complete")
       .set("Authorization", `Bearer ${dispatcher.accessToken}`)
       .send({
-        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
-        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: [] },
-        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+        business: {
+          name: "Test Co",
+          phone: "+1234567890",
+          defaultCurrency: "USD",
+        },
+        area: {
+          latitude: 40.7128,
+          longitude: -74.006,
+          radiusKm: 10,
+          zonePlaceIds: [],
+          customZones: [],
+        },
+        services: {
+          services: [
+            {
+              serviceKey: "ac_repair",
+              name: "AC Repair",
+              iconKey: "air_conditioning",
+              isCustom: false,
+            },
+          ],
+        },
       });
 
     // The route has requireRole("OWNER") middleware, so non-owners get 403
@@ -198,9 +245,28 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
       .post("/api/v1/companies/current/onboarding/complete")
       .set("Authorization", `Bearer ${technician.accessToken}`)
       .send({
-        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
-        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: [] },
-        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+        business: {
+          name: "Test Co",
+          phone: "+1234567890",
+          defaultCurrency: "USD",
+        },
+        area: {
+          latitude: 40.7128,
+          longitude: -74.006,
+          radiusKm: 10,
+          zonePlaceIds: [],
+          customZones: [],
+        },
+        services: {
+          services: [
+            {
+              serviceKey: "ac_repair",
+              name: "AC Repair",
+              iconKey: "air_conditioning",
+              isCustom: false,
+            },
+          ],
+        },
       });
 
     // The route has requireRole("OWNER") middleware, so non-owners get 403
@@ -218,8 +284,23 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
       .send({
         companyId: ownerB.company.id, // Should be ignored
         business: { name: "Test Co", phone: "+1234567890" },
-        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: ["Manhattan"] },
-        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+        area: {
+          latitude: 40.7128,
+          longitude: -74.006,
+          radiusKm: 10,
+          zonePlaceIds: [],
+          customZones: ["Manhattan"],
+        },
+        services: {
+          services: [
+            {
+              serviceKey: "ac_repair",
+              name: "AC Repair",
+              iconKey: "air_conditioning",
+              isCustom: false,
+            },
+          ],
+        },
       });
 
     // The zone verification will fail (Manhattan is not a real zone), but that's okay for this test
@@ -249,9 +330,28 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
       .post("/api/v1/companies/current/onboarding/complete")
       .set("Authorization", `Bearer ${owner.accessToken}`)
       .send({
-        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
-        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: ["Manhattan"] },
-        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+        business: {
+          name: "Test Co",
+          phone: "+1234567890",
+          defaultCurrency: "USD",
+        },
+        area: {
+          latitude: 40.7128,
+          longitude: -74.006,
+          radiusKm: 10,
+          zonePlaceIds: [],
+          customZones: ["Manhattan"],
+        },
+        services: {
+          services: [
+            {
+              serviceKey: "ac_repair",
+              name: "AC Repair",
+              iconKey: "air_conditioning",
+              isCustom: false,
+            },
+          ],
+        },
       });
 
     expect(res.status).toBe(409);
@@ -262,9 +362,28 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
     const owner = await registerOwner("concurrent");
 
     const payload = {
-      business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
-      area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: ["Manhattan"] },
-      services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+      business: {
+        name: "Test Co",
+        phone: "+1234567890",
+        defaultCurrency: "USD",
+      },
+      area: {
+        latitude: 40.7128,
+        longitude: -74.006,
+        radiusKm: 10,
+        zonePlaceIds: [],
+        customZones: ["Manhattan"],
+      },
+      services: {
+        services: [
+          {
+            serviceKey: "ac_repair",
+            name: "AC Repair",
+            iconKey: "air_conditioning",
+            isCustom: false,
+          },
+        ],
+      },
     };
 
     // Send two requests concurrently
@@ -281,8 +400,12 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
 
     // With early check: both might fail with 409, or one succeeds (201) and one fails (409)
     // Transaction guard ensures at most one success
-    const successCount = [res1.status, res2.status].filter((s) => s === 201).length;
-    const conflictCount = [res1.status, res2.status].filter((s) => s === 409).length;
+    const successCount = [res1.status, res2.status].filter(
+      (s) => s === 201,
+    ).length;
+    const conflictCount = [res1.status, res2.status].filter(
+      (s) => s === 409,
+    ).length;
 
     expect(successCount).toBeLessThanOrEqual(1);
     expect(conflictCount).toBeGreaterThanOrEqual(1);
@@ -308,9 +431,28 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
       .post("/api/v1/companies/current/onboarding/complete")
       .set("Authorization", `Bearer ${owner.accessToken}`)
       .send({
-        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
-        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: ["Manhattan"] },
-        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+        business: {
+          name: "Test Co",
+          phone: "+1234567890",
+          defaultCurrency: "USD",
+        },
+        area: {
+          latitude: 40.7128,
+          longitude: -74.006,
+          radiusKm: 10,
+          zonePlaceIds: [],
+          customZones: ["Manhattan"],
+        },
+        services: {
+          services: [
+            {
+              serviceKey: "ac_repair",
+              name: "AC Repair",
+              iconKey: "air_conditioning",
+              isCustom: false,
+            },
+          ],
+        },
         logoObjectKey: `${testCompanyId}/logo.jpg`, // Different company's key
         logoMimeType: "image/jpeg",
       });
@@ -333,7 +475,7 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
     const res2 = await request(app)
       .patch("/api/v1/companies/current/onboarding/service-area")
       .set("Authorization", `Bearer ${owner.accessToken}`)
-      .send({ lat: 40.7128, lng: -74.0060 });
+      .send({ lat: 40.7128, lng: -74.006 });
     expect(res2.status).toBe(404);
 
     // PUT /services
@@ -387,15 +529,25 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
         },
         area: {
           latitude: 40.7128,
-          longitude: -74.0060,
+          longitude: -74.006,
           radiusKm: 15,
           zonePlaceIds: [],
           customZones: ["Manhattan"],
         },
         services: {
           services: [
-            { serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false },
-            { serviceKey: "ac_installation", name: "AC Installation", iconKey: "tools", isCustom: false },
+            {
+              serviceKey: "ac_repair",
+              name: "AC Repair",
+              iconKey: "air_conditioning",
+              isCustom: false,
+            },
+            {
+              serviceKey: "ac_installation",
+              name: "AC Installation",
+              iconKey: "tools",
+              isCustom: false,
+            },
           ],
         },
       });
@@ -439,15 +591,36 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
     const owner = await registerOwner("upstream-fail");
 
     // Mock the geocoding service to throw an error
-    vi.mocked(osmGeoService.reverseGeocode).mockRejectedValueOnce(new Error("Network timeout"));
+    vi.mocked(osmGeoService.reverseGeocode).mockRejectedValueOnce(
+      new Error("Network timeout"),
+    );
 
     const res = await request(app)
       .post("/api/v1/companies/current/onboarding/complete")
       .set("Authorization", `Bearer ${owner.accessToken}`)
       .send({
-        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
-        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: ["Manhattan"] },
-        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+        business: {
+          name: "Test Co",
+          phone: "+1234567890",
+          defaultCurrency: "USD",
+        },
+        area: {
+          latitude: 40.7128,
+          longitude: -74.006,
+          radiusKm: 10,
+          zonePlaceIds: [],
+          customZones: ["Manhattan"],
+        },
+        services: {
+          services: [
+            {
+              serviceKey: "ac_repair",
+              name: "AC Repair",
+              iconKey: "air_conditioning",
+              isCustom: false,
+            },
+          ],
+        },
       });
 
     expect(res.status).toBe(503);
@@ -470,9 +643,28 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
       .post("/api/v1/companies/current/onboarding/complete")
       .set("Authorization", `Bearer ${owner.accessToken}`)
       .send({
-        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
-        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: ["nonexistent-zone-id"], customZones: [] },
-        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+        business: {
+          name: "Test Co",
+          phone: "+1234567890",
+          defaultCurrency: "USD",
+        },
+        area: {
+          latitude: 40.7128,
+          longitude: -74.006,
+          radiusKm: 10,
+          zonePlaceIds: ["nonexistent-zone-id"],
+          customZones: [],
+        },
+        services: {
+          services: [
+            {
+              serviceKey: "ac_repair",
+              name: "AC Repair",
+              iconKey: "air_conditioning",
+              isCustom: false,
+            },
+          ],
+        },
       });
 
     expect(res.status).toBe(422);
@@ -493,9 +685,28 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
       .post("/api/v1/companies/current/onboarding/complete")
       .set("Authorization", `Bearer ${owner.accessToken}`)
       .send({
-        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
-        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: ["Manhattan"] },
-        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+        business: {
+          name: "Test Co",
+          phone: "+1234567890",
+          defaultCurrency: "USD",
+        },
+        area: {
+          latitude: 40.7128,
+          longitude: -74.006,
+          radiusKm: 10,
+          zonePlaceIds: [],
+          customZones: ["Manhattan"],
+        },
+        services: {
+          services: [
+            {
+              serviceKey: "ac_repair",
+              name: "AC Repair",
+              iconKey: "air_conditioning",
+              isCustom: false,
+            },
+          ],
+        },
       });
 
     expect(res.status).toBe(201);
@@ -522,23 +733,46 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
     const owner = await registerOwner("InvalidAreaTest");
 
     mockLocateCustomArea.mockRejectedValueOnce(
-      new AppError("CUSTOM_AREA_NOT_FOUND", "Custom area not found.", 404)
+      new AppError("CUSTOM_AREA_NOT_FOUND", "Custom area not found.", 404),
     );
 
     const res = await request(app)
       .post("/api/v1/companies/current/onboarding/complete")
       .set("Authorization", `Bearer ${owner.accessToken}`)
       .send({
-        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
-        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: ["InvalidArea"] },
-        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+        business: {
+          name: "Test Co",
+          phone: "+1234567890",
+          defaultCurrency: "USD",
+        },
+        area: {
+          latitude: 40.7128,
+          longitude: -74.006,
+          radiusKm: 10,
+          zonePlaceIds: [],
+          customZones: ["InvalidArea"],
+        },
+        services: {
+          services: [
+            {
+              serviceKey: "ac_repair",
+              name: "AC Repair",
+              iconKey: "air_conditioning",
+              isCustom: false,
+            },
+          ],
+        },
       });
 
     expect(res.status).toBe(503);
     expect(res.body.error.code).toBe("UPSTREAM_UNAVAILABLE");
 
     // Reset mock
-    mockLocateCustomArea.mockResolvedValueOnce({ latitude: 40.7128, longitude: -74.006, radiusKm: 15 });
+    mockLocateCustomArea.mockResolvedValueOnce({
+      latitude: 40.7128,
+      longitude: -74.006,
+      radiusKm: 15,
+    });
   });
 
   it("returns 503 for network failures", async () => {
@@ -550,9 +784,28 @@ describe("POST /api/v1/companies/current/onboarding/complete", () => {
       .post("/api/v1/companies/current/onboarding/complete")
       .set("Authorization", `Bearer ${owner.accessToken}`)
       .send({
-        business: { name: "Test Co", phone: "+1234567890", defaultCurrency: "USD" },
-        area: { latitude: 40.7128, longitude: -74.0060, radiusKm: 10, zonePlaceIds: [], customZones: ["Manhattan"] },
-        services: { services: [{ serviceKey: "ac_repair", name: "AC Repair", iconKey: "air_conditioning", isCustom: false }] },
+        business: {
+          name: "Test Co",
+          phone: "+1234567890",
+          defaultCurrency: "USD",
+        },
+        area: {
+          latitude: 40.7128,
+          longitude: -74.006,
+          radiusKm: 10,
+          zonePlaceIds: [],
+          customZones: ["Manhattan"],
+        },
+        services: {
+          services: [
+            {
+              serviceKey: "ac_repair",
+              name: "AC Repair",
+              iconKey: "air_conditioning",
+              isCustom: false,
+            },
+          ],
+        },
       });
 
     expect(res.status).toBe(503);

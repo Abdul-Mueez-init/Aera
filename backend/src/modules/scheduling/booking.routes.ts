@@ -69,9 +69,7 @@ const holdSchema = z.object({
 });
 
 const proposalListSchema = z.object({
-  status: z
-    .enum(["OPEN", "PICKED", "EXPIRED", "CANCELLED"])
-    .optional(),
+  status: z.enum(["OPEN", "PICKED", "EXPIRED", "CANCELLED"]).optional(),
   requestId: z.string().uuid().optional(),
   jobId: z.string().uuid().optional(),
   quoteId: z.string().uuid().optional(),
@@ -130,17 +128,15 @@ router.get(
   async (request, response) => {
     const parsed = availabilitySchema.safeParse(request.query);
     if (!parsed.success) return validation(response, parsed.error);
-    response
-      .status(200)
-      .json({
-        data: await getAvailability(
-          request.auth!,
-          parsed.data.startsAt,
-          parsed.data.endsAt,
-          parsed.data.durationMinutes,
-          parsed.data.serviceId,
-        ),
-      });
+    response.status(200).json({
+      data: await getAvailability(
+        request.auth!,
+        parsed.data.startsAt,
+        parsed.data.endsAt,
+        parsed.data.durationMinutes,
+        parsed.data.serviceId,
+      ),
+    });
   },
 );
 
@@ -209,9 +205,9 @@ router.delete(
   requireAuth,
   requireRole(...managerRoles),
   async (request, response) => {
-    response
-      .status(200)
-      .json({ data: await deleteTimeOff(request.auth!, id(request.params.timeOffId)) });
+    response.status(200).json({
+      data: await deleteTimeOff(request.auth!, id(request.params.timeOffId)),
+    });
   },
 );
 
@@ -247,15 +243,13 @@ router.post(
   async (request, response) => {
     const parsed = pickSchema.safeParse(request.body);
     if (!parsed.success) return validation(response, parsed.error);
-    response
-      .status(200)
-      .json({
-        data: await pickProposal(
-          request.auth!,
-          id(request.params.proposalId),
-          parsed.data,
-        ),
-      });
+    response.status(200).json({
+      data: await pickProposal(
+        request.auth!,
+        id(request.params.proposalId),
+        parsed.data,
+      ),
+    });
   },
 );
 
@@ -277,11 +271,9 @@ router.post(
   requireAuth,
   requireRole(...managerRoles),
   async (request, response) => {
-    response
-      .status(200)
-      .json({
-        data: await confirmHold(request.auth!, id(request.params.holdId)),
-      });
+    response.status(200).json({
+      data: await confirmHold(request.auth!, id(request.params.holdId)),
+    });
   },
 );
 

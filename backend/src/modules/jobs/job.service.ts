@@ -1614,7 +1614,11 @@ export async function quoteJobChangeRequest(
   changeRequestId: string,
 ) {
   if (context.role !== "OWNER" && context.role !== "DISPATCHER") {
-    throw new AppError("AUTH_FORBIDDEN", "Only staff can quote change requests", 403);
+    throw new AppError(
+      "AUTH_FORBIDDEN",
+      "Only staff can quote change requests",
+      403,
+    );
   }
   const { job, changeRequest } = await getChangeRequestJob(
     context,
@@ -1657,7 +1661,11 @@ export async function authorizeJobChangeRequest(
   reason: string,
 ) {
   if (context.role !== "OWNER" && context.role !== "DISPATCHER") {
-    throw new AppError("AUTH_FORBIDDEN", "Only staff can authorize change requests", 403);
+    throw new AppError(
+      "AUTH_FORBIDDEN",
+      "Only staff can authorize change requests",
+      403,
+    );
   }
   const company = await prisma.company.findUniqueOrThrow({
     where: { id: context.companyId },
@@ -1700,7 +1708,11 @@ export async function declineJobChangeRequest(
   changeRequestId: string,
 ) {
   if (context.role !== "OWNER" && context.role !== "DISPATCHER") {
-    throw new AppError("AUTH_FORBIDDEN", "Only staff can decline change requests", 403);
+    throw new AppError(
+      "AUTH_FORBIDDEN",
+      "Only staff can decline change requests",
+      403,
+    );
   }
   const { changeRequest } = await getChangeRequestJob(
     context,

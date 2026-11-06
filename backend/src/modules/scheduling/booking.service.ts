@@ -195,11 +195,7 @@ export async function getAvailability(
   const firstLocal = localDateOf(timeZone, startsAt);
   const lastLocal = localDateOf(timeZone, endsAt);
   const localDates: LocalDate[] = [];
-  for (
-    let cursor = firstLocal;
-    ;
-    cursor = nextLocalDate(cursor)
-  ) {
+  for (let cursor = firstLocal; ; cursor = nextLocalDate(cursor)) {
     localDates.push(cursor);
     const same =
       cursor.year === lastLocal.year &&
@@ -592,9 +588,8 @@ export async function confirmHold(
     // accepted-quote flow — creates the job exactly once via the
     // sourceQuoteId unique constraint.
     if (hold.quoteId) {
-      const { resumeAcceptedQuoteBooking } = await import(
-        "../quotes/quote.service.js"
-      );
+      const { resumeAcceptedQuoteBooking } =
+        await import("../quotes/quote.service.js");
       await resumeAcceptedQuoteBooking(transaction, {
         companyId: context.companyId,
         quoteId: hold.quoteId,
@@ -660,9 +655,8 @@ export async function requestCustomerReschedule(
     windows,
     expiresAt,
   });
-  const { notificationPublisher } = await import(
-    "../notifications/notification.port.js"
-  );
+  const { notificationPublisher } =
+    await import("../notifications/notification.port.js");
   void notificationPublisher.publish({
     type: "JOB_RESCHEDULED",
     companyId: context.companyId,
@@ -673,7 +667,12 @@ export async function requestCustomerReschedule(
 
 export async function listProposals(
   context: AuthContext,
-  filters: { status?: string; requestId?: string; jobId?: string; quoteId?: string },
+  filters: {
+    status?: string;
+    requestId?: string;
+    jobId?: string;
+    quoteId?: string;
+  },
 ) {
   const proposals = await prisma.appointmentProposal.findMany({
     where: {
@@ -814,8 +813,7 @@ async function assertCustomerBookingReference(
       },
       select: { id: true },
     });
-    if (!found)
-      throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+    if (!found) throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   } else if (input.quoteId) {
     const found = await prisma.quote.findFirst({
       where: {
@@ -899,7 +897,9 @@ export async function confirmCustomerHold(
     },
   });
   const ownerId =
-    hold?.request?.customerId ?? hold?.job?.customerId ?? hold?.quote?.customerId;
+    hold?.request?.customerId ??
+    hold?.job?.customerId ??
+    hold?.quote?.customerId;
   if (!hold || ownerId !== context.customerId) {
     throw new AppError("RESOURCE_NOT_FOUND", "Hold not found", 404);
   }

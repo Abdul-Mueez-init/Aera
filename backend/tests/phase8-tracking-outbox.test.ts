@@ -44,13 +44,15 @@ interface Fixture {
 }
 
 async function seedCompany(): Promise<Fixture> {
-  const res = await request(app).post("/api/v1/auth/register").send({
-    email: `p8-${suffix()}@example.com`,
-    password: "correct-horse-battery-staple",
-    firstName: "Owner",
-    lastName: "P8",
-    companyName: `P8 ${suffix()}`,
-  });
+  const res = await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      email: `p8-${suffix()}@example.com`,
+      password: "correct-horse-battery-staple",
+      firstName: "Owner",
+      lastName: "P8",
+      companyName: `P8 ${suffix()}`,
+    });
   expect(res.status).toBe(201);
   const companyId = res.body.data.company.id as string;
   const userId = res.body.data.user.id as string;
@@ -133,9 +135,9 @@ describe("Phase 8.2 — live tracking backend", () => {
     const job = await seedJob(fx);
 
     // Unauthenticated
-    const noAuth = await request(app).post(
-      `/api/v1/jobs/${job.id}/location`,
-    ).send({ latitude: 30.1, longitude: -97.7 });
+    const noAuth = await request(app)
+      .post(`/api/v1/jobs/${job.id}/location`)
+      .send({ latitude: 30.1, longitude: -97.7 });
     expect(noAuth.status).toBe(401);
 
     // Wrong tenant (different company, same user id space)
@@ -222,9 +224,8 @@ describe("Phase 8.2 — live tracking backend", () => {
     });
     // Simulate the transition hook directly (completeJob path calls
     // clearJobTracking); assert the helper contract via status change.
-    const { clearJobTracking } = await import(
-      "../src/modules/tracking/tracking.service.js"
-    );
+    const { clearJobTracking } =
+      await import("../src/modules/tracking/tracking.service.js");
     await clearJobTracking(enRoute.id, fx.companyId);
     const gone = await prisma.jobTrackingState.findUnique({
       where: { jobId: enRoute.id },
@@ -323,9 +324,8 @@ describe("Phase 8.1 — durable notification outbox", () => {
 
   it("outbox rows dedupe on dedupeKey and dead-letter after max attempts", async () => {
     const fx = await seedCompany();
-    const { enqueueNotificationOutbox } = await import(
-      "../src/modules/notifications/notification-outbox.service.js"
-    );
+    const { enqueueNotificationOutbox } =
+      await import("../src/modules/notifications/notification-outbox.service.js");
     const key = `p8-test-${suffix()}`;
     await enqueueNotificationOutbox({
       companyId: fx.companyId,
@@ -353,9 +353,8 @@ describe("Phase 8.1 — durable notification outbox", () => {
       where: { id: row!.id },
       data: { status: "DEAD", attempts: 99 },
     });
-    const { startNotificationOutboxScheduler } = await import(
-      "../src/modules/notifications/notification-outbox.service.js"
-    );
+    const { startNotificationOutboxScheduler } =
+      await import("../src/modules/notifications/notification-outbox.service.js");
     const stop = startNotificationOutboxScheduler();
     stop();
     const after = await prisma.notificationOutbox.findUnique({

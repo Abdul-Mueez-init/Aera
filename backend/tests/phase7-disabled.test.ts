@@ -37,13 +37,15 @@ describe("phase 7 disabled", () => {
   });
 
   it("deposit terms are ignored by the acceptance gate", async () => {
-    const res = await request(app).post("/api/v1/auth/register").send({
-      email: `p7off-${Date.now()}@example.com`,
-      password: "correct-horse-battery-staple",
-      firstName: "Off",
-      lastName: "Flags",
-      companyName: `P7Off ${Date.now()}`,
-    });
+    const res = await request(app)
+      .post("/api/v1/auth/register")
+      .send({
+        email: `p7off-${Date.now()}@example.com`,
+        password: "correct-horse-battery-staple",
+        firstName: "Off",
+        lastName: "Flags",
+        companyName: `P7Off ${Date.now()}`,
+      });
     expect(res.status).toBe(201);
     const companyId = res.body.data.company.id as string;
     const auth = { Authorization: `Bearer ${res.body.data.accessToken}` };
