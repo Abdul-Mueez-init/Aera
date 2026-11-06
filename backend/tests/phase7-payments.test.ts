@@ -281,7 +281,7 @@ beforeEach(async () => {
 describe("7.2 webhook security", () => {
   it("rejects a forged signature and a stale timestamp", async () => {
     const invoice = await seedIssuedInvoice(fx);
-    await payViaPortal(fx, invoice.id);
+    const pay = await payViaPortal(fx, invoice.id);
     expect(pay.status).toBe(201);
     const session = await prisma.paymentSession.findFirstOrThrow({
       where: { invoiceId: invoice.id },
@@ -308,7 +308,7 @@ describe("7.2 webhook security", () => {
 
   it("settles on a valid webhook and ignores replays", async () => {
     const invoice = await seedIssuedInvoice(fx, { totalMinor: 20_000n });
-    await payViaPortal(fx, invoice.id);
+    const pay = await payViaPortal(fx, invoice.id);
     expect(pay.status).toBe(201);
     const session = await prisma.paymentSession.findFirstOrThrow({
       where: { invoiceId: invoice.id },
@@ -404,7 +404,7 @@ describe("7.2 webhook security", () => {
 describe("7.3 checkout + reconciliation", () => {
   it("a redirect without a webhook leaves the invoice unpaid until reconcile", async () => {
     const invoice = await seedIssuedInvoice(fx);
-    await payViaPortal(fx, invoice.id);
+    const pay = await payViaPortal(fx, invoice.id);
     expect(pay.status).toBe(201);
     expect(pay.body.data.checkoutUrl).toContain(
       "/api/v1/payments/sandbox/checkout/",
@@ -440,7 +440,7 @@ describe("7.3 checkout + reconciliation", () => {
 
   it("sandbox checkout page + pay button settles through the same path", async () => {
     const invoice = await seedIssuedInvoice(fx, { totalMinor: 12_345n });
-    await payViaPortal(fx, invoice.id);
+    const pay = await payViaPortal(fx, invoice.id);
     const checkoutUrl = pay.body.data.checkoutUrl as string;
     const providerSessionId = checkoutUrl.split("/").pop() as string;
 
@@ -519,7 +519,7 @@ describe("7.4 deposits", () => {
     expect(depositInvoice.status).toBe("ISSUED");
     expect(depositInvoice.balanceDueMinor).toBe(5000n);
 
-    await payViaPortal(fx, depositInvoice.id);
+    const pay = await payViaPortal(fx, depositInvoice.id);
     expect(pay.status).toBe(201);
     const session = await prisma.paymentSession.findFirstOrThrow({
       where: { invoiceId: depositInvoice.id },
