@@ -17,15 +17,34 @@ describe("Portal Security Tests", () => {
 
   beforeEach(async () => {
     app = buildApp();
+    await prisma.portalDeliveryToken.deleteMany();
     await prisma.portalSession.deleteMany();
     await prisma.portalAccessGrant.deleteMany();
+    await prisma.portalAuditEvent.deleteMany();
+    await prisma.refund.deleteMany();
+    await prisma.invoiceCreditApplication.deleteMany();
+    await prisma.invoiceDisputeEvent.deleteMany();
+    await prisma.invoiceDispute.deleteMany();
+    await prisma.paymentOperation.deleteMany();
+    await prisma.paymentSession.deleteMany();
+    await prisma.payment.deleteMany();
     await prisma.customerReview.deleteMany();
-    await prisma.quoteApprovalEvent.deleteMany();
-    await prisma.quoteItem.deleteMany();
-    await prisma.quote.deleteMany();
     await prisma.invoiceItem.deleteMany();
     await prisma.invoice.deleteMany();
+    await prisma.jobChangeRequest.deleteMany();
+    await prisma.jobFinding.deleteMany();
+    await prisma.jobTrackingState.deleteMany();
+    await prisma.jobStatusHistory.deleteMany();
+    await prisma.jobPhoto.deleteMany();
+    await prisma.jobNote.deleteMany();
+    await prisma.jobPart.deleteMany();
     await prisma.job.deleteMany();
+    await prisma.quoteApprovalEvent.deleteMany();
+    await prisma.quoteAcceptance.deleteMany();
+    await prisma.quoteItem.deleteMany();
+    await prisma.quote.deleteMany();
+    await prisma.appointmentHold.deleteMany();
+    await prisma.appointmentProposal.deleteMany();
     await prisma.serviceRequestMessage.deleteMany();
     await prisma.serviceRequestAttachment.deleteMany();
     await prisma.serviceRequestUpload.deleteMany();

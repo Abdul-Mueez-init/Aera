@@ -54,7 +54,9 @@ export async function recomputeInvoiceBalance(
   let status: string;
   if (invoice.status === "VOID") {
     status = "VOID";
-  } else if (balanceDueMinor === 0n && invoice.totalMinor > 0n) {
+  } else if (balanceDueMinor === 0n && invoice.status !== "DRAFT") {
+    // Zero-total invoices are settled by definition — without this a
+    // $0 invoice could absorb unlimited $0 payments forever.
     status = "PAID";
   } else if (settled > 0n) {
     status = "PARTIALLY_PAID";

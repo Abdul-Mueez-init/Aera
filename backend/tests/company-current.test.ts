@@ -42,6 +42,8 @@ describe("GET /api/v1/companies/current", () => {
     expect(res.body.data.name).toBe(owner.company.name);
     expect(Object.keys(res.body.data).sort()).toEqual([
       "defaultCurrency",
+      "defaultDepositType",
+      "defaultDepositValue",
       "id",
       "name",
       "slug",

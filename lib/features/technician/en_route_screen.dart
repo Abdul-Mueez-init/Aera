@@ -28,23 +28,23 @@ class EnRouteScreen extends ConsumerStatefulWidget {
 
 class _EnRouteScreenState extends ConsumerState<EnRouteScreen> {
   bool _trackingDenied = false;
+  late final JobLocationTracker _tracker;
 
   @override
   void initState() {
     super.initState();
+    _tracker = ref.read(jobLocationTrackerProvider);
     _startTracking();
   }
 
   @override
   void dispose() {
-    ref.read(jobLocationTrackerProvider).stop();
+    _tracker.stop();
     super.dispose();
   }
 
   Future<void> _startTracking() async {
-    final result = await ref
-        .read(jobLocationTrackerProvider)
-        .start(widget.jobId);
+    final result = await _tracker.start(widget.jobId);
     if (!mounted) return;
     if (result == TrackingStartResult.permissionDenied) {
       setState(() => _trackingDenied = true);
@@ -77,7 +77,7 @@ class _EnRouteScreenState extends ConsumerState<EnRouteScreen> {
     );
     if (!mounted) return;
     if (result == true) {
-      ref.read(jobLocationTrackerProvider).stop();
+      _tracker.stop();
       _refreshEverywhere();
       context.push('/technician/jobs/${widget.jobId}/work');
     } else if (result is String) {

@@ -235,6 +235,21 @@ const companySelect = {
   defaultDepositValue: true,
 } as const;
 
+
+// defaultDepositValue is BigInt in Prisma; the public DTO carries it as a
+// JSON-safe number (bounded to <= 100_000_000 by the update schema).
+function serializeCompany<T extends { defaultDepositValue: bigint | null }>(
+  company: T,
+) {
+  return {
+    ...company,
+    defaultDepositValue:
+      company.defaultDepositValue === null
+        ? null
+        : Number(company.defaultDepositValue),
+  };
+}
+
 // Only returns the company when the caller is still an ACTIVE member of it.
 function findCompanyForMember(companyId: string, userId: string) {
   return prisma.company.findFirst({
@@ -257,7 +272,7 @@ router.get("/current", requireAuth, async (request, response) => {
     throw new AppError("TENANT_ACCESS_DENIED", "Company access denied", 403);
   }
 
-  response.status(200).json({ data: company });
+  response.status(200).json({ data: serializeCompany(company) });
 });
 
 router.patch(
@@ -300,7 +315,7 @@ router.patch(
       select: companySelect,
     });
 
-    response.status(200).json({ data: updated });
+    response.status(200).json({ data: serializeCompany(updated) });
   },
 );
 
@@ -318,7 +333,7 @@ router.get("/:companyId", requireAuth, async (request, response) => {
     throw new AppError("TENANT_ACCESS_DENIED", "Company access denied", 403);
   }
 
-  response.status(200).json({ data: company });
+  response.status(200).json({ data: serializeCompany(company) });
 });
 
 export { router as companyRouter };

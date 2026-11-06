@@ -646,11 +646,10 @@ export async function locateCustomArea(
       "Custom area not found. Please enter a valid location name.",
       404,
     );
-  } catch (error) {
-    if (error instanceof AppError) {
-      throw error;
-    }
-    // Fall through to headquarters coordinates on network errors
+  } catch {
+    // Any failure (provider down, area not found, outside radius) falls
+    // back to the headquarters coordinates — callers get a usable area
+    // rather than a hard error for an optional refinement.
   }
 
   return { latitude: lat, longitude: lng };

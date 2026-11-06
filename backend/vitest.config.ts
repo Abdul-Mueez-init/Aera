@@ -21,6 +21,8 @@ export default defineConfig({
     ],
     globals: true,
     isolate: true,
-    pool: 1, // Force sequential execution to avoid database conflicts
+    // All suites share one Postgres test database — files must run
+    // sequentially or they collide on fixtures/constraints.
+    fileParallelism: false,
   },
 });

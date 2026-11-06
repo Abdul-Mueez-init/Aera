@@ -404,6 +404,20 @@ describe("Audit fixes: payment validation and operation recovery", () => {
     const job = await createJob(owner.accessToken, customerId, addressId);
     await completeJob(owner.accessToken, job.id, owner.companyId);
     const invoice = await createInvoice(owner.accessToken, job.id);
+    // Issue-time recomputation derives totals from line items, so the
+    // fixture needs a real $100 item rather than only stored totals.
+    await prisma.invoiceItem.create({
+      data: {
+        companyId: owner.companyId,
+        invoiceId: invoice.id,
+        description: "Service",
+        quantity: 1,
+        unitPriceMinor: 10000n,
+        totalMinor: 10000n,
+        sortOrder: 0,
+        sourceType: "MANUAL",
+      },
+    });
     await prisma.invoice.update({
       where: { id: invoice.id },
       data: {

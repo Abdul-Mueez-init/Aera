@@ -146,7 +146,8 @@ async function staffRespond(
   return request(app)
     .post(`/api/v1/quotes/${quoteId}/respond`)
     .set(auth)
-    .send({ action });
+    // Staff approvals on behalf of the customer require an audit reason.
+    .send({ action, reason: "Customer confirmed by phone" });
 }
 
 // Formats an instant as an ISO string in a fixed UTC offset notation

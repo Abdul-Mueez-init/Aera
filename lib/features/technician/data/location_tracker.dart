@@ -31,15 +31,21 @@ class JobLocationTracker {
   Future<TrackingStartResult> start(String jobId) async {
     stop();
 
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return TrackingStartResult.permissionDenied;
-    }
-    if (!await Geolocator.isLocationServiceEnabled()) {
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return TrackingStartResult.permissionDenied;
+      }
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        return TrackingStartResult.unavailable;
+      }
+    } catch (_) {
+      // Platform plugin unavailable (tests, unsupported device) — treat
+      // as unavailable rather than crashing the screen.
       return TrackingStartResult.unavailable;
     }
 

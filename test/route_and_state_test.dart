@@ -23,7 +23,7 @@ import 'package:aera/features/technician/job_evidence_screen.dart';
 import 'package:aera/features/technician/complete_job_screen.dart';
 import 'package:aera/features/more/more_screen.dart';
 import 'package:aera/features/invoices/create_invoice_screen.dart';
-import 'package:aera/features/portal/customer_home_screen.dart';
+import 'package:aera/features/portal/workspace_home_screen.dart';
 import 'package:aera/features/portal/portal_closed_screen.dart';
 import 'package:aera/features/portal/portal_open_screen.dart';
 import 'package:aera/features/ai/ai_operations_assistant_screen.dart';
@@ -205,7 +205,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
-      expect(find.byType(CustomerHomeScreen), findsOneWidget);
+      expect(find.byType(PortalWorkspaceHomeScreen), findsOneWidget);
 
       // And the closed screen.
       appRouter.go('/p/closed');
@@ -408,7 +408,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
-      expect(find.byType(CustomerHomeScreen), findsOneWidget);
+      expect(find.byType(PortalWorkspaceHomeScreen), findsOneWidget);
     });
 
     testWidgets('Legacy token routes no longer resolve', (
@@ -425,7 +425,7 @@ void main() {
       // app must handle them gracefully (router error page, no crash).
       appRouter.go('/portal/customer-token-123');
       await tester.pumpAndSettle();
-      expect(find.byType(CustomerHomeScreen), findsNothing);
+      expect(find.byType(PortalWorkspaceHomeScreen), findsNothing);
       expect(find.byType(MaterialApp), findsOneWidget);
     });
 

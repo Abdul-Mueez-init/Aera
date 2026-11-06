@@ -22,12 +22,19 @@ beforeAll(async () => {
     });
   }
 
-  await prisma.company.deleteMany({
-    where: { slug: { startsWith: "company" } },
-  });
-  await prisma.user.deleteMany({
-    where: { email: { startsWith: "owner-" } },
-  });
+  // Users are referenced by many tables (jobs, grants, notifications...);
+  // cleanup is best-effort — unique emails make leftovers harmless, and a
+  // strict delete would fail the whole suite on unrelated FK rows.
+  try {
+    await prisma.company.deleteMany({
+      where: { slug: { startsWith: "company" } },
+    });
+    await prisma.user.deleteMany({
+      where: { email: { startsWith: "owner-" } },
+    });
+  } catch {
+    // Ignore cleanup failures — tests generate unique identifiers.
+  }
 });
 
 function uniqueSuffix(label: string) {

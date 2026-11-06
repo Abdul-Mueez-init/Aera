@@ -875,6 +875,13 @@ export async function recordPayment(
   if (invoice.status === "DRAFT" || invoice.status === "VOID") {
     throw new AppError("INVOICE_NOT_PAYABLE", "Invoice is not payable", 409);
   }
+  if (invoice.status === "PAID") {
+    throw new AppError(
+      "INVOICE_ALREADY_PAID",
+      "Invoice is already paid in full",
+      422,
+    );
+  }
   if (invoice.currency !== input.currency.toUpperCase()) {
     throw new AppError(
       "PAYMENT_CURRENCY_MISMATCH",
