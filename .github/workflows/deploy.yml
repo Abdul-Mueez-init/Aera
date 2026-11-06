@@ -17,29 +17,35 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
+            echo "=== syncing repo ==="
             cd /home/ubuntu/Aera
-
-            # Hard-sync to origin/main so stray server-side edits or
-            # leftover files can never block or corrupt a deploy.
             git fetch origin main
             git reset --hard origin/main
 
-            # Remove artifacts left by the old npm-based deploy — pnpm
-            # manages its own node_modules layout and a stale npm tree
-            # would shadow it.
+            echo "=== cleaning stale npm artifacts ==="
             rm -rf backend/node_modules package-lock.json backend/package-lock.json
 
-            # pnpm via Corepack (ships with Node 22+).
-            corepack enable
-            corepack prepare pnpm@12.3.4 --activate
+            echo "=== ensuring pnpm ==="
+            if ! command -v pnpm >/dev/null 2>&1; then
+              # User-level install — no sudo required. Standalone pnpm
+              # also avoids Corepack's system-symlink permission issues.
+              curl -fsSL https://get.pnpm.io/install.sh | sh -
+              export PATH="$HOME/.local/share/pnpm:$PATH"
+            fi
+            pnpm --version
 
+            echo "=== installing dependencies ==="
             pnpm install --frozen-lockfile
 
-            # Prisma client is gitignored — it must be generated on the
-            # server, then migrations applied before the app restarts.
-            pnpm --filter backend prisma:generate
-            pnpm --filter backend prisma:migrate:deploy
+            echo "=== prisma generate + migrate ==="
+            cd backend
+            pnpm prisma:generate
+            pnpm prisma:migrate:deploy
+            cd ..
 
+            echo "=== restarting service ==="
             sudo systemctl restart aera
             sleep 3
-            sudo systemctl status aera --no-pager
+            sudo systemctl status aera --no-pager || true
+            sudo systemctl is-active --quiet aera
+            echo "=== deploy complete ==="
