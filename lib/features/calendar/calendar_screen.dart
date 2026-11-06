@@ -94,6 +94,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Unscheduled queue',
+            icon: const Icon(Icons.event_busy, color: AeraColors.ink, size: 22),
+            onPressed: () => context.push('/booking-queue'),
+          ),
+          IconButton(
             tooltip: 'Booking settings',
             icon: const Icon(Icons.tune, color: AeraColors.ink, size: 22),
             onPressed: () => context.push('/booking-settings'),

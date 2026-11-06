@@ -373,3 +373,11 @@ prisma.job.findUnique({ where: { id } })
 ```
 
 when the operation requires tenant scoping and authorization.
+
+## v2 schema notes (Phases 1–8)
+
+- `ServiceRequest` is the intake aggregate; `Job.serviceRequestId` and `Quote.serviceRequestId` reference it. Legacy quotes with neither `jobId` nor `serviceRequestId` are reported by `scripts/report-legacy-quotes.ts` (dry-run only — never auto-attached).
+- `JobTrackingState.jobId` is unique — exactly one current position per job; no location history is stored.
+- `NotificationOutbox.dedupeKey` is unique — enqueue is idempotent; statuses QUEUED → PROVIDER_ACCEPTED → DELIVERED, or FAILED → DEAD after max attempts with exponential backoff.
+- `PortalDeliveryToken` stores `tokenHash` only; the plaintext exists solely in the outbound message at send time. Exchange accepts either the grant `linkTokenHash` or a delivery-token hash.
+- All tenant-owned tables carry `companyId`; portal reads are additionally scoped by `customerId` (workspace) or pinned `jobId` (JOB scope).

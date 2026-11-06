@@ -21,6 +21,9 @@ const updateCompanySchema = z
     name: z.string().trim().min(1).max(120).optional(),
     timezone: z.string().trim().min(1).max(80).optional(),
     defaultCurrency: z.string().trim().length(3).toUpperCase().optional(),
+    // Phase 7.4/7.7 — company-wide deposit defaults prefilled on quotes.
+    defaultDepositType: z.enum(["NONE", "FIXED", "PERCENT"]).optional(),
+    defaultDepositValue: z.number().int().nonnegative().max(100_000_000).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
@@ -228,6 +231,8 @@ const companySelect = {
   slug: true,
   timezone: true,
   defaultCurrency: true,
+  defaultDepositType: true,
+  defaultDepositValue: true,
 } as const;
 
 // Only returns the company when the caller is still an ACTIVE member of it.
@@ -286,7 +291,12 @@ router.patch(
 
     const updated = await prisma.company.update({
       where: { id: companyId },
-      data: parsed.data,
+      data: {
+        ...parsed.data,
+        ...(parsed.data.defaultDepositValue !== undefined
+          ? { defaultDepositValue: BigInt(parsed.data.defaultDepositValue) }
+          : {}),
+      },
       select: companySelect,
     });
 

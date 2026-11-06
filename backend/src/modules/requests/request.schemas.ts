@@ -32,6 +32,7 @@ const requestFields = z.object({
   requiresInspection: z.boolean().optional(),
   source: z.enum(requestSources).default("PHONE"),
   preferredWindows: z.custom<Prisma.InputJsonValue>().optional(),
+  equipmentInfo: z.string().trim().max(2000).optional(),
   budgetMinMinor: z.number().int().nonnegative().optional(),
   budgetMaxMinor: z.number().int().nonnegative().optional(),
   budgetCurrency: z.string().regex(/^[A-Za-z]{3}$/).optional(),

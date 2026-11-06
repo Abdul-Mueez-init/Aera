@@ -1,6 +1,7 @@
-import { Router, type Response } from "express";
+import { Router, type RequestHandler, type Response } from "express";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../../common/auth/auth.middleware.js";
+import { env } from "../../config/env.js";
 import { prisma } from "../../db/prisma.js";
 import {
   archiveCustomer,
@@ -63,9 +64,10 @@ const customerJobsQuerySchema = z.object({
 });
 
 const portalAccessSchema = z.object({
+  // Empty array = copy-link only (staff pastes the returned link manually);
+  // SMS/EMAIL queue delivery through the notification outbox.
   channels: z
     .array(z.enum(["SMS", "EMAIL"]))
-    .min(1)
     .default(["SMS", "EMAIL"]),
 });
 
@@ -77,6 +79,22 @@ function sendValidationError(response: Response, error: z.ZodError) {
     },
   });
 }
+
+// Phase 2 ships dark behind WORKSPACE_PORTAL_ENABLED: with the flag off the
+// customer workspace grant endpoints are indistinguishable from unknown
+// routes (same 404 contract as the portal workspace read APIs).
+const requireWorkspacePortal: RequestHandler = (_request, response, next) => {
+  if (!env.WORKSPACE_PORTAL_ENABLED) {
+    response.status(404).json({
+      error: {
+        code: "RESOURCE_NOT_FOUND",
+        message: "Portal resource not found",
+      },
+    });
+    return;
+  }
+  next();
+};
 
 router.get(
   "/",
@@ -102,6 +120,7 @@ router.post(
   "/:customerId/portal-access",
   requireAuth,
   requireRole(...manageCustomers),
+  requireWorkspacePortal,
   portalWriteRateLimiter,
   async (request, response) => {
     const parsed = portalAccessSchema.safeParse(request.body ?? {});
@@ -137,6 +156,7 @@ router.post(
   requireAuth,
   requireRole(...manageCustomers),
   portalWriteRateLimiter,
+  requireWorkspacePortal,
   async (request, response) => {
     const parsed = portalAccessSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -171,6 +191,7 @@ router.post(
   requireAuth,
   requireRole(...manageCustomers),
   portalWriteRateLimiter,
+  requireWorkspacePortal,
   async (request, response) => {
     await revokeWorkspaceGrant(
       request.auth!,
@@ -184,6 +205,7 @@ router.get(
   "/:customerId/portal-access",
   requireAuth,
   requireRole(...manageCustomers),
+  requireWorkspacePortal,
   async (request, response) => {
     response.status(200).json({
       data: await getWorkspaceGrantStatus(

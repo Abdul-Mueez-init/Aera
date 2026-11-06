@@ -751,26 +751,43 @@ class PortalRepository {
 
   Future<PortalResult> createWorkspaceRequest({
     required String submissionKey,
-    required String serviceAddressId,
+    String? serviceAddressId,
+    Map<String, dynamic>? newAddress,
     required String title,
     required String description,
     required String serviceCategory,
+    String? equipmentInfo,
     String priority = 'NORMAL',
     bool requiresInspection = false,
+    Map<String, dynamic>? preferredWindows,
+    int? budgetMinMinor,
+    int? budgetMaxMinor,
+    String? budgetCurrency,
   }) async {
     final http.Response response;
     try {
+      final headers = await _headers();
+      // Phase 3.3: Idempotency-Key header is authoritative; the body
+      // submissionKey stays for older clients.
+      headers['Idempotency-Key'] = submissionKey;
       response = await _client.post(
         _buildUri('/api/v1/portal/requests'),
-        headers: await _headers(),
+        headers: headers,
         body: jsonEncode({
           'submissionKey': submissionKey,
-          'serviceAddressId': serviceAddressId,
+          'serviceAddressId': ?serviceAddressId,
+          'newAddress': ?newAddress,
           'title': title,
           'description': description,
           'serviceCategory': serviceCategory,
+          if (equipmentInfo != null && equipmentInfo.trim().isNotEmpty)
+            'equipmentInfo': equipmentInfo.trim(),
           'priority': priority,
           'requiresInspection': requiresInspection,
+          'preferredWindows': ?preferredWindows,
+          'budgetMinMinor': ?budgetMinMinor,
+          'budgetMaxMinor': ?budgetMaxMinor,
+          'budgetCurrency': ?budgetCurrency,
         }),
       );
     } catch (_) {
@@ -782,6 +799,152 @@ class PortalRepository {
     }
     return _errorResult(response);
   }
+
+  /// GET on a portal path whose `data` payload is a List (request media,
+  /// request messages). Returns the decoded list, or null on failure.
+  Future<dynamic> workspaceList(String path) async {
+    final http.Response response;
+    try {
+      response = await _client.get(
+        _buildUri('/api/v1/portal/$path'),
+        headers: await _headers(),
+      );
+    } catch (_) {
+      return null;
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) return null;
+    try {
+      final decoded = response.body.isNotEmpty
+          ? jsonDecode(response.body)
+          : null;
+      if (decoded is Map<String, dynamic>) return decoded['data'];
+      return decoded;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Phase 3.2 presign → the client PUTs bytes straight to Supabase →
+  /// confirm. The signed URL is itself the credential: no portal headers.
+  Future<PortalResult> presignRequestMedia(String requestId, String mimeType) =>
+      workspaceAction(
+        'requests/$requestId/media/presign',
+        body: {'mimeType': mimeType},
+      );
+
+  Future<PortalResult> confirmRequestMedia(
+    String requestId, {
+    required String objectKey,
+    required String mimeType,
+    String? caption,
+  }) => workspaceAction(
+    'requests/$requestId/media',
+    body: {
+      'objectKey': objectKey,
+      'mimeType': mimeType,
+      if (caption != null && caption.trim().isNotEmpty)
+        'caption': caption.trim(),
+    },
+  );
+
+  /// PUTs raw bytes to a presigned Supabase upload URL. Returns true on a
+  /// 2xx. Retries are the caller's job so each attempt is observable.
+  Future<bool> uploadMediaBytes(
+    String uploadUrl,
+    List<int> bytes,
+    String mimeType,
+  ) async {
+    try {
+      final response = await _client.put(
+        Uri.parse(uploadUrl),
+        headers: {'Content-Type': mimeType},
+        body: bytes,
+      );
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Phase 4.5 — ask the business a question about a quote. Posts a
+  /// customer message on the linked service request; quote status is
+  /// unchanged.
+  Future<PortalResult> askQuoteQuestion(String quoteId, String body) =>
+      workspaceAction('quotes/$quoteId/question', body: {'body': body});
+
+  /// Phase 5 — booking. Proposals/holds are workspace-scoped; the backend
+  /// enforces BOOKING_ENABLED and customer ownership.
+  Future<PortalResult> listBookingProposals() async {
+    final http.Response response;
+    try {
+      response = await _client.get(
+        _buildUri('/api/v1/portal/booking/proposals'),
+        headers: await _headers(),
+      );
+    } catch (_) {
+      return const PortalFailure('Could not reach the server');
+    }
+    final data = _dataOrNull(response);
+    if (data == null) return _errorResult(response);
+    if (data is! List) {
+      return const PortalFailure('Received an unexpected response');
+    }
+    return PortalSessionActive(workspace: {'items': data});
+  }
+
+  Future<PortalResult> pickAppointmentProposal(
+    String proposalId,
+    DateTime startsAt,
+    DateTime endsAt,
+  ) => workspaceAction(
+    'appointment-proposals/$proposalId/pick',
+    body: {
+      'startsAt': startsAt.toUtc().toIso8601String(),
+      'endsAt': endsAt.toUtc().toIso8601String(),
+    },
+  );
+
+  Future<PortalResult> createBookingHold({
+    String? requestId,
+    String? jobId,
+    String? quoteId,
+    required DateTime windowStart,
+    required DateTime windowEnd,
+  }) => workspaceAction(
+    'booking/holds',
+    body: {
+      'requestId': ?requestId,
+      'jobId': ?jobId,
+      'quoteId': ?quoteId,
+      'windowStart': windowStart.toUtc().toIso8601String(),
+      'windowEnd': windowEnd.toUtc().toIso8601String(),
+    },
+  );
+
+  Future<PortalResult> confirmBookingHold(String holdId) =>
+      workspaceAction('booking/holds/$holdId/confirm');
+
+  /// Phase 5.5 — customer reschedule request: preferred windows become a
+  /// proposal the dispatcher confirms.
+  Future<PortalResult> requestJobReschedule(
+    String jobId,
+    List<({DateTime start, DateTime end})> windows,
+  ) => workspaceAction(
+    'jobs/$jobId/reschedule-request',
+    body: {
+      'windows': windows
+          .map(
+            (w) => {
+              'startsAt': w.start.toUtc().toIso8601String(),
+              'endsAt': w.end.toUtc().toIso8601String(),
+            },
+          )
+          .toList(),
+    },
+  );
+
+  Future<PortalResult> postRequestMessage(String requestId, String body) =>
+      workspaceAction('requests/$requestId/messages', body: {'body': body});
 
   /// Approves or declines a quote in the snapshot. [action] is
   /// `'APPROVED'` or `'DECLINED'`.

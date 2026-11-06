@@ -177,6 +177,32 @@ enum InvoiceKind {
   DEPOSIT
 }
 
+enum DepositType {
+  NONE
+  FIXED
+  PERCENT
+}
+
+enum InvoiceDisputeReason {
+  INCORRECT_AMOUNT
+  DUPLICATE_CHARGE
+  SERVICE_NOT_RENDERED
+  GOODS_NOT_RECEIVED
+  OTHER
+}
+
+enum InvoiceDisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+}
+
+enum InvoiceDisputeResolution {
+  UPHELD
+  ADJUSTED
+  REFUNDED
+}
+
 enum PaymentMethod {
   CASH
   CARD
@@ -218,6 +244,13 @@ enum NotificationType {
   // are a later Phase 10 slice); email-templates.ts already has a safe
   // fallback for notification types without a template.
   INVOICE_PAYMENT_REMINDER
+  REQUEST_SUBMITTED
+  REQUEST_INFO_PROVIDED
+  REQUEST_STATUS_CHANGED
+  JOB_CHANGE_REQUEST_SUBMITTED
+  JOB_REVIEW_CHANGES_REQUESTED
+  INVOICE_DISPUTE_OPENED
+  INVOICE_DISPUTE_RESOLVED
 }
 
 enum PortalGrantStatus {
@@ -302,6 +335,8 @@ model User {
   aiConversations            AiConversation[]           @relation("AiConversationOwners")
   presignedUploads           PresignedUpload[]          @relation("PresignedUploadRequesters")
   paymentOperations          PaymentOperation[]         @relation("PaymentOperationCreators")
+  resolvedInvoiceDisputes    InvoiceDispute[]           @relation("InvoiceDisputeResolvers")
+  invoiceDisputeEvents       InvoiceDisputeEvent[]      @relation("InvoiceDisputeEventActors")
   authoredFindings           JobFinding[]               @relation("JobFindingAuthors")
   assignedChangeRequests     JobChangeRequest[]         @relation("JobChangeRequestTechnicians")
   authorizedChangeRequests   JobChangeRequest[]         @relation("JobChangeRequestAuthorizers")
@@ -324,6 +359,9 @@ model Company {
   bookingMode                   BookingMode                @default(DISPATCHER_CONFIRMS)
   requireCompletionReview       Boolean                    @default(false)
   emergencyAuthorizationAllowed Boolean                    @default(false)
+  defaultDepositType            DepositType                @default(NONE)
+  /// FIXED: minor units of defaultCurrency. PERCENT: basis points.
+  defaultDepositValue           BigInt                     @default(0)
   defaultCurrency               String                     @default("USD") @db.Char(3)
   phone                         String?
   taxId                         String?
@@ -361,6 +399,8 @@ model Company {
   refunds                       Refund[]
   paymentSessions               PaymentSession[]
   providerWebhookEvents         ProviderWebhookEvent[]
+  invoiceDisputes               InvoiceDispute[]
+  invoiceDisputeEvents          InvoiceDisputeEvent[]
   payments                      Payment[]
   reviews                       CustomerReview[]
   portalTokens                  CustomerPortalToken[]
@@ -614,6 +654,7 @@ model Customer {
   serviceRequestUploads     ServiceRequestUpload[]
   serviceRequestAttachments ServiceRequestAttachment[]
   serviceRequestMessages    ServiceRequestMessage[]
+  invoiceDisputes           InvoiceDispute[]
 
   @@unique([id, companyId])
   @@index([companyId, status])
@@ -850,6 +891,13 @@ model Quote {
   sentAt               DateTime?
   approvedAt           DateTime?
   declinedAt           DateTime?
+  depositType          DepositType           @default(NONE)
+  /// FIXED: minor units of `currency`. PERCENT: basis points of quote total.
+  depositValue         BigInt                @default(0)
+  /// Computed when the quote is sent; frozen into QuoteAcceptance on approval.
+  depositMinor         BigInt?
+  /// Deprecated (ADR-020): public quote sharing moved to portal sessions.
+  /// Kept for historical rows only; do not add new reads or writes.
   shareToken           String?               @unique
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
@@ -890,6 +938,7 @@ model QuoteAcceptance {
   taxMinor        BigInt
   totalMinor      BigInt
   currency        String                   @db.Char(3)
+  depositMinor    BigInt                   @default(0)
   itemsSnapshot   Json
   termsSnapshot   Json
   userAgentHash   String?
@@ -927,6 +976,7 @@ model ServiceRequest {
   source               ServiceRequestSource
   submissionKey        String?
   preferredWindows     Json?
+  equipmentInfo        String?
   budgetMinMinor       BigInt?
   budgetMaxMinor       BigInt?
   budgetCurrency       String?                    @db.Char(3)
@@ -1065,6 +1115,7 @@ model QuoteApprovalEvent {
   actorUserId String?             @db.Uuid
   action      QuoteApprovalAction
   source      String
+  reason      String?
   createdAt   DateTime            @default(now())
   company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   quote       Quote               @relation(fields: [quoteId], references: [id], onDelete: Cascade)
@@ -1111,6 +1162,7 @@ model Invoice {
   creditTargets     InvoiceCreditApplication[] @relation("CreditTarget")
   refunds           Refund[]
   paymentSessions   PaymentSession[]
+  disputes          InvoiceDispute[]
 
   @@unique([companyId, invoiceNumber])
   @@unique([companyId, jobId])
@@ -1214,6 +1266,7 @@ model PaymentSession {
   expiresAt         DateTime
   idempotencyKey    String
   portalSessionId   String?              @db.Uuid
+  checkoutUrl       String?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   company           Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -1244,6 +1297,52 @@ model ProviderWebhookEvent {
   @@map("provider_webhook_events")
 }
 
+model InvoiceDispute {
+  id               String                  @id @default(uuid()) @db.Uuid
+  companyId        String                  @db.Uuid
+  invoiceId        String                  @db.Uuid
+  customerId       String                  @db.Uuid
+  reason           InvoiceDisputeReason
+  message          String
+  status           InvoiceDisputeStatus    @default(OPEN)
+  resolution       InvoiceDisputeResolution?
+  resolutionNote   String?
+  resolvedBy       String?                 @db.Uuid
+  resolvedAt       DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  company          Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice          Invoice                 @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  customer         Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  resolver         User?                   @relation("InvoiceDisputeResolvers", fields: [resolvedBy], references: [id], onDelete: SetNull)
+  events           InvoiceDisputeEvent[]
+
+  @@index([companyId, status, createdAt(sort: Desc)])
+  @@index([companyId, invoiceId])
+  @@map("invoice_disputes")
+}
+
+model InvoiceDisputeEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @db.Uuid
+  disputeId   String   @db.Uuid
+  actorUserId String?  @db.Uuid
+  type        String
+  fromStatus  InvoiceDisputeStatus?
+  toStatus    InvoiceDisputeStatus?
+  note        String?
+  createdAt   DateTime @default(now())
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  dispute     InvoiceDispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  actor       User?    @relation("InvoiceDisputeEventActors", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, disputeId, createdAt])
+  @@map("invoice_dispute_events")
+}
+
+/// Deprecated (ADR-020): superseded by PortalAccessGrant link tokens exchanged
+/// for PortalSession rows. Retained only so historical rows and any legacy
+/// reader keep working; do not add new reads or writes.
 model CustomerPortalToken {
   id         String    @id @default(uuid()) @db.Uuid
   companyId  String    @db.Uuid
@@ -1493,11 +1592,28 @@ model PortalAccessGrant {
   job               Job?                      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   issuer            User?                     @relation("PortalGrantIssuers", fields: [issuedBy], references: [id], onDelete: SetNull)
   sessions          PortalSession[]
+  deliveryTokens    PortalDeliveryToken[]
 
   @@index([companyId, jobId, status])
   @@index([companyId, customerId, scope, status])
   @@index([status, linkExpiresAt])
   @@map("portal_access_grants")
+}
+
+// Phase 8.1 — single-use link tokens minted at outbox send time. The
+// NotificationOutbox row stores only the grant reference; the plaintext
+// token exists solely in the worker's memory for the duration of the send.
+model PortalDeliveryToken {
+  id         String           @id @default(uuid()) @db.Uuid
+  grantId    String           @db.Uuid
+  tokenHash  String           @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime         @default(now())
+  grant      PortalAccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@index([grantId])
+  @@map("portal_delivery_tokens")
 }
 
 model PortalSession {

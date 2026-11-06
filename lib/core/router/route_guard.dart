@@ -185,7 +185,9 @@ String? resolveRedirect({
         }
       }
       // Completed owner on onboarding paths goes to dashboard
-      if (role == 'OWNER' && !ownerOnboardingPending && _ownerOnboardingPaths.contains(p)) {
+      if (role == 'OWNER' &&
+          !ownerOnboardingPending &&
+          _ownerOnboardingPaths.contains(p)) {
         return kDashboardPath;
       }
       if (p == kSplashPath || _authEntryPaths.contains(p)) {
@@ -195,7 +197,8 @@ String? resolveRedirect({
         return kTechnicianHomePath;
       }
       if (role == 'TECHNICIAN' &&
-          (_managerOnlyExact.contains(p) || p.startsWith('/service-requests/'))) {
+          (_managerOnlyExact.contains(p) ||
+              p.startsWith('/service-requests/'))) {
         return kTechnicianHomePath;
       }
       return null;

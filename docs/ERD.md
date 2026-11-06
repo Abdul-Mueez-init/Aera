@@ -128,3 +128,19 @@ Stores user-facing AI interactions. Never use raw LLM text as an authorization s
 ## Audit principle
 
 Important state changes are not overwritten without trace. History records preserve who changed what and when.
+
+## v2 entities (Phases 1–8)
+
+- `ServiceRequest` — customer intake record; links to `Job` (many jobs may reference one request; staff-direct jobs get an auto-created request).
+- `ServiceRequestMedia` / conversation messages — request attachments and threaded customer↔staff messages.
+- `Quote` extended — `serviceRequestId`, `kind`, `basisJobId`, deposit fields (`depositType`, `depositValue`, `depositMinor`), approval reason, expiry/recompute.
+- `AppointmentProposal` / `AppointmentHold` — scheduling offers and atomic time holds (CONFIRMED holds resume quote→job creation).
+- `CompanyBusinessHours`, `TechnicianWorkingHours`, `TechnicianTimeOff`, `TechnicianSkill` — availability inputs.
+- `JobFinding`, `JobChangeRequest`, `Job.reviewState` — field execution and completion review.
+- `InvoiceItem.sourceType/sourceId` — provenance (QUOTE_ITEM, JOB_PART, AUTHORIZATION, CREDIT/MANUAL); credit lines may be negative.
+- `Payment`, `PaymentSession`, `InvoiceCreditApplication`, `Refund`, `PaymentDispute` — money movement; integer minor units only.
+- `ProviderWebhookEvent` — deduplicated webhook inbox.
+- `JobTrackingState` — one row per job, last position only (no history), wiped on arrival/cancel/reassign/complete.
+- `NotificationOutbox` — durable at-least-once delivery with dedupeKey, backoff, dead-letter.
+- `PortalDeliveryToken` — send-time-minted single-use token hashes for outbox-delivered portal links; plaintext never persisted.
+- `PortalAccessGrant` / `PortalSession` / `PortalAuditEvent` — workspace access, sessions, audit.

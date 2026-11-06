@@ -375,3 +375,7 @@ Close with:
 ## Plan ownership
 
 This file owns implementation phases, dependencies, exit criteria, demo sequencing, hardening, and pilot readiness. It does not redefine product requirements, architecture, database schema, visual design, or coding rules.
+
+## v2 implementation status (Aera v2 plan, Phases 1–8)
+
+Phases 1–7 are implemented and verified by dedicated Vitest suites (request notifications, portal security/IDOR, intake+media, quote-before-job, booking concurrency, completion/invoicing Gate A e2e, payments/deposits/refunds/disputes). Phase 8 added: ETA computation on `JobTrackingState`, outbox-minted `PortalDeliveryToken` delivery (plaintext never persisted), technician location sharing in Flutter, tracking/outbox test coverage, and the release runbook. Remaining before Gate C: staging soak, production payment provider selection (D-1), booking-mode default (D-2), retention policy (D-7), and the deferred deprecations (job-scoped grants, `QUOTE_REQUIRES_JOB`, `CustomerPortalToken`/`Quote.shareToken` drops) which require production verification first.

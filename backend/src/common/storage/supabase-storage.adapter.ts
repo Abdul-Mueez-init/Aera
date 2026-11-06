@@ -47,6 +47,58 @@ function getServiceRoleClient(): SupabaseClient {
   return cachedClient;
 }
 
+/**
+ * Shared HEAD verification for private buckets: mint a short-lived signed
+ * URL, HEAD the object, and report the REAL Content-Length / Content-Type.
+ * Never trusts client-reported size or mime. Used by job photos and
+ * request media so both paths verify identically.
+ */
+async function verifyUploadedObject(
+  bucket: string,
+  objectKey: string,
+  fallbackMimeType: string,
+): Promise<VerifyUploadResult> {
+  const { data, error } = await getServiceRoleClient()
+    .storage.from(bucket)
+    .createSignedUrl(objectKey, 60);
+
+  if (error || !data) {
+    logger.warn(
+      { err: error, objectKey, bucket },
+      "Could not verify upload existence via signed URL",
+    );
+    return { exists: false, mimeType: fallbackMimeType, sizeBytes: 0 };
+  }
+
+  let head: Response;
+  try {
+    head = await fetch(data.signedUrl, {
+      method: "HEAD",
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch (fetchError) {
+    logger.warn(
+      { err: fetchError, objectKey, bucket },
+      "Could not HEAD uploaded object for verification",
+    );
+    return { exists: false, mimeType: fallbackMimeType, sizeBytes: 0 };
+  }
+
+  if (!head.ok) {
+    return { exists: false, mimeType: fallbackMimeType, sizeBytes: 0 };
+  }
+
+  const actualSize = Number(head.headers.get("content-length"));
+  const actualMime =
+    head.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ??
+    fallbackMimeType;
+  return {
+    exists: true,
+    mimeType: actualMime,
+    sizeBytes: Number.isFinite(actualSize) ? actualSize : 0,
+  };
+}
+
 export const supabaseStorageAdapter: StoragePort = {
   async createSignedUploadUrl(
     request: SignedUploadRequest,
@@ -92,63 +144,15 @@ export const supabaseStorageAdapter: StoragePort = {
   async verifyUpload(
     request: VerifyUploadRequest,
   ): Promise<VerifyUploadResult> {
-    // Verify the ACTUAL object: mint a short-lived signed URL and HEAD
-    // it, reporting the real Content-Length / Content-Type. The previous
-    // implementation only checked that a signed URL could be created
-    // and echoed the caller's expected mime/size back as if measured —
-    // confirming a presign for image/jpeg proved nothing about the
-    // bytes actually uploaded. Mirrors verifyCompanyLogoUpload below.
-    const { data, error } = await getServiceRoleClient()
-      .storage.from(env.SUPABASE_JOB_PHOTOS_BUCKET)
-      .createSignedUrl(request.objectKey, 60);
-
-    if (error || !data) {
-      logger.warn(
-        { err: error, objectKey: request.objectKey },
-        "Could not verify upload existence via signed URL",
-      );
-      return {
-        exists: false,
-        mimeType: request.expectedMimeType,
-        sizeBytes: 0,
-      };
-    }
-
-    let head: Response;
-    try {
-      head = await fetch(data.signedUrl, {
-        method: "HEAD",
-        signal: AbortSignal.timeout(8000),
-      });
-    } catch (fetchError) {
-      logger.warn(
-        { err: fetchError, objectKey: request.objectKey },
-        "Could not HEAD uploaded object for verification",
-      );
-      return {
-        exists: false,
-        mimeType: request.expectedMimeType,
-        sizeBytes: 0,
-      };
-    }
-
-    if (!head.ok) {
-      return {
-        exists: false,
-        mimeType: request.expectedMimeType,
-        sizeBytes: 0,
-      };
-    }
-
-    const actualSize = Number(head.headers.get("content-length"));
-    const actualMime =
-      head.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ??
-      request.expectedMimeType;
-    return {
-      exists: true,
-      mimeType: actualMime,
-      sizeBytes: Number.isFinite(actualSize) ? actualSize : 0,
-    };
+    // Verify the ACTUAL object via the shared HEAD verifier — the
+    // previous implementation only checked that a signed URL could be
+    // created and echoed the caller's expected mime/size back as if
+    // measured, proving nothing about the bytes actually uploaded.
+    return verifyUploadedObject(
+      env.SUPABASE_JOB_PHOTOS_BUCKET,
+      request.objectKey,
+      request.expectedMimeType,
+    );
   },
 };
 
@@ -316,34 +320,29 @@ export async function verifyRequestMediaUpload(
   expectedMaxSizeBytes: number,
 ): Promise<VerifyUploadResult> {
   void expectedMaxSizeBytes;
-  const { data, error } = await getServiceRoleClient()
+  // Same shared HEAD verification as job photos — actual stored object
+  // metadata only, never client-reported values.
+  return verifyUploadedObject(
+    env.SUPABASE_REQUEST_MEDIA_BUCKET,
+    objectKey,
+    expectedMimeType,
+  );
+}
+
+export async function deleteRequestMediaObjects(
+  objectKeys: string[],
+): Promise<void> {
+  if (objectKeys.length === 0) return;
+  const { error } = await getServiceRoleClient()
     .storage.from(env.SUPABASE_REQUEST_MEDIA_BUCKET)
-    .createSignedUrl(objectKey, 60);
-  if (error || !data)
-    return { exists: false, mimeType: expectedMimeType, sizeBytes: 0 };
-  let head: Response;
-  try {
-    head = await fetch(data.signedUrl, {
-      method: "HEAD",
-      signal: AbortSignal.timeout(8000),
-    });
-  } catch (fetchError) {
-    logger.warn(
-      { err: fetchError, objectKey },
-      "Could not verify request media upload",
+    .remove(objectKeys);
+  if (error) {
+    throw new AppError(
+      "STORAGE_UNAVAILABLE",
+      "Could not delete request media objects",
+      502,
     );
-    return { exists: false, mimeType: expectedMimeType, sizeBytes: 0 };
   }
-  if (!head.ok)
-    return { exists: false, mimeType: expectedMimeType, sizeBytes: 0 };
-  const sizeBytes = Number(head.headers.get("content-length"));
-  const actualMime =
-    head.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
-  return {
-    exists: true,
-    mimeType: actualMime,
-    sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : 0,
-  };
 }
 
 export async function createRequestMediaReadUrl(

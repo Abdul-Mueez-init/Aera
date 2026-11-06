@@ -115,6 +115,68 @@ export async function buildSmsMessage(
       };
     }
 
+    case "REQUEST_SUBMITTED":
+    case "REQUEST_INFO_PROVIDED":
+    case "REQUEST_STATUS_CHANGED": {
+      if (!event.requestId) return null;
+      const request = await prisma.serviceRequest.findFirst({
+        where: { id: event.requestId, companyId: event.companyId },
+        select: {
+          requestNumber: true,
+          title: true,
+          customer: { select: { firstName: true, lastName: true } },
+        },
+      });
+      if (!request) return null;
+
+      const label =
+        event.type === "REQUEST_SUBMITTED"
+          ? "New service request"
+          : event.type === "REQUEST_INFO_PROVIDED"
+            ? "Customer replied on a service request"
+            : "Service request updated";
+      return {
+        body: `Aera: ${label} #${request.requestNumber} — ${request.title} (${request.customer.firstName} ${request.customer.lastName}).`,
+      };
+    }
+
+    case "JOB_CHANGE_REQUEST_SUBMITTED":
+    case "JOB_REVIEW_CHANGES_REQUESTED": {
+      if (!event.jobId) return null;
+      const job = await prisma.job.findFirst({
+        where: { id: event.jobId, companyId: event.companyId },
+        select: {
+          jobNumber: true,
+          serviceType: true,
+          customer: { select: { firstName: true, lastName: true } },
+        },
+      });
+      if (!job) return null;
+      const label =
+        event.type === "JOB_CHANGE_REQUEST_SUBMITTED"
+          ? "change request"
+          : "changes requested";
+      return {
+        body: `Aera: ${label} on job #${job.jobNumber} — ${job.serviceType} for ${job.customer.firstName} ${job.customer.lastName}.`,
+      };
+    }
+
+    case "INVOICE_DISPUTE_OPENED":
+    case "INVOICE_DISPUTE_RESOLVED": {
+      if (!event.invoiceId) return null;
+      const invoice = await prisma.invoice.findFirst({
+        where: { id: event.invoiceId, companyId: event.companyId },
+        select: { invoiceNumber: true },
+      });
+      if (!invoice) return null;
+      return {
+        body:
+          event.type === "INVOICE_DISPUTE_OPENED"
+            ? `Aera: dispute opened on invoice ${invoice.invoiceNumber}.`
+            : `Aera: dispute resolved on invoice ${invoice.invoiceNumber}.`,
+      };
+    }
+
     default:
       // Safety net for a future NotificationEventType added to the union
       // without an SMS template yet — skip rather than throw, so a queue

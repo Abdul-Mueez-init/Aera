@@ -389,4 +389,133 @@ void main() {
       expect((result as PortalClosed).variant, PortalClosedVariant.deactivated);
     });
   });
+
+  group('Phase 3 request intake', () {
+    PortalRepository repoWith(MockClient client) => PortalRepository(
+          baseUrl: 'https://api.test',
+          client: client,
+          store: _MemoryPortalSessionStore(),
+          forceWebTransport: true,
+        );
+
+    test('createWorkspaceRequest sends Idempotency-Key header plus '
+        'newAddress/equipmentInfo', () async {
+      late http.Request captured;
+      final repo = repoWith(
+        MockClient((request) async {
+          captured = request;
+          return _json(201, {'data': {'id': 'req-1'}});
+        }),
+      );
+
+      final result = await repo.createWorkspaceRequest(
+        submissionKey: 'key-1234567890abcdef',
+        newAddress: {
+          'line1': '42 Pine Rd',
+          'city': 'Dallas',
+          'countryCode': 'US',
+        },
+        title: 'Leak',
+        description: 'Drip',
+        serviceCategory: 'PLUMBING',
+        equipmentInfo: 'Moen faucet',
+      );
+
+      expect(result, isA<PortalSessionActive>());
+      expect(captured.headers['idempotency-key'], 'key-1234567890abcdef');
+      final body = jsonDecode(captured.body) as Map<String, dynamic>;
+      expect(body['submissionKey'], 'key-1234567890abcdef');
+      expect(body['newAddress']['line1'], '42 Pine Rd');
+      expect(body['equipmentInfo'], 'Moen faucet');
+      expect(body.containsKey('serviceAddressId'), isFalse);
+    });
+
+    test('presign → uploadMediaBytes → confirm round-trips', () async {
+      final requests = <http.Request>[];
+      final repo = repoWith(
+        MockClient((request) async {
+          requests.add(request);
+          if (request.url.path.endsWith('/media/presign')) {
+            return _json(201, {
+              'data': {
+                'objectKey': 'k1',
+                'uploadUrl': 'https://storage.test/put',
+              },
+            });
+          }
+          if (request.url.path.endsWith('/media')) {
+            return _json(201, {'data': {'id': 'att-1'}});
+          }
+          if (request.url.host == 'storage.test') {
+            return http.Response('', 200);
+          }
+          return _json(500, {'error': {'message': 'unexpected'}});
+        }),
+      );
+
+      final presign = await repo.presignRequestMedia('req-1', 'image/jpeg');
+      expect(presign, isA<PortalSessionActive>());
+      final workspace = (presign as PortalSessionActive).workspace!;
+      expect(workspace['objectKey'], 'k1');
+
+      final uploaded = await repo.uploadMediaBytes(
+        workspace['uploadUrl'] as String,
+        [1, 2, 3],
+        'image/jpeg',
+      );
+      expect(uploaded, isTrue);
+      // The byte PUT goes to the signed URL, NOT through the portal API.
+      expect(requests.last.url.toString(), 'https://storage.test/put');
+      expect(requests.last.headers['content-type'], 'image/jpeg');
+
+      final confirm = await repo.confirmRequestMedia(
+        'req-1',
+        objectKey: 'k1',
+        mimeType: 'image/jpeg',
+        caption: 'Leak',
+      );
+      expect(confirm, isA<PortalSessionActive>());
+      final confirmBody =
+          jsonDecode(requests.last.body) as Map<String, dynamic>;
+      expect(confirmBody['objectKey'], 'k1');
+      expect(confirmBody['caption'], 'Leak');
+    });
+
+    test('uploadMediaBytes returns false on transport failure', () async {
+      final repo = repoWith(
+        MockClient((_) async => throw Exception('offline')),
+      );
+      expect(
+        await repo.uploadMediaBytes('https://x', [1], 'image/jpeg'),
+        isFalse,
+      );
+    });
+
+    test('workspaceList parses list payloads and postRequestMessage posts',
+        () async {
+      final repo = repoWith(
+        MockClient((request) async {
+          if (request.method == 'GET') {
+            return _json(200, {
+              'data': [
+                {'id': 'm1', 'authorType': 'STAFF', 'body': 'hi'},
+              ],
+            });
+          }
+          return _json(201, {
+            'data': {'id': 'm2', 'authorType': 'CUSTOMER', 'body': 'hello'},
+          });
+        }),
+      );
+
+      final messages = await repo.workspaceList(
+        'requests/req-1/messages',
+      );
+      expect(messages, isA<List>());
+      expect((messages as List).single['authorType'], 'STAFF');
+
+      final posted = await repo.postRequestMessage('req-1', 'hello');
+      expect(posted, isA<PortalSessionActive>());
+    });
+  });
 }

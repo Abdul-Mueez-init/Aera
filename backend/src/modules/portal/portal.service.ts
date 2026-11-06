@@ -23,8 +23,10 @@ function jsonSafe<T>(value: T): T {
 export async function exchangeToken(token: string, userAgent?: string) {
   const tokenHash = hashToken(token);
 
-  // Find grant by hash
-  const grant = await prisma.portalAccessGrant.findUnique({
+  // Find grant by hash — either the issuance link token or a
+  // send-time-minted PortalDeliveryToken (Phase 8.1 outbox delivery).
+  let deliveryTokenId: string | null = null;
+  let grant = await prisma.portalAccessGrant.findUnique({
     where: { linkTokenHash: tokenHash },
     include: {
       company: {
@@ -35,6 +37,31 @@ export async function exchangeToken(token: string, userAgent?: string) {
       },
     },
   });
+
+  if (!grant) {
+    const deliveryToken = await prisma.portalDeliveryToken.findUnique({
+      where: { tokenHash },
+      select: { id: true, grantId: true, expiresAt: true, consumedAt: true },
+    });
+    if (
+      deliveryToken &&
+      !deliveryToken.consumedAt &&
+      deliveryToken.expiresAt > new Date()
+    ) {
+      deliveryTokenId = deliveryToken.id;
+      grant = await prisma.portalAccessGrant.findUnique({
+        where: { id: deliveryToken.grantId },
+        include: {
+          company: {
+            select: {
+              name: true,
+              phone: true,
+            },
+          },
+        },
+      });
+    }
+  }
 
   if (!grant) {
     throw new AppError("PORTAL_LINK_INVALID", "Invalid portal link", 401);
@@ -70,7 +97,9 @@ export async function exchangeToken(token: string, userAgent?: string) {
 
   // Check if already used — the response carries the company contact
   // payload so the "already used" screen can show who to ask for a new link.
-  if (grant.linkConsumedAt) {
+  // Delivery tokens (outbox-minted at send time) are fresh credentials and
+  // are not gated by the grant's issuance link consumption state.
+  if (!deliveryTokenId && grant.linkConsumedAt) {
     const contacts = await getCompanyContacts(grant.companyId);
     throw new AppError(
       "PORTAL_LINK_ALREADY_USED",
@@ -95,18 +124,29 @@ export async function exchangeToken(token: string, userAgent?: string) {
   // concurrent exchange can win it.
   const now = new Date();
   const exchanged = await prisma.$transaction(async (tx) => {
-    const burnResult = await tx.portalAccessGrant.updateMany({
-      where: {
-        id: grant.id,
-        status: "ACTIVE",
-        linkConsumedAt: null,
-        linkExpiresAt: { gt: now },
-      },
-      data: { linkConsumedAt: now },
-    });
+    // Delivery tokens are independent single-use credentials: the grant's
+    // issuance link may already be consumed, so the burn guard is the
+    // delivery token itself rather than the grant link state.
+    if (deliveryTokenId) {
+      const tokenBurn = await tx.portalDeliveryToken.updateMany({
+        where: { id: deliveryTokenId, consumedAt: null, expiresAt: { gt: now } },
+        data: { consumedAt: now },
+      });
+      if (tokenBurn.count !== 1) return null;
+    } else {
+      const burnResult = await tx.portalAccessGrant.updateMany({
+        where: {
+          id: grant.id,
+          status: "ACTIVE",
+          linkConsumedAt: null,
+          linkExpiresAt: { gt: now },
+        },
+        data: { linkConsumedAt: now },
+      });
 
-    if (burnResult.count !== 1) {
-      return null;
+      if (burnResult.count !== 1) {
+        return null;
+      }
     }
 
     const { sessionToken } = await createPortalSession(grant.id, userAgent, tx);
@@ -118,6 +158,10 @@ export async function exchangeToken(token: string, userAgent?: string) {
         customerId: grant.customerId,
         grantId: grant.id,
         action: "PORTAL_LINK_EXCHANGED",
+        resourceType:
+          grant.scope === "WORKSPACE" ? "WORKSPACE" : grant.scope,
+        resourceId:
+          grant.scope === "WORKSPACE" ? grant.customerId : grant.jobId,
       },
     });
 

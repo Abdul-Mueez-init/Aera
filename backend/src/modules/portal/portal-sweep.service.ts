@@ -3,6 +3,7 @@ import { captureBackgroundError } from "../../common/observability.js";
 import { env } from "../../config/env.js";
 import { prisma } from "../../db/prisma.js";
 import { closePortalIfDone } from "./portal.grants.js";
+import { sweepExpiredRequestUploads } from "../requests/request.media.js";
 
 const DAY_MS = 86_400_000;
 const PAGE_SIZE = 200;
@@ -16,6 +17,7 @@ export interface PortalSweepResult {
   completedJobsClosed: number;
   neverOpenedLinksClosed: number;
   reevaluatedJobs: number;
+  requestUploadsSwept?: number;
 }
 
 /**
@@ -251,7 +253,21 @@ export async function runPortalSweep(
     if (page.length < PAGE_SIZE) break;
   }
 
-  return { completedJobsClosed, neverOpenedLinksClosed, reevaluatedJobs };
+  // Request-media hygiene: delete expired, never-confirmed upload rows
+  // and their orphaned storage objects (Phase 3.2).
+  const requestUploadsSwept = await sweepExpiredRequestUploads(now).catch(
+    (error) => {
+      logger.warn({ err: error }, "Request media upload sweep failed");
+      return 0;
+    },
+  );
+
+  return {
+    completedJobsClosed,
+    neverOpenedLinksClosed,
+    reevaluatedJobs,
+    requestUploadsSwept,
+  };
 }
 
 /**

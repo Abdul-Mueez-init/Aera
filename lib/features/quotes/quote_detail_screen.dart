@@ -47,6 +47,13 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   bool _revising = false;
 
   Future<void> _respondQuote(bool approve) async {
+    // Phase 4.7: staff accept-on-behalf requires an audit reason — the
+    // backend records it on the QuoteApprovalEvent.
+    String? reason;
+    if (approve) {
+      reason = await _askApprovalReason();
+      if (reason == null || !mounted) return;
+    }
     // Approving a job-linked quote advances the job server-side
     // (QUOTING → SCHEDULED/NEW), so the job detail cache must go too.
     final jobId = ref
@@ -57,7 +64,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     try {
       await ref
           .read(quotesRepositoryProvider)
-          .respondToQuote(widget.quoteId, approve: approve);
+          .respondToQuote(widget.quoteId, approve: approve, reason: reason);
       ref.invalidate(quoteDetailProvider(widget.quoteId));
       ref.invalidate(quotesListProvider);
       if (jobId != null) ref.invalidate(jobDetailProvider(jobId));
@@ -82,6 +89,39 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     } finally {
       if (mounted) setState(() => _responding = false);
     }
+  }
+
+  Future<String?> _askApprovalReason() {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Record customer approval'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 2,
+          decoration: const InputDecoration(
+            labelText: 'Audit reason',
+            hintText: 'e.g. Customer approved by phone',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isEmpty) return;
+              Navigator.of(dialogContext).pop(value);
+            },
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _sendQuote() async {

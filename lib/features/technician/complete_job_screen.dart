@@ -131,6 +131,23 @@ class _CompleteJobScreenState extends ConsumerState<CompleteJobScreen> {
                 ),
               ),
               const SizedBox(height: 14),
+              // Diagnostic jobs require at least one recorded finding —
+              // the backend rejects completion without one.
+              if (job.type == 'DIAGNOSTIC')
+                Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AeraColors.warningSoft,
+                    borderRadius: AeraRadii.borderMd,
+                  ),
+                  child: Text(
+                    'This is a diagnostic job — make sure at least one finding is recorded on the Work screen before completing.',
+                    style: AeraTypography.bodySm.copyWith(
+                      color: AeraColors.warning,
+                    ),
+                  ),
+                ),
               AeraTextField(
                 label: 'Completion summary (required)',
                 hintText: 'What was diagnosed and fixed?',

@@ -34,6 +34,8 @@ class _WorkInProgressScreenState extends ConsumerState<WorkInProgressScreen> {
     ref.invalidate(jobDetailProvider(widget.jobId));
     ref.invalidate(jobsListProvider);
     ref.invalidate(technicianTodayProvider);
+    ref.invalidate(jobFindingsProvider(widget.jobId));
+    ref.invalidate(jobChangeRequestsProvider(widget.jobId));
   }
 
   void _showError(Object error) {
@@ -190,6 +192,232 @@ class _WorkInProgressScreenState extends ConsumerState<WorkInProgressScreen> {
     }
   }
 
+  Future<void> _addFinding() async {
+    final summaryController = TextEditingController();
+    final workController = TextEditingController();
+    final minutesController = TextEditingController();
+    var customerVisible = false;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AeraColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
+          title: Text(
+            'Add Finding',
+            style: AeraTypography.h3.copyWith(fontSize: 17),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AeraTextField(
+                  label: 'What did you find? (required)',
+                  hintText: 'e.g. Compressor seized, refrigerant low',
+                  controller: summaryController,
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 12),
+                AeraTextField(
+                  label: 'Recommended work (optional)',
+                  hintText: 'e.g. Replace compressor',
+                  controller: workController,
+                ),
+                const SizedBox(height: 12),
+                AeraTextField(
+                  label: 'Est. labor minutes (optional)',
+                  controller: minutesController,
+                  keyboardType: TextInputType.number,
+                ),
+                CheckboxListTile(
+                  value: customerVisible,
+                  onChanged: (v) =>
+                      setDialogState(() => customerVisible = v ?? false),
+                  title: Text(
+                    'Share with customer',
+                    style: AeraTypography.bodySm,
+                  ),
+                  subtitle: Text(
+                    'Customer-visible findings appear in their portal',
+                    style: AeraTypography.label.copyWith(fontSize: 10),
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                'Cancel',
+                style: AeraTypography.bodyMedium.copyWith(
+                  color: AeraColors.inkSoft,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(
+                'Save',
+                style: AeraTypography.bodyMedium.copyWith(
+                  color: AeraColors.accent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final summary = summaryController.text.trim();
+    if (result != true || summary.isEmpty) return;
+    final minutes = int.tryParse(minutesController.text.trim());
+
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(jobsRepositoryProvider)
+          .addFinding(
+            widget.jobId,
+            summary: summary,
+            recommendedWork: workController.text,
+            estimatedLaborMinutes: minutes,
+            customerVisible: customerVisible,
+          );
+      _refreshEverywhere();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Finding added')));
+      }
+    } catch (e) {
+      _showError(e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _requestChange() async {
+    final reasonController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final priceController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AeraColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
+        title: Text(
+          'Request Scope Change',
+          style: AeraTypography.h3.copyWith(fontSize: 17),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AeraTextField(
+                label: 'Reason (required)',
+                hintText: 'e.g. Additional damage found',
+                controller: reasonController,
+              ),
+              const SizedBox(height: 12),
+              AeraTextField(
+                label: 'Description (required)',
+                hintText: 'What extra work is needed?',
+                controller: descriptionController,
+                maxLines: 3,
+              ),
+              const SizedBox(height: 12),
+              AeraTextField(
+                label: 'Estimated price (e.g. 150.00)',
+                controller: priceController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              'Cancel',
+              style: AeraTypography.bodyMedium.copyWith(
+                color: AeraColors.inkSoft,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              'Submit',
+              style: AeraTypography.bodyMedium.copyWith(
+                color: AeraColors.accent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final reason = reasonController.text.trim();
+    final description = descriptionController.text.trim();
+    final price = double.tryParse(priceController.text.trim());
+    if (result != true ||
+        reason.isEmpty ||
+        description.isEmpty ||
+        price == null ||
+        price < 0) {
+      if (result == true) {
+        _showError(Exception('Enter a reason, description, and price'));
+      }
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(jobsRepositoryProvider)
+          .createChangeRequest(
+            widget.jobId,
+            reason: reason,
+            description: description,
+            estimatedPriceMinor: (price * 100).round(),
+            currency: 'USD',
+          );
+      _refreshEverywhere();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Change request sent for review')),
+        );
+      }
+    } catch (e) {
+      _showError(e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _withdrawChange(String changeRequestId) async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(jobsRepositoryProvider)
+          .withdrawChangeRequest(widget.jobId, changeRequestId);
+      _refreshEverywhere();
+    } catch (e) {
+      _showError(e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final jobAsync = ref.watch(jobDetailProvider(widget.jobId));
@@ -318,6 +546,64 @@ class _WorkInProgressScreenState extends ConsumerState<WorkInProgressScreen> {
                 ),
                 onPressed: _busy ? null : _addNote,
               ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: AeraButton(
+                      text: 'Add Finding',
+                      variant: AeraButtonVariant.outline,
+                      icon: const Icon(
+                        Icons.fact_check_outlined,
+                        size: 18,
+                        color: AeraColors.ink,
+                      ),
+                      onPressed: _busy ? null : _addFinding,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: AeraButton(
+                      text: 'Request Change',
+                      variant: AeraButtonVariant.outline,
+                      icon: const Icon(
+                        Icons.add_circle_outline,
+                        size: 18,
+                        color: AeraColors.ink,
+                      ),
+                      onPressed: _busy ? null : _requestChange,
+                    ),
+                  ),
+                ],
+              ),
+
+              // Diagnostic jobs cannot be completed without a finding —
+              // surface that requirement before the technician gets the
+              // JOB_FINDING_REQUIRED error at completion time.
+              if (job.type == 'DIAGNOSTIC')
+                ref
+                    .watch(jobFindingsProvider(widget.jobId))
+                    .maybeWhen(
+                      data: (findings) => findings.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AeraColors.warningSoft,
+                                  borderRadius: AeraRadii.borderMd,
+                                ),
+                                child: Text(
+                                  'Diagnostic job: add at least one finding before completing.',
+                                  style: AeraTypography.bodySm.copyWith(
+                                    color: AeraColors.warning,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                      orElse: () => const SizedBox.shrink(),
+                    ),
 
               const SizedBox(height: 20),
 
@@ -459,6 +745,153 @@ class _WorkInProgressScreenState extends ConsumerState<WorkInProgressScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 14),
+
+              // Findings (Phase 6.3)
+              ref
+                  .watch(jobFindingsProvider(widget.jobId))
+                  .when(
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, _) => const SizedBox.shrink(),
+                    data: (findings) => AeraCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Findings (${findings.length})',
+                            style: AeraTypography.h3.copyWith(fontSize: 15),
+                          ),
+                          const SizedBox(height: 8),
+                          if (findings.isEmpty)
+                            Text(
+                              'No findings recorded',
+                              style: AeraTypography.bodySm,
+                            )
+                          else
+                            ...findings.map(
+                              (finding) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      finding.summary,
+                                      style: AeraTypography.bodySm.copyWith(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    if (finding.recommendedWork != null)
+                                      Text(
+                                        '→ ${finding.recommendedWork}',
+                                        style: AeraTypography.bodySm.copyWith(
+                                          fontSize: 11,
+                                          color: AeraColors.inkSoft,
+                                        ),
+                                      ),
+                                    Text(
+                                      '${finding.customerVisible ? 'Shared with customer' : 'Internal'} · ${DateFormat('MMM d, h:mm a').format(finding.createdAt)}',
+                                      style: AeraTypography.label.copyWith(
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+              const SizedBox(height: 14),
+
+              // Change requests (Phase 6.5)
+              ref
+                  .watch(jobChangeRequestsProvider(widget.jobId))
+                  .when(
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, _) => const SizedBox.shrink(),
+                    data: (requests) => AeraCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Change Requests (${requests.length})',
+                            style: AeraTypography.h3.copyWith(fontSize: 15),
+                          ),
+                          const SizedBox(height: 8),
+                          if (requests.isEmpty)
+                            Text(
+                              'No change requests',
+                              style: AeraTypography.bodySm,
+                            )
+                          else
+                            ...requests.map(
+                              (cr) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            '${cr.reason} — ${cr.currency} ${(cr.estimatedPriceMinor / 100).toStringAsFixed(2)}',
+                                            style: AeraTypography.bodySm
+                                                .copyWith(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                          ),
+                                        ),
+                                        AeraStatusChip(
+                                          label: cr.status,
+                                          type: cr.status == 'OPEN'
+                                              ? AeraStatusType.warning
+                                              : cr.status == 'QUOTED' ||
+                                                    cr.authorizedBy != null
+                                              ? AeraStatusType.completed
+                                              : AeraStatusType.inProgress,
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      cr.description,
+                                      style: AeraTypography.bodySm.copyWith(
+                                        fontSize: 11,
+                                        color: AeraColors.inkSoft,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (cr.isOpen)
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: TextButton(
+                                          onPressed: _busy
+                                              ? null
+                                              : () => _withdrawChange(cr.id),
+                                          child: Text(
+                                            'Withdraw',
+                                            style: AeraTypography.label
+                                                .copyWith(
+                                                  color: AeraColors.danger,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
               const SizedBox(height: 24),
 
               if (job.status == 'IN_PROGRESS' || job.status == 'WAITING_PARTS')

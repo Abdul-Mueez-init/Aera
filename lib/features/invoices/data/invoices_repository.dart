@@ -74,6 +74,7 @@ class InvoiceItem {
     required this.unitPriceMinor,
     required this.totalMinor,
     required this.sortOrder,
+    this.sourceType,
   });
 
   final String id;
@@ -82,6 +83,10 @@ class InvoiceItem {
   final int unitPriceMinor;
   final int totalMinor;
   final int sortOrder;
+
+  /// Phase 6.6 provenance: QUOTE_ITEM / JOB_PART / AUTHORIZATION / MANUAL.
+  /// Null on invoices created before source tracking existed.
+  final String? sourceType;
 
   factory InvoiceItem.fromJson(Map<String, dynamic> json) => InvoiceItem(
     id: json['id'] as String,
@@ -93,6 +98,7 @@ class InvoiceItem {
     unitPriceMinor: int.tryParse(json['unitPriceMinor']?.toString() ?? '') ?? 0,
     totalMinor: int.tryParse(json['totalMinor']?.toString() ?? '') ?? 0,
     sortOrder: json['sortOrder'] as int? ?? 0,
+    sourceType: json['sourceType'] as String?,
   );
 }
 
@@ -291,8 +297,9 @@ class InvoicesRepository {
       );
       final map = res as Map<String, dynamic>;
       invoices.addAll(
-        (map['items'] as List<dynamic>)
-            .map((i) => Invoice.fromJson(i as Map<String, dynamic>)),
+        (map['items'] as List<dynamic>).map(
+          (i) => Invoice.fromJson(i as Map<String, dynamic>),
+        ),
       );
       final meta = map['meta'] as Map<String, dynamic>?;
       final pageCount = (meta?['pageCount'] as num?)?.toInt() ?? page;
@@ -317,6 +324,25 @@ class InvoicesRepository {
       body: {'allowZeroAmount': ?allowZeroAmount},
     );
     return Invoice.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Phase 6.6 — add a MANUAL line to a DRAFT invoice. The backend
+  /// recomputes subtotal/total server-side; only DRAFT invoices accept
+  /// edits (409 INVOICE_NOT_EDITABLE otherwise).
+  Future<void> addInvoiceItem(
+    String invoiceId, {
+    required String description,
+    required double quantity,
+    required int unitPriceMinor,
+  }) async {
+    await _client.post(
+      '/api/v1/invoices/$invoiceId/items',
+      body: {
+        'description': description.trim(),
+        'quantity': quantity,
+        'unitPriceMinor': unitPriceMinor,
+      },
+    );
   }
 
   Future<Invoice> issueInvoice(String invoiceId) async {
@@ -348,6 +374,123 @@ class InvoicesRepository {
     );
     return Invoice.fromJson(res as Map<String, dynamic>);
   }
+
+  // ---- Phase 7: refunds + disputes ----
+
+  Future<List<Map<String, dynamic>>> listRefunds(String invoiceId) async {
+    final res = await _client.get('/api/v1/invoices/$invoiceId/refunds');
+    return (res as List).cast<Map<String, dynamic>>();
+  }
+
+  /// OWNER only on the server. [paymentId] identifies which payment to
+  /// refund; [amountMinor] may be partial.
+  Future<Map<String, dynamic>> createRefund(
+    String invoiceId, {
+    required String paymentId,
+    required int amountMinor,
+    required String reason,
+  }) async {
+    final res = await _client.post(
+      '/api/v1/invoices/$invoiceId/refunds',
+      body: {
+        'paymentId': paymentId,
+        'amountMinor': amountMinor,
+        'reason': reason,
+      },
+    );
+    return res as Map<String, dynamic>;
+  }
+
+  /// Returns `{items, meta}` — the endpoint is paginated.
+  Future<InvoiceDisputePage> listDisputes({String? status}) async {
+    final res = await _client.get(
+      '/api/v1/invoices/disputes',
+      queryParameters: {'status': ?status},
+    );
+    return InvoiceDisputePage.fromJson(res as Map<String, dynamic>);
+  }
+
+  Future<InvoiceDispute> reviewDispute(String disputeId) async {
+    final res = await _client.post(
+      '/api/v1/invoices/disputes/$disputeId/review',
+    );
+    return InvoiceDispute.fromJson(res as Map<String, dynamic>);
+  }
+
+  Future<InvoiceDispute> resolveDispute(
+    String disputeId, {
+    required String resolution,
+    required String note,
+  }) async {
+    final res = await _client.post(
+      '/api/v1/invoices/disputes/$disputeId/resolve',
+      body: {'resolution': resolution, 'note': note},
+    );
+    return InvoiceDispute.fromJson(res as Map<String, dynamic>);
+  }
+}
+
+class InvoiceDisputePage {
+  const InvoiceDisputePage({required this.items, this.total = 0});
+  final List<InvoiceDispute> items;
+  final int total;
+
+  factory InvoiceDisputePage.fromJson(Map<String, dynamic> json) =>
+      InvoiceDisputePage(
+        items: ((json['items'] as List?) ?? const [])
+            .map((e) => InvoiceDispute.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        total: json['meta']?['total'] as int? ?? 0,
+      );
+}
+
+/// Phase 7.6 — staff view of a customer invoice dispute.
+class InvoiceDispute {
+  const InvoiceDispute({
+    required this.id,
+    required this.invoiceId,
+    required this.reason,
+    required this.message,
+    required this.status,
+    this.resolution,
+    this.resolutionNote,
+    this.customerName,
+    this.invoiceNumber,
+    this.createdAt,
+  });
+
+  final String id;
+  final String invoiceId;
+  final String reason;
+  final String message;
+  final String status;
+  final String? resolution;
+  final String? resolutionNote;
+  final String? customerName;
+  final String? invoiceNumber;
+  final DateTime? createdAt;
+
+  factory InvoiceDispute.fromJson(Map<String, dynamic> json) => InvoiceDispute(
+    id: json['id'] as String? ?? '',
+    invoiceId: json['invoiceId'] as String? ?? '',
+    reason: json['reason'] as String? ?? '',
+    message: json['message'] as String? ?? '',
+    status: json['status'] as String? ?? 'OPEN',
+    resolution: json['resolution'] as String?,
+    resolutionNote: json['resolutionNote'] as String?,
+    customerName: () {
+      final c = json['customer'] as Map<String, dynamic>?;
+      if (c == null) return json['customerName'] as String?;
+      return '${c['firstName'] ?? ''} ${c['lastName'] ?? ''}'.trim();
+    }(),
+    invoiceNumber:
+        (json['invoice'] as Map<String, dynamic>?)?['invoiceNumber']
+            as String? ??
+        json['invoiceNumber'] as String?,
+    createdAt: json['createdAt'] != null
+        ? DateTime.tryParse(json['createdAt'].toString())
+        : null,
+  );
 }
 
 /// No `uuid` package exists in the project yet (checked pubspec.yaml before

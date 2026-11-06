@@ -27,6 +27,8 @@ import '../../features/jobs/jobs_screen.dart';
 import '../../features/jobs/job_detail_screen.dart';
 import '../../features/calendar/calendar_screen.dart';
 import '../../features/calendar/booking_settings_screen.dart';
+import '../../features/calendar/team_availability_screen.dart';
+import '../../features/calendar/unscheduled_queue_screen.dart';
 import '../../features/customers/customers_screen.dart';
 import '../../features/customers/customer_detail_screen.dart';
 import '../../features/customers/edit_customer_screen.dart';
@@ -43,6 +45,7 @@ import '../../features/invoices/create_invoice_screen.dart';
 import '../../features/quotes/quotes_screen.dart';
 import '../../features/quotes/quote_detail_screen.dart';
 import '../../features/invoices/invoices_screen.dart';
+import '../../features/invoices/invoice_disputes_screen.dart';
 import '../../features/invoices/invoice_detail_screen.dart';
 import '../../features/portal/workspace_home_screen.dart';
 import '../../features/portal/portal_closed_screen.dart';
@@ -171,6 +174,14 @@ final List<RouteBase> _staffRoutes = [
     path: '/booking-settings',
     builder: (context, state) => const BookingSettingsScreen(),
   ),
+  GoRoute(
+    path: '/booking-queue',
+    builder: (context, state) => const UnscheduledQueueScreen(),
+  ),
+  GoRoute(
+    path: '/team-availability',
+    builder: (context, state) => const TeamAvailabilityScreen(),
+  ),
   // Auth Routes
   GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
   GoRoute(path: '/welcome', builder: (context, state) => const WelcomeScreen()),
@@ -259,6 +270,10 @@ final List<RouteBase> _staffRoutes = [
   GoRoute(
     path: '/invoices',
     builder: (context, state) => const InvoicesScreen(),
+  ),
+  GoRoute(
+    path: '/invoice-disputes',
+    builder: (context, state) => const InvoiceDisputesScreen(),
   ),
   GoRoute(
     path: '/invoices/:invoiceId',

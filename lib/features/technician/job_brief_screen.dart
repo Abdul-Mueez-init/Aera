@@ -136,6 +136,106 @@ class _JobBriefScreenState extends ConsumerState<JobBriefScreen> {
               ),
               const SizedBox(height: 14),
 
+              // Phase 6.1 — the originating customer request gives the
+              // technician the full scope context before starting work.
+              if (job.serviceRequest != null) ...[
+                AeraCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.assignment_outlined,
+                            size: 18,
+                            color: AeraColors.accent,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Customer Request',
+                            style: AeraTypography.label.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        job.serviceRequest!.title,
+                        style: AeraTypography.bodyMedium.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        job.serviceRequest!.description,
+                        style: AeraTypography.bodySm.copyWith(
+                          color: AeraColors.inkSoft,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
+
+              // Phase 6.1 — approved quote scope: what the customer
+              // approved and what will be invoiced.
+              if (job.approvedScope.isNotEmpty) ...[
+                AeraCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.playlist_add_check_outlined,
+                            size: 18,
+                            color: AeraColors.accent,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Approved Scope',
+                            style: AeraTypography.label.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      ...job.approvedScope.map(
+                        (item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  item.description,
+                                  style: AeraTypography.bodySm.copyWith(
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '×${item.quantity == item.quantity.roundToDouble() ? item.quantity.toStringAsFixed(0) : item.quantity.toStringAsFixed(2)}',
+                                style: AeraTypography.label.copyWith(
+                                  fontSize: 10,
+                                  color: AeraColors.inkSoft,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
+
               // Customer information
               AeraCard(
                 padding: const EdgeInsets.all(16),

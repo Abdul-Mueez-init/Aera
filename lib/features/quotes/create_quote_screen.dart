@@ -79,7 +79,18 @@ class CreateQuoteScreen extends ConsumerStatefulWidget {
 class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
   String? _customerId;
   String? _jobId;
+  String? _basisJobId;
+  String _kind = 'GENERAL';
+  static const _quoteKinds = [
+    'GENERAL',
+    'INSPECTION',
+    'REPAIR',
+    'INSTALLATION',
+    'CHANGE_ORDER',
+  ];
   String _currency = 'USD';
+  String? _depositType;
+  final _depositValueController = TextEditingController(text: '0');
   final _currencyController = TextEditingController(text: 'USD');
   final _discountController = TextEditingController(text: '0');
   final _taxRateController = TextEditingController(text: '0');
@@ -116,6 +127,14 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
   double get _previewTaxable => _previewSubtotal - _previewDiscount;
   double get _previewTax => _previewTaxable * (_previewTaxRatePct / 100);
   double get _previewTotal => _previewTaxable + _previewTax;
+
+  num? _depositValueForInput() {
+    if (_depositType == null) return null;
+    final raw = double.tryParse(_depositValueController.text.trim()) ?? 0;
+    if (_depositType == 'FIXED') return (raw * 100).round();
+    // PERCENT: UI collects percent (e.g. 25), backend expects basis points.
+    return (raw * 100).round();
+  }
 
   Future<void> _submit() async {
     if (_customerId == null) {
@@ -167,9 +186,15 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
             CreateQuoteInput(
               customerId: _customerId!,
               jobId: _jobId,
+              basisJobId: _basisJobId,
+              kind: _kind,
               currency: _currency,
               discountMinor: (_previewDiscount * 100).round(),
               taxRateBps: (_previewTaxRatePct * 100).round(),
+              depositType: _depositType,
+              // FIXED is minor units; PERCENT is basis points — the UI
+              // collects a percent and converts to bps below.
+              depositValue: _depositValueForInput(),
               items: validItems
                   .map(
                     (it) => CreateQuoteItemInput(
@@ -305,6 +330,7 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
                           setState(() {
                             _customerId = value;
                             _jobId = null;
+                            _basisJobId = null;
                           });
                         },
                       );
@@ -392,6 +418,127 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
                                   .toList(),
                               onChanged: (value) =>
                                   setState(() => _jobId = value),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'QUOTE TYPE',
+                      style: AeraTypography.labelUpper.copyWith(fontSize: 10),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: _quoteKinds.contains(_kind) ? _kind : null,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: AeraColors.surface,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: AeraRadii.borderMd,
+                          borderSide: const BorderSide(color: AeraColors.line),
+                        ),
+                      ),
+                      items: _quoteKinds
+                          .map(
+                            (k) => DropdownMenuItem(
+                              value: k,
+                              child: Text(k.replaceAll('_', ' ')),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) =>
+                          setState(() => _kind = value ?? 'GENERAL'),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'BASIS JOB (OPTIONAL)',
+                      style: AeraTypography.labelUpper.copyWith(fontSize: 10),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'e.g. the completed diagnostic this repair quote follows',
+                      style: AeraTypography.bodySm.copyWith(
+                        color: AeraColors.inkSoft,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final jobsAsync = ref.watch(
+                          customerJobsProvider(customerId),
+                        );
+                        return jobsAsync.when(
+                          loading: () => const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          error: (error, _) => Text(
+                            error is ApiException
+                                ? error.message
+                                : 'Could not load jobs',
+                            style: AeraTypography.bodySm.copyWith(
+                              color: AeraColors.danger,
+                            ),
+                          ),
+                          data: (page) {
+                            // Basis jobs are typically completed work the
+                            // new quote builds on (e.g. a finished
+                            // diagnostic). Backend only requires same
+                            // customer ownership.
+                            final basisEligible = page.items
+                                .where((j) => j.status == 'COMPLETED')
+                                .toList();
+                            if (basisEligible.isEmpty) {
+                              return Text(
+                                'No completed jobs for this customer',
+                                style: AeraTypography.bodySm,
+                              );
+                            }
+                            return DropdownButtonFormField<String>(
+                              initialValue:
+                                  basisEligible.any((j) => j.id == _basisJobId)
+                                  ? _basisJobId
+                                  : null,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: AeraColors.surface,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: AeraRadii.borderMd,
+                                  borderSide: const BorderSide(
+                                    color: AeraColors.line,
+                                  ),
+                                ),
+                                hintText: 'None',
+                              ),
+                              items: basisEligible
+                                  .map(
+                                    (j) => DropdownMenuItem(
+                                      value: j.id,
+                                      child: Text(
+                                        '#${j.jobNumber} · ${j.serviceType}',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) =>
+                                  setState(() => _basisJobId = value),
                             );
                           },
                         );
@@ -580,6 +727,53 @@ class _CreateQuoteScreenState extends ConsumerState<CreateQuoteScreen> {
                     ),
                     onChanged: (_) => setState(() {}),
                   ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _depositType,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: 'Deposit required (optional)',
+                      filled: true,
+                      fillColor: AeraColors.surface,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: AeraRadii.borderMd,
+                        borderSide:
+                            const BorderSide(color: AeraColors.line),
+                      ),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: null, child: Text('None')),
+                      DropdownMenuItem(
+                        value: 'FIXED',
+                        child: Text('Fixed amount'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'PERCENT',
+                        child: Text('Percent of total'),
+                      ),
+                    ],
+                    onChanged: (v) =>
+                        setState(() => _depositType = v),
+                  ),
+                  if (_depositType != null) ...[
+                    const SizedBox(height: 10),
+                    AeraTextField(
+                      label: _depositType == 'FIXED'
+                          ? 'Deposit amount (\$)'
+                          : 'Deposit percent (%)',
+                      hintText: _depositType == 'FIXED' ? '0.00' : '25',
+                      controller: _depositValueController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ],
                 ],
               ),
             ),

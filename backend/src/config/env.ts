@@ -200,6 +200,10 @@ const envSchema = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    WORKSPACE_PORTAL_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     PORTAL_REQUESTS_ENABLED: z
       .enum(["true", "false"])
       .default("false")
@@ -217,6 +221,21 @@ const envSchema = z
       .default("false")
       .transform((value) => value === "true"),
     INVOICE_FROM_SCOPE_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    // Phase 7 — online checkout, payment sessions, webhooks, refunds.
+    ONLINE_PAYMENTS_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    // Which PaymentProvider adapter serves checkout/webhooks/refunds.
+    // "manual" disables online checkout; "sandbox" is the dev/test adapter.
+    PAYMENT_PROVIDER: z.enum(["manual", "sandbox"]).default("manual"),
+    // HMAC secret used by the sandbox provider to sign/verify webhooks.
+    PAYMENT_WEBHOOK_SECRET: optionalNonEmptyString,
+    // Phase 7 — deposit terms on quotes and the DepositGate.
+    DEPOSITS_ENABLED: z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),

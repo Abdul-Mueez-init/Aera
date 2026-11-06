@@ -140,6 +140,9 @@ class Quote {
     this.job,
     this.items = const [],
     this.approvalEvents = const [],
+    this.depositType = 'NONE',
+    this.depositValue = 0,
+    this.depositMinor,
   });
 
   final String id;
@@ -156,6 +159,9 @@ class Quote {
   final int taxRateBps;
   final int totalMinor;
   final String currency;
+  final String depositType;
+  final int depositValue;
+  final int? depositMinor;
   final DateTime? expiresAt;
   final DateTime? sentAt;
   final DateTime? approvedAt;
@@ -184,6 +190,11 @@ class Quote {
     taxRateBps: json['taxRateBps'] as int? ?? 0,
     totalMinor: int.tryParse(json['totalMinor']?.toString() ?? '') ?? 0,
     currency: json['currency'] as String? ?? 'USD',
+    depositType: json['depositType'] as String? ?? 'NONE',
+    depositValue: int.tryParse(json['depositValue']?.toString() ?? '') ?? 0,
+    depositMinor: json['depositMinor'] != null
+        ? int.tryParse(json['depositMinor'].toString())
+        : null,
     expiresAt: json['expiresAt'] != null
         ? DateTime.tryParse(json['expiresAt'] as String)?.toLocal()
         : null,
@@ -246,10 +257,13 @@ class CreateQuoteInput {
     required this.customerId,
     this.jobId,
     this.serviceRequestId,
+    this.basisJobId,
     this.kind = 'GENERAL',
     required this.currency,
     this.discountMinor = 0,
     this.taxRateBps = 0,
+    this.depositType,
+    this.depositValue,
     this.expiresAt,
     this.assumptions,
     this.exclusions,
@@ -259,10 +273,13 @@ class CreateQuoteInput {
   final String customerId;
   final String? jobId;
   final String? serviceRequestId;
+  final String? basisJobId;
   final String kind;
   final String currency;
   final num discountMinor;
   final num taxRateBps;
+  final String? depositType;
+  final num? depositValue;
   final DateTime? expiresAt;
   final String? assumptions;
   final String? exclusions;
@@ -273,10 +290,13 @@ class CreateQuoteInput {
     if (jobId != null && jobId!.isNotEmpty) 'jobId': jobId,
     if (serviceRequestId != null && serviceRequestId!.isNotEmpty)
       'serviceRequestId': serviceRequestId,
+    if (basisJobId != null && basisJobId!.isNotEmpty) 'basisJobId': basisJobId,
     'kind': kind,
     'currency': currency.toUpperCase(),
     'discountMinor': discountMinor,
     'taxRateBps': taxRateBps,
+    if (depositType != null) 'depositType': depositType,
+    if (depositValue != null) 'depositValue': depositValue,
     if (expiresAt != null) 'expiresAt': expiresAt!.toUtc().toIso8601String(),
     if (assumptions != null && assumptions!.trim().isNotEmpty)
       'assumptions': assumptions!.trim(),
@@ -345,10 +365,17 @@ class QuotesRepository {
     return Quote.fromJson(res as Map<String, dynamic>);
   }
 
-  Future<Quote> respondToQuote(String quoteId, {required bool approve}) async {
+  Future<Quote> respondToQuote(
+    String quoteId, {
+    required bool approve,
+    String? reason,
+  }) async {
     final res = await _client.post(
       '/api/v1/quotes/$quoteId/respond',
-      body: {'action': approve ? 'APPROVED' : 'DECLINED'},
+      body: {
+        'action': approve ? 'APPROVED' : 'DECLINED',
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      },
     );
     return Quote.fromJson(res as Map<String, dynamic>);
   }

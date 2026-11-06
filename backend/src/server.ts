@@ -4,6 +4,7 @@ import { logger } from "./common/logger.js";
 import { startInvoiceReminderScheduler } from "./modules/invoices/invoice-reminder.service.js";
 import { startPortalSweepScheduler } from "./modules/portal/portal-sweep.service.js";
 import { startPaymentOperationScheduler } from "./modules/payments/payment-operation.service.js";
+import { startPaymentSessionScheduler } from "./modules/payments/payment-session.service.js";
 import { startBookingSweepScheduler } from "./modules/scheduling/booking.service.js";
 import { inProcessQueue } from "./queue/in-process-queue.adapter.js";
 import { startNotificationOutboxScheduler } from "./modules/notifications/notification-outbox.service.js";
@@ -15,6 +16,7 @@ const app = buildApp();
 let stopInvoiceReminders: (() => void) | undefined;
 let stopPortalSweep: (() => void) | undefined;
 let stopPaymentOperations: (() => void) | undefined;
+let stopPaymentSessions: (() => void) | undefined;
 let stopBookingSweep: (() => void) | undefined;
 let stopNotificationOutbox: (() => void) | undefined;
 
@@ -35,6 +37,10 @@ const server = app.listen(env.PORT, env.HOST, () => {
 
   if (env.PAYMENT_OPERATIONS_ENABLED) {
     stopPaymentOperations = startPaymentOperationScheduler();
+  }
+
+  if (env.ONLINE_PAYMENTS_ENABLED) {
+    stopPaymentSessions = startPaymentSessionScheduler();
   }
 
   if (env.BOOKING_ENABLED) {
@@ -73,6 +79,7 @@ const shutdown = async (signal: string): Promise<void> => {
   stopInvoiceReminders?.();
   stopPortalSweep?.();
   stopPaymentOperations?.();
+  stopPaymentSessions?.();
   stopBookingSweep?.();
   stopNotificationOutbox?.();
 

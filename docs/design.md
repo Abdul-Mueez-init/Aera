@@ -531,3 +531,9 @@ AI screens should feel like an operational command layer, not a chatbot toy. Use
 ## Design ownership
 
 This file owns visual tokens, typography, layout, components, motion, accessibility presentation, screen mapping, Stitch prompts, and design-to-code handoff. Product behavior belongs in `PRD.md`; engineering implementation rules belong in `rules.md`.
+
+## v2 screens (Phases 1–8)
+
+- Customer workspace home: requests, quotes, jobs, invoices; 15s tracking poll card with unavailable/stale/ETA states; invoice sheet with pay/receipt/dispute; booking proposal picker; request thread with media.
+- Staff: request triage inbox, quote editor (kind, basis job, deposit terms), unscheduled booking queue, team availability editor, job brief (request context + approved scope), work screen (findings, change requests), completion review card, invoice detail (line provenance, payments, refunds OWNER-only), dispute inbox.
+- Technician: en-route screen auto-starts location sharing after a permission prompt (denied → inline banner); handshake-gated arrival; work screen with findings/change requests; complete screen with diagnostic warning.

@@ -146,6 +146,26 @@ function jobSelect() {
     assignedTechnician: {
       select: { id: true, firstName: true, lastName: true, email: true },
     },
+    // Phase 6.1 — the approved quote is the billable scope the technician
+    // is executing against; expose its line items (no customer PII).
+    quotes: {
+      where: { status: "APPROVED" },
+      orderBy: { createdAt: "desc" as const },
+      take: 1,
+      select: {
+        id: true,
+        status: true,
+        items: {
+          orderBy: { sortOrder: "asc" as const },
+          select: {
+            description: true,
+            quantity: true,
+            unitPriceMinor: true,
+            totalMinor: true,
+          },
+        },
+      },
+    },
     serviceRequest: {
       select: {
         id: true,
@@ -215,6 +235,25 @@ function technicianJobSelect() {
     },
     assignedTechnician: {
       select: { id: true, firstName: true, lastName: true, email: true },
+    },
+    // Same approved-scope exposure as the staff select (Phase 6.1).
+    quotes: {
+      where: { status: "APPROVED" },
+      orderBy: { createdAt: "desc" as const },
+      take: 1,
+      select: {
+        id: true,
+        status: true,
+        items: {
+          orderBy: { sortOrder: "asc" as const },
+          select: {
+            description: true,
+            quantity: true,
+            unitPriceMinor: true,
+            totalMinor: true,
+          },
+        },
+      },
     },
     serviceRequest: {
       select: {
@@ -1213,7 +1252,12 @@ export async function reviewCompletedJob(
   }
   const current = await prisma.job.findFirst({
     where: { id: jobId, companyId: context.companyId },
-    select: { id: true, status: true, reviewState: true },
+    select: {
+      id: true,
+      status: true,
+      reviewState: true,
+      assignedTechnicianId: true,
+    },
   });
   if (!current) throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   if (current.status !== "COMPLETED" || current.reviewState !== "PENDING") {
@@ -1232,6 +1276,16 @@ export async function reviewCompletedJob(
       reviewNote: note?.trim() || null,
     },
   });
+  // Phase 6.4 — CHANGES_REQUESTED notifies the assigned technician with
+  // the review note so they know what to correct.
+  if (decision === "CHANGES_REQUESTED" && current.assignedTechnicianId) {
+    void notificationPublisher.publish({
+      type: "JOB_REVIEW_CHANGES_REQUESTED",
+      companyId: context.companyId,
+      jobId,
+      recipientUserId: current.assignedTechnicianId,
+    });
+  }
   return getJob(context, updated.id);
 }
 
@@ -1299,6 +1353,13 @@ export async function createJobChangeRequest(
       evidencePhotoIds: input.evidencePhotoIds,
     },
   });
+  // Phase 6.5 — staff (OWNER/DISPATCHER) are notified; no recipientUserId
+  // means the company-event role fan-out applies.
+  void notificationPublisher.publish({
+    type: "JOB_CHANGE_REQUEST_SUBMITTED",
+    companyId: context.companyId,
+    jobId,
+  });
   return jsonSafe(changeRequest);
 }
 
@@ -1361,7 +1422,13 @@ export async function completeJob(
       select: { requireCompletionReview: true },
     }),
   ]);
-  if (existingJob.type === "DIAGNOSTIC" && findingCount < 1) {
+  // Phase 6 ships dark: the diagnostic finding requirement only applies
+  // when COMPLETION_REVIEW_ENABLED is on.
+  if (
+    env.COMPLETION_REVIEW_ENABLED &&
+    existingJob.type === "DIAGNOSTIC" &&
+    findingCount < 1
+  ) {
     throw new AppError(
       "JOB_FINDING_REQUIRED",
       "Diagnostic jobs require at least one finding before completion",
@@ -1438,6 +1505,7 @@ export async function addJobNote(
       companyId: true,
       assignedTechnicianId: true,
       status: true,
+      reviewState: true,
     },
   });
   if (!job) {
@@ -1445,10 +1513,13 @@ export async function addJobNote(
   }
   assertCanAddJobNote(context, job, visibility);
   // Notes are part of the job record: final jobs are immutable (photos
-  // and parts already enforce this via assertExecutableJob). A note —
-  // including a CUSTOMER-visible one — must not be appendable after
-  // completion, invoicing and portal closure.
-  if (job.status === "COMPLETED" || job.status === "CANCELLED") {
+  // and parts already enforce this via assertExecutableJob). The single
+  // exception mirrors photos: while reviewState is CHANGES_REQUESTED the
+  // technician may still append evidence notes for the rework.
+  if (
+    (job.status === "COMPLETED" || job.status === "CANCELLED") &&
+    !(job.status === "COMPLETED" && job.reviewState === "CHANGES_REQUESTED")
+  ) {
     throw new AppError(
       "JOB_IMMUTABLE",
       "Notes cannot be added to a completed or cancelled job",
@@ -1472,6 +1543,212 @@ export async function addJobNote(
       updatedAt: true,
     },
   });
+}
+
+// --- Phase 6.5: change-request workflow ----------------------------------
+
+async function getChangeRequestJob(
+  context: AuthContext,
+  jobId: string,
+  changeRequestId: string,
+) {
+  const job = await prisma.job.findFirst({
+    where: { id: jobId, companyId: context.companyId },
+    select: { id: true, customerId: true, assignedTechnicianId: true },
+  });
+  if (!job) throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+  const changeRequest = await prisma.jobChangeRequest.findFirst({
+    where: { id: changeRequestId, companyId: context.companyId, jobId },
+  });
+  if (!changeRequest) {
+    throw new AppError("RESOURCE_NOT_FOUND", "Change request not found", 404);
+  }
+  return { job, changeRequest };
+}
+
+const changeRequestSelect = {
+  id: true,
+  jobId: true,
+  technicianId: true,
+  reason: true,
+  description: true,
+  estimatedPriceMinor: true,
+  currency: true,
+  status: true,
+  evidencePhotoIds: true,
+  authorizationReason: true,
+  authorizedBy: true,
+  authorizedAt: true,
+  createdAt: true,
+  technician: { select: { firstName: true, lastName: true } },
+} as const;
+
+export async function listJobChangeRequests(
+  context: AuthContext,
+  jobId: string,
+) {
+  const job = await prisma.job.findFirst({
+    where: { id: jobId, companyId: context.companyId },
+    select: { id: true, assignedTechnicianId: true },
+  });
+  if (!job) throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+  // Technicians see change requests only on jobs assigned to them.
+  if (
+    context.role === "TECHNICIAN" &&
+    job.assignedTechnicianId !== context.userId
+  ) {
+    throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+  }
+  const requests = await prisma.jobChangeRequest.findMany({
+    where: { companyId: context.companyId, jobId },
+    orderBy: { createdAt: "desc" },
+    select: changeRequestSelect,
+  });
+  return jsonSafe(requests);
+}
+
+/** Staff create a prefilled CHANGE_ORDER quote from an OPEN request. */
+export async function quoteJobChangeRequest(
+  context: AuthContext,
+  jobId: string,
+  changeRequestId: string,
+) {
+  if (context.role !== "OWNER" && context.role !== "DISPATCHER") {
+    throw new AppError("AUTH_FORBIDDEN", "Only staff can quote change requests", 403);
+  }
+  const { job, changeRequest } = await getChangeRequestJob(
+    context,
+    jobId,
+    changeRequestId,
+  );
+  if (changeRequest.status !== "OPEN") {
+    throw new AppError(
+      "CHANGE_REQUEST_NOT_OPEN",
+      "Only open change requests can be quoted",
+      409,
+    );
+  }
+  const { createQuote } = await import("../quotes/quote.service.js");
+  const quote = await createQuote(context, {
+    customerId: job.customerId,
+    jobId,
+    kind: "CHANGE_ORDER",
+    currency: changeRequest.currency,
+    items: [
+      {
+        description: `${changeRequest.reason}: ${changeRequest.description}`,
+        quantity: "1",
+        unitPriceMinor: Number(changeRequest.estimatedPriceMinor),
+      },
+    ],
+  });
+  await prisma.jobChangeRequest.update({
+    where: { id: changeRequest.id },
+    data: { status: "QUOTED" },
+  });
+  return jsonSafe(quote);
+}
+
+/** Staff record an emergency authorization instead of customer acceptance. */
+export async function authorizeJobChangeRequest(
+  context: AuthContext,
+  jobId: string,
+  changeRequestId: string,
+  reason: string,
+) {
+  if (context.role !== "OWNER" && context.role !== "DISPATCHER") {
+    throw new AppError("AUTH_FORBIDDEN", "Only staff can authorize change requests", 403);
+  }
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { id: context.companyId },
+    select: { emergencyAuthorizationAllowed: true },
+  });
+  if (!company.emergencyAuthorizationAllowed) {
+    throw new AppError(
+      "EMERGENCY_AUTH_NOT_ALLOWED",
+      "Emergency authorization is disabled for this company",
+      422,
+    );
+  }
+  const { changeRequest } = await getChangeRequestJob(
+    context,
+    jobId,
+    changeRequestId,
+  );
+  if (changeRequest.status !== "OPEN") {
+    throw new AppError(
+      "CHANGE_REQUEST_NOT_OPEN",
+      "Only open change requests can be authorized",
+      409,
+    );
+  }
+  const updated = await prisma.jobChangeRequest.update({
+    where: { id: changeRequest.id },
+    data: {
+      authorizationReason: reason.trim(),
+      authorizedBy: context.userId,
+      authorizedAt: new Date(),
+    },
+    select: changeRequestSelect,
+  });
+  return jsonSafe(updated);
+}
+
+export async function declineJobChangeRequest(
+  context: AuthContext,
+  jobId: string,
+  changeRequestId: string,
+) {
+  if (context.role !== "OWNER" && context.role !== "DISPATCHER") {
+    throw new AppError("AUTH_FORBIDDEN", "Only staff can decline change requests", 403);
+  }
+  const { changeRequest } = await getChangeRequestJob(
+    context,
+    jobId,
+    changeRequestId,
+  );
+  if (changeRequest.status !== "OPEN" && changeRequest.status !== "QUOTED") {
+    throw new AppError(
+      "CHANGE_REQUEST_NOT_OPEN",
+      "This change request can no longer be declined",
+      409,
+    );
+  }
+  const updated = await prisma.jobChangeRequest.update({
+    where: { id: changeRequest.id },
+    data: { status: "DECLINED" },
+    select: changeRequestSelect,
+  });
+  return jsonSafe(updated);
+}
+
+/** Technician withdraws their own OPEN change request. */
+export async function withdrawJobChangeRequest(
+  context: AuthContext,
+  jobId: string,
+  changeRequestId: string,
+) {
+  const { changeRequest } = await getChangeRequestJob(
+    context,
+    jobId,
+    changeRequestId,
+  );
+  if (changeRequest.technicianId !== context.userId) {
+    throw new AppError("RESOURCE_NOT_FOUND", "Change request not found", 404);
+  }
+  if (changeRequest.status !== "OPEN") {
+    throw new AppError(
+      "CHANGE_REQUEST_NOT_OPEN",
+      "Only open change requests can be withdrawn",
+      409,
+    );
+  }
+  const updated = await prisma.jobChangeRequest.update({
+    where: { id: changeRequest.id },
+    data: { status: "WITHDRAWN" },
+    select: changeRequestSelect,
+  });
+  return jsonSafe(updated);
 }
 
 export async function getJobHistory(context: AuthContext, jobId: string) {

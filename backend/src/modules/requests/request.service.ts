@@ -2,6 +2,7 @@ import { AppError } from "../../common/errors.js";
 import type { AuthContext } from "../../common/auth/auth.types.js";
 import { prisma } from "../../db/prisma.js";
 import { getNextCounter } from "../../common/counters/counter.service.js";
+import { notificationPublisher } from "../notifications/notification.port.js";
 import {
   assertRequestTransition,
   type ServiceRequestStatusValue,
@@ -29,6 +30,7 @@ const requestSelect = {
   requiresInspection: true,
   source: true,
   preferredWindows: true,
+  equipmentInfo: true,
   budgetMinMinor: true,
   budgetMaxMinor: true,
   budgetCurrency: true,
@@ -97,12 +99,37 @@ export async function listRequests(
     status?: ServiceRequestStatusValue;
     priority?: "LOW" | "NORMAL" | "HIGH" | "URGENT";
     requiresInspection?: boolean;
+    aging?: "24h" | "72h";
     search?: string;
   },
 ) {
+  const agingHours =
+    filters.aging === "24h" ? 24 : filters.aging === "72h" ? 72 : undefined;
+  const openStatuses: ServiceRequestStatusValue[] = [
+    "SUBMITTED",
+    "NEEDS_INFO",
+    "QUOTING",
+    "QUOTED",
+    "ACCEPTED",
+  ];
+  const statusFilter =
+    agingHours !== undefined
+      ? filters.status
+        ? openStatuses.filter((s) => s === filters.status)
+        : openStatuses
+      : filters.status
+        ? [filters.status]
+        : undefined;
   const where = {
     companyId: context.companyId,
-    ...(filters.status ? { status: filters.status } : {}),
+    ...(statusFilter ? { status: { in: statusFilter } } : {}),
+    ...(agingHours !== undefined
+      ? {
+          createdAt: {
+            lt: new Date(Date.now() - agingHours * 60 * 60 * 1000),
+          },
+        }
+      : {}),
     ...(filters.priority ? { priority: filters.priority } : {}),
     ...(filters.requiresInspection === undefined
       ? {}
@@ -223,6 +250,7 @@ export async function createRequest(
         requiresInspection: input.requiresInspection ?? false,
         source: input.source,
         preferredWindows: input.preferredWindows,
+        equipmentInfo: input.equipmentInfo,
         budgetMinMinor:
           input.budgetMinMinor === undefined
             ? undefined
@@ -246,7 +274,24 @@ export async function createRequest(
     });
     return created;
   });
+  void notificationPublisher.publish({
+    type: "REQUEST_SUBMITTED",
+    companyId: context.companyId,
+    requestId: request.id,
+  });
   return jsonSafe(request);
+}
+
+const PORTAL_REQUESTS_PER_DAY = 10;
+
+export interface PortalNewAddress {
+  label?: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  region?: string;
+  postalCode?: string;
+  countryCode: string;
 }
 
 export async function createPortalRequest(
@@ -255,15 +300,39 @@ export async function createPortalRequest(
     customerId: string;
     sessionId: string;
   },
-  input: Omit<CreateRequestInput, "customerId" | "source"> & {
+  input: Omit<CreateRequestInput, "customerId" | "source" | "serviceAddressId"> & {
+    serviceAddressId?: string;
+    newAddress?: PortalNewAddress;
     submissionKey: string;
   },
 ) {
-  await assertReferences(
-    context.companyId,
-    context.customerId,
-    input.serviceAddressId,
-  );
+  if (!input.serviceAddressId && !input.newAddress) {
+    throw new AppError(
+      "REQUEST_INVALID_REFERENCES",
+      "A service address or a new address is required",
+      422,
+    );
+  }
+  if (input.serviceAddressId) {
+    await assertReferences(
+      context.companyId,
+      context.customerId,
+      input.serviceAddressId,
+    );
+  } else {
+    // New-address path: the customer must still be ACTIVE in this company.
+    const customer = await prisma.customer.findFirst({
+      where: {
+        id: context.customerId,
+        companyId: context.companyId,
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
+    if (!customer) {
+      throw new AppError("RESOURCE_NOT_FOUND", "Customer not found", 404);
+    }
+  }
   const existing = await prisma.serviceRequest.findFirst({
     where: {
       companyId: context.companyId,
@@ -273,7 +342,45 @@ export async function createPortalRequest(
     select: requestSelect,
   });
   if (existing) return jsonSafe(existing);
-  const request = await prisma.$transaction(async (transaction) => {
+  let request;
+  try {
+    request = await prisma.$transaction(async (transaction) => {
+    // Daily abuse cap per customer: a compromised session cannot flood the
+    // staff triage queue. Counted inside the transaction so concurrent
+    // submits cannot both slip under the limit.
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const todayCount = await transaction.serviceRequest.count({
+      where: {
+        companyId: context.companyId,
+        customerId: context.customerId,
+        createdAt: { gte: dayAgo },
+      },
+    });
+    if (todayCount >= PORTAL_REQUESTS_PER_DAY) {
+      throw new AppError(
+        "RATE_LIMITED",
+        "Daily request limit reached — please contact the office directly",
+        429,
+      );
+    }
+    let serviceAddressId = input.serviceAddressId;
+    if (!serviceAddressId && input.newAddress) {
+      const address = await transaction.serviceAddress.create({
+        data: {
+          companyId: context.companyId,
+          customerId: context.customerId,
+          label: input.newAddress.label ?? "Service address",
+          line1: input.newAddress.line1,
+          line2: input.newAddress.line2,
+          city: input.newAddress.city,
+          region: input.newAddress.region,
+          postalCode: input.newAddress.postalCode,
+          countryCode: input.newAddress.countryCode.toUpperCase(),
+        },
+        select: { id: true },
+      });
+      serviceAddressId = address.id;
+    }
     const requestNumber = await getNextCounter(
       context.companyId,
       "SERVICE_REQUEST",
@@ -283,7 +390,7 @@ export async function createPortalRequest(
       data: {
         companyId: context.companyId,
         customerId: context.customerId,
-        serviceAddressId: input.serviceAddressId,
+        serviceAddressId: serviceAddressId!,
         requestNumber,
         title: input.title,
         description: input.description,
@@ -293,6 +400,7 @@ export async function createPortalRequest(
         source: "WEB_PORTAL",
         submissionKey: input.submissionKey,
         preferredWindows: input.preferredWindows,
+        equipmentInfo: input.equipmentInfo,
         budgetMinMinor:
           input.budgetMinMinor === undefined
             ? undefined
@@ -315,6 +423,33 @@ export async function createPortalRequest(
       },
     });
     return created;
+    });
+  } catch (error) {
+    // Lost a concurrent-submit race on the submissionKey unique index:
+    // the other request won, so return it — a double tap must create one
+    // request, not a 500.
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "P2002"
+    ) {
+      const raced = await prisma.serviceRequest.findFirst({
+        where: {
+          companyId: context.companyId,
+          customerId: context.customerId,
+          submissionKey: input.submissionKey,
+        },
+        select: requestSelect,
+      });
+      if (raced) return jsonSafe(raced);
+    }
+    throw error;
+  }
+  void notificationPublisher.publish({
+    type: "REQUEST_SUBMITTED",
+    companyId: context.companyId,
+    requestId: request.id,
   });
   return jsonSafe(request);
 }
@@ -367,7 +502,7 @@ export async function transitionRequest(
   if (!current)
     throw new AppError("RESOURCE_NOT_FOUND", "Service request not found", 404);
   assertRequestTransition(current.status, toStatus);
-  return prisma.$transaction(async (transaction) => {
+  await prisma.$transaction(async (transaction) => {
     const claimed = await transaction.serviceRequest.updateMany({
       where: {
         id: requestId,
@@ -396,6 +531,13 @@ export async function transitionRequest(
         toStatus,
       },
     });
-    return getRequest(context, requestId);
   });
+  // Publish after commit and read the fresh row outside the transaction:
+  // getRequest uses the global client, which cannot see uncommitted writes.
+  void notificationPublisher.publish({
+    type: "REQUEST_STATUS_CHANGED",
+    companyId: context.companyId,
+    requestId,
+  });
+  return getRequest(context, requestId);
 }

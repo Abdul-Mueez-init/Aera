@@ -235,7 +235,9 @@ class DashboardScreen extends ConsumerWidget {
                               label: "Today's Jobs",
                               value: summary.jobsToday.toString(),
                               sublabel:
-                                  '${summary.unassignedJobs} unassigned · ${summary.openServiceRequests} requests',
+                                  '${summary.unassignedJobs} unassigned · ${summary.openServiceRequests} requests'
+                                  '${summary.agingServiceRequests > 0 ? ' (${summary.agingServiceRequests} aging)' : ''}'
+                                  '${summary.waitingOnCustomerServiceRequests > 0 ? ' · ${summary.waitingOnCustomerServiceRequests} waiting on customer' : ''}',
                               icon: Icons.assignment_outlined,
                               onTap: () => context.go('/jobs'),
                             ),

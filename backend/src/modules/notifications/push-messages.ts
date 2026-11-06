@@ -124,6 +124,76 @@ export async function buildPushMessage(
       };
     }
 
+    case "REQUEST_SUBMITTED":
+    case "REQUEST_INFO_PROVIDED":
+    case "REQUEST_STATUS_CHANGED": {
+      if (!event.requestId) return null;
+      const request = await prisma.serviceRequest.findFirst({
+        where: { id: event.requestId, companyId: event.companyId },
+        select: {
+          requestNumber: true,
+          title: true,
+          status: true,
+          customer: { select: { firstName: true, lastName: true } },
+        },
+      });
+      if (!request) return null;
+
+      const title =
+        event.type === "REQUEST_SUBMITTED"
+          ? `New service request #${request.requestNumber}`
+          : event.type === "REQUEST_INFO_PROVIDED"
+            ? `Customer replied on request #${request.requestNumber}`
+            : `Service request #${request.requestNumber} updated`;
+      return {
+        title,
+        body: `${request.title} — ${request.customer.firstName} ${request.customer.lastName}`,
+        data: { type: event.type, requestId: event.requestId },
+      };
+    }
+
+    case "JOB_CHANGE_REQUEST_SUBMITTED":
+    case "JOB_REVIEW_CHANGES_REQUESTED": {
+      if (!event.jobId) return null;
+      const job = await prisma.job.findFirst({
+        where: { id: event.jobId, companyId: event.companyId },
+        select: {
+          jobNumber: true,
+          serviceType: true,
+          customer: { select: { firstName: true, lastName: true } },
+        },
+      });
+      if (!job) return null;
+      return {
+        title:
+          event.type === "JOB_CHANGE_REQUEST_SUBMITTED"
+            ? `Change request on job #${job.jobNumber}`
+            : `Changes requested on job #${job.jobNumber}`,
+        body: `${job.serviceType} for ${job.customer.firstName} ${job.customer.lastName}`,
+        data: { type: event.type, jobId: event.jobId },
+      };
+    }
+
+    case "INVOICE_DISPUTE_OPENED":
+    case "INVOICE_DISPUTE_RESOLVED": {
+      if (!event.invoiceId) return null;
+      const invoice = await prisma.invoice.findFirst({
+        where: { id: event.invoiceId, companyId: event.companyId },
+        select: { invoiceNumber: true },
+      });
+      if (!invoice) return null;
+      const opened = event.type === "INVOICE_DISPUTE_OPENED";
+      return {
+        title: opened
+          ? `Dispute on invoice ${invoice.invoiceNumber}`
+          : `Dispute resolved — ${invoice.invoiceNumber}`,
+        body: opened
+          ? "A customer opened a dispute. Review it from the invoices inbox."
+          : "A customer dispute was resolved.",
+        data: { type: event.type, invoiceId: event.invoiceId },
+      };
+    }
+
     default:
       // Safety net for a future NotificationEventType (e.g. an eventual
       // INVOICE_PAYMENT_REMINDER) added to the union without a template

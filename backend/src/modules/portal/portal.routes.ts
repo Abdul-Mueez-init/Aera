@@ -27,17 +27,27 @@ import {
   portalWriteRateLimiter,
 } from "../../common/rateLimit.js";
 import { workspaceContext } from "./portal.access.js";
-import { pickProposalForCustomer } from "../scheduling/booking.service.js";
+import {
+  confirmCustomerHold,
+  createCustomerHold,
+  getAvailability,
+  listCustomerProposals,
+  pickProposalForCustomer,
+  requestCustomerReschedule,
+} from "../scheduling/booking.service.js";
 import {
   getWorkspaceInvoice,
   getWorkspaceJob,
   getWorkspaceMe,
+  getWorkspacePaymentReceipt,
   getWorkspaceQuote,
   getWorkspaceRequest,
   listWorkspaceInvoices,
   listWorkspaceJobs,
+  listWorkspacePayments,
   listWorkspaceQuotes,
   listWorkspaceRequests,
+  payWorkspaceInvoice,
 } from "./workspace.service.js";
 import {
   confirmPortalRequestMedia,
@@ -49,6 +59,13 @@ import {
   postPortalMessage,
 } from "../requests/request.conversation.js";
 import { createPortalRequest } from "../requests/request.service.js";
+import { askQuoteQuestion } from "../quotes/quote.service.js";
+import {
+  createPortalDispute,
+  listInvoiceDisputes,
+} from "../invoices/invoice-dispute.service.js";
+import { assertCanReadInvoice } from "./portal.access.js";
+import { randomUUID as cryptoRandomUUID } from "node:crypto";
 import { getJobTracking } from "../tracking/tracking.service.js";
 
 const router = Router();
@@ -63,6 +80,20 @@ function portalRequestsEnabled(
   next: (error?: unknown) => void,
 ) {
   if (!env.PORTAL_REQUESTS_ENABLED) {
+    response
+      .status(404)
+      .json({ error: { code: "NOT_FOUND", message: "Route not found" } });
+    return;
+  }
+  next();
+}
+
+function bookingEnabled(
+  _request: Request,
+  response: Response,
+  next: (error?: unknown) => void,
+) {
+  if (!env.BOOKING_ENABLED) {
     response
       .status(404)
       .json({ error: { code: "NOT_FOUND", message: "Route not found" } });
@@ -222,32 +253,215 @@ router.post(
   },
 );
 
+// --- Phase 5: customer booking (availability, proposals, holds) ----------
+
+const portalAvailabilitySchema = z.object({
+  startsAt: z.coerce.date(),
+  endsAt: z.coerce.date(),
+  durationMinutes: z.coerce.number().int().positive().max(1440),
+  serviceId: z.string().uuid().optional(),
+});
+
+router.get(
+  "/booking/availability",
+  bookingEnabled,
+  portalReadRateLimiter,
+  requirePortalSession,
+  portalCsrfGuard,
+  async (request: PortalRequest, response: Response) => {
+    const parsed = portalAvailabilitySchema.safeParse(request.query);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: {
+          code: "VALIDATION_FAILED",
+          message: "Invalid availability query",
+        },
+      });
+      return;
+    }
+    const context = workspaceContext(request);
+    response.status(200).json({
+      data: await getAvailability(
+        { companyId: context.companyId },
+        parsed.data.startsAt,
+        parsed.data.endsAt,
+        parsed.data.durationMinutes,
+        parsed.data.serviceId,
+      ),
+    });
+  },
+);
+
+router.get(
+  "/booking/proposals",
+  bookingEnabled,
+  portalReadRateLimiter,
+  requirePortalSession,
+  portalCsrfGuard,
+  async (request: PortalRequest, response: Response) => {
+    const context = workspaceContext(request);
+    response.status(200).json({
+      data: await listCustomerProposals({
+        companyId: context.companyId,
+        customerId: context.customerId,
+      }),
+    });
+  },
+);
+
+const portalHoldSchema = z
+  .object({
+    requestId: z.string().uuid().optional(),
+    jobId: z.string().uuid().optional(),
+    quoteId: z.string().uuid().optional(),
+    windowStart: z.coerce.date(),
+    windowEnd: z.coerce.date(),
+  })
+  .refine(
+    (value) =>
+      [value.requestId, value.jobId, value.quoteId].filter(Boolean).length ===
+      1,
+    { message: "Reference exactly one of request, job or quote" },
+  );
+
+router.post(
+  "/booking/holds",
+  bookingEnabled,
+  portalWriteRateLimiter,
+  requirePortalSession,
+  portalCsrfGuard,
+  async (request: PortalRequest, response: Response) => {
+    const parsed = portalHoldSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: {
+          code: "VALIDATION_FAILED",
+          message: parsed.error.issues.map((issue) => issue.message).join(", "),
+        },
+      });
+      return;
+    }
+    const context = workspaceContext(request);
+    response.status(201).json({
+      data: await createCustomerHold(
+        {
+          companyId: context.companyId,
+          customerId: context.customerId,
+        },
+        parsed.data,
+      ),
+    });
+  },
+);
+
+const portalRescheduleSchema = z.object({
+  windows: z
+    .array(z.object({ startsAt: z.coerce.date(), endsAt: z.coerce.date() }))
+    .min(1)
+    .max(3),
+  expiresAt: z.coerce.date().optional(),
+});
+
+router.post(
+  "/jobs/:jobId/reschedule-request",
+  bookingEnabled,
+  portalWriteRateLimiter,
+  requirePortalSession,
+  portalCsrfGuard,
+  async (request: PortalRequest, response: Response) => {
+    const parsed = portalRescheduleSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: {
+          code: "VALIDATION_FAILED",
+          message: parsed.error.issues.map((issue) => issue.message).join(", "),
+        },
+      });
+      return;
+    }
+    const context = workspaceContext(request);
+    response.status(201).json({
+      data: await requestCustomerReschedule(
+        {
+          companyId: context.companyId,
+          customerId: context.customerId,
+        },
+        request.params.jobId as string,
+        parsed.data.windows,
+        parsed.data.expiresAt ??
+          new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      ),
+    });
+  },
+);
+
+router.post(
+  "/booking/holds/:holdId/confirm",
+  bookingEnabled,
+  portalWriteRateLimiter,
+  requirePortalSession,
+  portalCsrfGuard,
+  async (request: PortalRequest, response: Response) => {
+    const context = workspaceContext(request);
+    response.status(200).json({
+      data: await confirmCustomerHold(
+        {
+          companyId: context.companyId,
+          customerId: context.customerId,
+        },
+        request.params.holdId as string,
+      ),
+    });
+  },
+);
+
 const requestMediaSchema = z.object({
   mimeType: z.string().trim().min(1).max(100),
 });
 const requestMediaConfirmSchema = z.object({
   objectKey: z.string().trim().min(1).max(500),
   mimeType: z.string().trim().min(1).max(100),
+  caption: z.string().trim().max(500).optional(),
 });
 const requestMessageSchema = z.object({
   body: z.string().trim().min(1).max(4000),
 });
-const createPortalRequestSchema = z.object({
-  submissionKey: z.string().trim().min(16).max(128),
-  serviceAddressId: z.string().uuid(),
-  title: z.string().trim().min(1).max(160),
-  description: z.string().trim().min(1).max(4000),
-  serviceCategory: z.string().trim().min(1).max(120),
-  priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
-  requiresInspection: z.boolean().optional(),
-  preferredWindows: z.custom<Prisma.InputJsonValue>().optional(),
-  budgetMinMinor: z.number().int().nonnegative().optional(),
-  budgetMaxMinor: z.number().int().nonnegative().optional(),
-  budgetCurrency: z
-    .string()
-    .regex(/^[A-Za-z]{3}$/)
-    .optional(),
+const portalAddressSchema = z.object({
+  label: z.string().trim().max(80).optional(),
+  line1: z.string().trim().min(1).max(160),
+  line2: z.string().trim().max(160).optional(),
+  city: z.string().trim().min(1).max(80),
+  region: z.string().trim().max(80).optional(),
+  postalCode: z.string().trim().max(20).optional(),
+  countryCode: z.string().trim().length(2),
 });
+
+const createPortalRequestSchema = z
+  .object({
+    // Idempotency-Key header takes precedence; the body field remains
+    // accepted for older clients. Exactly one must be present (checked
+    // in the route since headers are not part of the body schema).
+    submissionKey: z.string().trim().min(16).max(128).optional(),
+    serviceAddressId: z.string().uuid().optional(),
+    newAddress: portalAddressSchema.optional(),
+    title: z.string().trim().min(1).max(160),
+    description: z.string().trim().min(1).max(4000),
+    serviceCategory: z.string().trim().min(1).max(120),
+    equipmentInfo: z.string().trim().max(2000).optional(),
+    priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
+    requiresInspection: z.boolean().optional(),
+    preferredWindows: z.custom<Prisma.InputJsonValue>().optional(),
+    budgetMinMinor: z.number().int().nonnegative().optional(),
+    budgetMaxMinor: z.number().int().nonnegative().optional(),
+    budgetCurrency: z
+      .string()
+      .regex(/^[A-Za-z]{3}$/)
+      .optional(),
+  })
+  .refine(
+    (value) => value.serviceAddressId != null || value.newAddress != null,
+    "A service address or a new address is required",
+  );
 
 router.post(
   "/requests",
@@ -257,7 +471,15 @@ router.post(
   portalCsrfGuard,
   async (request: PortalRequest, response: Response) => {
     const parsed = createPortalRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
+    const headerKey = request.get("Idempotency-Key")?.trim();
+    const submissionKey =
+      headerKey || (parsed.success ? parsed.data.submissionKey : undefined);
+    if (
+      !parsed.success ||
+      !submissionKey ||
+      submissionKey.length < 16 ||
+      submissionKey.length > 128
+    ) {
       response.status(422).json({
         error: { code: "VALIDATION_FAILED", message: "Invalid request" },
       });
@@ -268,7 +490,7 @@ router.post(
       data: await createPortalRequest(context, {
         ...parsed.data,
         preferredWindows: parsed.data.preferredWindows,
-        submissionKey: parsed.data.submissionKey,
+        submissionKey,
       }),
     });
   },
@@ -336,6 +558,7 @@ router.post(
         request.params.requestId as string,
         parsed.data.objectKey,
         parsed.data.mimeType,
+        parsed.data.caption,
       ),
     });
   },
@@ -502,6 +725,130 @@ router.get(
   },
 );
 
+// Phase 7.3 — online checkout. Idempotent via Idempotency-Key header or
+// body.idempotencyKey so a double-tap never creates two sessions.
+const portalPaySchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(200).optional(),
+});
+
+router.post(
+  "/invoices/:invoiceId/pay",
+  portalWriteRateLimiter,
+  requirePortalSession,
+  portalCsrfGuard,
+  async (request: PortalRequest, response: Response) => {
+    const parsed = portalPaySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      response.status(422).json({
+        error: { code: "VALIDATION_FAILED", message: "Invalid request body" },
+      });
+      return;
+    }
+    const key =
+      request.header("idempotency-key") ??
+      parsed.data.idempotencyKey ??
+      cryptoRandomUUID();
+    response.status(201).json({
+      data: await payWorkspaceInvoice(
+        workspaceContext(request),
+        request.params.invoiceId as string,
+        key,
+      ),
+    });
+  },
+);
+
+router.get(
+  "/payments",
+  portalReadRateLimiter,
+  requirePortalSession,
+  async (request: PortalRequest, response: Response) => {
+    const parsed = pageSchema.safeParse(request.query);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: { code: "VALIDATION_FAILED", message: "Invalid pagination" },
+      });
+      return;
+    }
+    response.status(200).json({
+      data: await listWorkspacePayments(
+        workspaceContext(request),
+        parsed.data.page,
+        parsed.data.pageSize,
+      ),
+    });
+  },
+);
+
+router.get(
+  "/payments/:paymentId/receipt",
+  portalReadRateLimiter,
+  requirePortalSession,
+  async (request: PortalRequest, response: Response) => {
+    response.status(200).json({
+      data: await getWorkspacePaymentReceipt(
+        workspaceContext(request),
+        request.params.paymentId as string,
+      ),
+    });
+  },
+);
+
+// Phase 7.6 — customer disputes. A dispute never changes invoice state;
+// it opens an auditable review and suppresses reminders while open.
+const disputeSchema = z.object({
+  reason: z.enum([
+    "INCORRECT_AMOUNT",
+    "DUPLICATE_CHARGE",
+    "SERVICE_NOT_RENDERED",
+    "GOODS_NOT_RECEIVED",
+    "OTHER",
+  ]),
+  message: z.string().trim().min(1).max(2000),
+});
+
+router.post(
+  "/invoices/:invoiceId/disputes",
+  portalWriteRateLimiter,
+  requirePortalSession,
+  portalCsrfGuard,
+  async (request: PortalRequest, response: Response) => {
+    const parsed = disputeSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: {
+          code: "VALIDATION_FAILED",
+          message: parsed.error.issues.map((i) => i.message).join(", "),
+        },
+      });
+      return;
+    }
+    response.status(201).json({
+      data: await createPortalDispute(
+        workspaceContext(request),
+        request.params.invoiceId as string,
+        parsed.data,
+      ),
+    });
+  },
+);
+
+router.get(
+  "/invoices/:invoiceId/disputes",
+  portalReadRateLimiter,
+  requirePortalSession,
+  async (request: PortalRequest, response: Response) => {
+    const context = workspaceContext(request);
+    await assertCanReadInvoice(context, request.params.invoiceId as string);
+    response.status(200).json({
+      data: await listInvoiceDisputes(
+        context,
+        request.params.invoiceId as string,
+      ),
+    });
+  },
+);
+
 /**
  * GET /api/v1/portal/job
  * Get job-scoped snapshot for the portal.
@@ -567,6 +914,49 @@ router.post(
     );
 
     response.status(200).json({ data });
+  },
+);
+
+/**
+ * POST /api/v1/portal/quotes/:quoteId/question
+ * Ask the business a question about a quote — posts a CUSTOMER message on
+ * the linked service request without changing the quote status (4.5).
+ */
+router.post(
+  "/quotes/:quoteId/question",
+  portalWriteRateLimiter,
+  requirePortalSession,
+  portalCsrfGuard,
+  async (request: PortalRequest, response: Response) => {
+    const parsed = z
+      .object({ body: z.string().trim().min(1).max(4000) })
+      .safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: {
+          code: "VALIDATION_FAILED",
+          message: "A question body is required",
+        },
+      });
+      return;
+    }
+    const quoteId = Array.isArray(request.params.quoteId)
+      ? request.params.quoteId[0]
+      : request.params.quoteId;
+    const { companyId, customerId, jobId, scope, sessionId } = request.portal!;
+    if (scope === "JOB" && !jobId) {
+      throw new AppError("RESOURCE_NOT_FOUND", "Quote not found", 404);
+    }
+    if (scope !== "JOB") {
+      await getWorkspaceQuote(workspaceContext(request), quoteId);
+    }
+    const data = await askQuoteQuestion(
+      { companyId, customerId, sessionId },
+      quoteId,
+      scope === "JOB" ? jobId! : null,
+      parsed.data.body,
+    );
+    response.status(201).json({ data });
   },
 );
 

@@ -254,6 +254,150 @@ class JobInvoiceSummary {
       );
 }
 
+/// A diagnostic/field finding recorded by the technician (Phase 6.3).
+/// `customerVisible` findings are the only ones the portal exposes.
+class JobFinding {
+  const JobFinding({
+    required this.id,
+    required this.summary,
+    this.recommendedWork,
+    this.estimatedLaborMinutes,
+    required this.customerVisible,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String summary;
+  final String? recommendedWork;
+  final int? estimatedLaborMinutes;
+  final bool customerVisible;
+  final DateTime createdAt;
+
+  factory JobFinding.fromJson(Map<String, dynamic> json) => JobFinding(
+    id: json['id'] as String,
+    summary: json['summary'] as String? ?? '',
+    recommendedWork: json['recommendedWork'] as String?,
+    estimatedLaborMinutes: int.tryParse(
+      json['estimatedLaborMinutes']?.toString() ?? '',
+    ),
+    customerVisible: json['customerVisible'] as bool? ?? false,
+    createdAt:
+        (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                DateTime.now())
+            .toLocal(),
+  );
+}
+
+/// A technician-submitted scope-change request (Phase 6.5). Staff quote it
+/// as a CHANGE_ORDER quote, authorize it as an emergency, or decline it;
+/// the technician can withdraw their own while OPEN.
+class JobChangeRequest {
+  const JobChangeRequest({
+    required this.id,
+    required this.jobId,
+    required this.reason,
+    required this.description,
+    required this.estimatedPriceMinor,
+    required this.currency,
+    required this.status,
+    this.authorizationReason,
+    this.authorizedBy,
+    this.authorizedAt,
+    this.technicianName,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String jobId;
+  final String reason;
+  final String description;
+  final int estimatedPriceMinor;
+  final String currency;
+  final String status;
+  final String? authorizationReason;
+  final String? authorizedBy;
+  final DateTime? authorizedAt;
+  final String? technicianName;
+  final DateTime createdAt;
+
+  bool get isOpen => status == 'OPEN';
+
+  factory JobChangeRequest.fromJson(Map<String, dynamic> json) {
+    final tech = json['technician'] as Map<String, dynamic>?;
+    final name = tech != null
+        ? '${tech['firstName'] ?? ''} ${tech['lastName'] ?? ''}'.trim()
+        : null;
+    return JobChangeRequest(
+      id: json['id'] as String,
+      jobId: json['jobId'] as String? ?? '',
+      reason: json['reason'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      estimatedPriceMinor:
+          int.tryParse(json['estimatedPriceMinor']?.toString() ?? '') ?? 0,
+      currency: json['currency'] as String? ?? 'USD',
+      status: json['status'] as String? ?? 'OPEN',
+      authorizationReason: json['authorizationReason'] as String?,
+      authorizedBy: json['authorizedBy'] as String?,
+      authorizedAt: json['authorizedAt'] != null
+          ? DateTime.tryParse(json['authorizedAt'] as String)?.toLocal()
+          : null,
+      technicianName: (name == null || name.isEmpty) ? null : name,
+      createdAt:
+          (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                  DateTime.now())
+              .toLocal(),
+    );
+  }
+}
+
+/// The originating service request embedded on a job payload (Phase 6.1
+/// — technicians execute with full request context). Attachments are
+/// deliberately not parsed here; the brief shows title/description only.
+class JobServiceRequestRef {
+  const JobServiceRequestRef({
+    required this.id,
+    required this.title,
+    required this.description,
+    this.serviceCategory,
+  });
+
+  final String id;
+  final String title;
+  final String description;
+  final String? serviceCategory;
+
+  factory JobServiceRequestRef.fromJson(Map<String, dynamic> json) =>
+      JobServiceRequestRef(
+        id: json['id'] as String? ?? '',
+        title: json['title'] as String? ?? '',
+        description: json['description'] as String? ?? '',
+        serviceCategory: json['serviceCategory'] as String?,
+      );
+}
+
+/// One line of the approved quote scope embedded on a job payload
+/// (Phase 6.1 — the billable scope the technician executes against).
+class JobScopeItem {
+  const JobScopeItem({
+    required this.description,
+    required this.quantity,
+    required this.unitPriceMinor,
+    required this.totalMinor,
+  });
+
+  final String description;
+  final double quantity;
+  final int unitPriceMinor;
+  final int totalMinor;
+
+  factory JobScopeItem.fromJson(Map<String, dynamic> json) => JobScopeItem(
+    description: json['description'] as String? ?? '',
+    quantity: double.tryParse(json['quantity']?.toString() ?? '') ?? 0,
+    unitPriceMinor: int.tryParse(json['unitPriceMinor']?.toString() ?? '') ?? 0,
+    totalMinor: int.tryParse(json['totalMinor']?.toString() ?? '') ?? 0,
+  );
+}
+
 class Job {
   const Job({
     required this.id,
@@ -262,6 +406,9 @@ class Job {
     required this.problemDescription,
     required this.priority,
     required this.status,
+    this.type,
+    this.reviewState,
+    this.reviewNote,
     this.scheduledStart,
     this.scheduledEnd,
     this.startedAt,
@@ -272,6 +419,8 @@ class Job {
     required this.customer,
     required this.serviceAddress,
     this.assignedTechnician,
+    this.serviceRequest,
+    this.approvedScope = const [],
     this.notes = const [],
     this.statusHistory = const [],
     this.photos = const [],
@@ -285,6 +434,13 @@ class Job {
   final String problemDescription;
   final String priority;
   final String status;
+
+  /// JobType (DIAGNOSTIC/REPAIR/INSTALLATION/MAINTENANCE/OTHER) and the
+  /// Phase 6 completion-review state (NOT_REQUIRED/PENDING/APPROVED/
+  /// CHANGES_REQUESTED). Null on payloads that predate those columns.
+  final String? type;
+  final String? reviewState;
+  final String? reviewNote;
   final DateTime? scheduledStart;
   final DateTime? scheduledEnd;
   final DateTime? startedAt;
@@ -295,6 +451,11 @@ class Job {
   final JobCustomer customer;
   final ServiceAddress serviceAddress;
   final Technician? assignedTechnician;
+  final JobServiceRequestRef? serviceRequest;
+
+  /// Line items of the latest APPROVED quote on this job (empty when the
+  /// job has no approved quote — e.g. legacy or parts-only jobs).
+  final List<JobScopeItem> approvedScope;
   final List<JobNote> notes;
   final List<JobStatusHistoryEntry> statusHistory;
   final List<JobPhoto> photos;
@@ -308,6 +469,9 @@ class Job {
     problemDescription: json['problemDescription'] as String? ?? '',
     priority: json['priority'] as String? ?? 'NORMAL',
     status: json['status'] as String? ?? 'NEW',
+    type: json['type'] as String?,
+    reviewState: json['reviewState'] as String?,
+    reviewNote: json['reviewNote'] as String?,
     scheduledStart: json['scheduledStart'] != null
         ? DateTime.tryParse(json['scheduledStart'] as String)?.toLocal()
         : null,
@@ -340,6 +504,19 @@ class Job {
             json['assignedTechnician'] as Map<String, dynamic>,
           )
         : null,
+    serviceRequest: json['serviceRequest'] != null
+        ? JobServiceRequestRef.fromJson(
+            json['serviceRequest'] as Map<String, dynamic>,
+          )
+        : null,
+    approvedScope:
+        (json['quotes'] as List<dynamic>?)?.expand((q) {
+          final items = (q as Map<String, dynamic>)['items'];
+          return (items as List<dynamic>? ?? const []).map(
+            (i) => JobScopeItem.fromJson(i as Map<String, dynamic>),
+          );
+        }).toList() ??
+        const [],
     notes:
         (json['notes'] as List<dynamic>?)
             ?.map((n) => JobNote.fromJson(n as Map<String, dynamic>))
@@ -705,6 +882,123 @@ class JobsRepository {
     final res = await _client.post(
       '/api/v1/jobs/$jobId/start/override',
       body: {'reason': reason.trim()},
+    );
+    return Job.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Phase 6.3 — field findings. Diagnostic jobs cannot be completed
+  /// without at least one finding (backend enforces with
+  /// JOB_FINDING_REQUIRED).
+  Future<List<JobFinding>> listFindings(String jobId) async {
+    final res = await _client.get('/api/v1/jobs/$jobId/findings');
+    return (res as List<dynamic>)
+        .map((f) => JobFinding.fromJson(f as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<JobFinding> addFinding(
+    String jobId, {
+    required String summary,
+    String? recommendedWork,
+    int? estimatedLaborMinutes,
+    bool customerVisible = false,
+  }) async {
+    final res = await _client.post(
+      '/api/v1/jobs/$jobId/findings',
+      body: {
+        'summary': summary.trim(),
+        if (recommendedWork != null && recommendedWork.trim().isNotEmpty)
+          'recommendedWork': recommendedWork.trim(),
+        'estimatedLaborMinutes': ?estimatedLaborMinutes,
+        'customerVisible': customerVisible,
+      },
+    );
+    return JobFinding.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Phase 6.5 — technician change requests. `estimatedPriceMinor` is in
+  /// minor units (cents); the backend validates currency and ownership.
+  Future<List<JobChangeRequest>> listChangeRequests(String jobId) async {
+    final res = await _client.get('/api/v1/jobs/$jobId/change-requests');
+    return (res as List<dynamic>)
+        .map((cr) => JobChangeRequest.fromJson(cr as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<JobChangeRequest> createChangeRequest(
+    String jobId, {
+    required String reason,
+    required String description,
+    required int estimatedPriceMinor,
+    required String currency,
+  }) async {
+    final res = await _client.post(
+      '/api/v1/jobs/$jobId/change-requests',
+      body: {
+        'reason': reason.trim(),
+        'description': description.trim(),
+        'estimatedPriceMinor': estimatedPriceMinor,
+        'currency': currency.toUpperCase(),
+      },
+    );
+    return JobChangeRequest.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Staff: turn an OPEN change request into a CHANGE_ORDER quote.
+  Future<void> quoteChangeRequest(String jobId, String changeRequestId) async {
+    await _client.post(
+      '/api/v1/jobs/$jobId/change-requests/$changeRequestId/quote',
+      body: const <String, dynamic>{},
+    );
+  }
+
+  /// Staff: emergency authorization — requires the company setting and a
+  /// reason (5+ chars); recorded on the change request for audit.
+  Future<void> authorizeChangeRequest(
+    String jobId,
+    String changeRequestId,
+    String reason,
+  ) async {
+    await _client.post(
+      '/api/v1/jobs/$jobId/change-requests/$changeRequestId/authorize',
+      body: {'reason': reason.trim()},
+    );
+  }
+
+  Future<void> declineChangeRequest(
+    String jobId,
+    String changeRequestId,
+  ) async {
+    await _client.post(
+      '/api/v1/jobs/$jobId/change-requests/$changeRequestId/decline',
+      body: const <String, dynamic>{},
+    );
+  }
+
+  /// Technician: withdraw their own OPEN change request.
+  Future<void> withdrawChangeRequest(
+    String jobId,
+    String changeRequestId,
+  ) async {
+    await _client.post(
+      '/api/v1/jobs/$jobId/change-requests/$changeRequestId/withdraw',
+      body: const <String, dynamic>{},
+    );
+  }
+
+  /// Phase 6.4 — staff completion review. Only valid while the job's
+  /// reviewState is PENDING; the backend rejects repeats with 409.
+  Future<Job> reviewJob(
+    String jobId, {
+    required String decision,
+    String? note,
+  }) async {
+    final res = await _client.post(
+      '/api/v1/jobs/$jobId/review',
+      body: {
+        'decision': decision,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      },
     );
     return Job.fromJson(res as Map<String, dynamic>);
   }

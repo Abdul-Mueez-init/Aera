@@ -3,14 +3,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/aera_colors.dart';
 import '../../core/theme/aera_typography.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_status_chip.dart';
+import 'booking_proposals.dart';
 import 'customer_home_screen.dart';
 import 'data/portal_repository.dart';
 import 'providers/portal_provider.dart';
+import 'request_intake.dart';
 
 class PortalWorkspaceHomeScreen extends ConsumerStatefulWidget {
   const PortalWorkspaceHomeScreen({super.key});
@@ -179,9 +182,8 @@ class _WorkspaceRequestsList extends ConsumerWidget {
         Align(
           alignment: Alignment.centerRight,
           child: FilledButton.icon(
-            onPressed: addresses.isEmpty
-                ? null
-                : () => _showCreateRequest(context, ref, addresses),
+            onPressed: () =>
+                RequestIntakeSheet.show(context, addresses: addresses),
             icon: const Icon(Icons.add),
             label: const Text('New request'),
           ),
@@ -208,111 +210,18 @@ class _WorkspaceRequestsList extends ConsumerWidget {
                     label: status,
                     type: AeraStatusType.info,
                   ),
+                  onTap: item['id'] == null
+                      ? null
+                      : () => RequestThreadSheet.show(
+                          context,
+                          item['id'].toString(),
+                        ),
                 ),
               ),
             );
           }),
       ],
     );
-  }
-
-  Future<void> _showCreateRequest(
-    BuildContext context,
-    WidgetRef ref,
-    List<dynamic> addresses,
-  ) async {
-    final titleController = TextEditingController();
-    final descriptionController = TextEditingController();
-    final categoryController = TextEditingController();
-    var addressId =
-        (addresses.first as Map<String, dynamic>)['id']?.toString() ?? '';
-    final created = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('New service request'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'What do you need?',
-                  ),
-                ),
-                TextField(
-                  controller: descriptionController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Describe the issue',
-                  ),
-                ),
-                TextField(
-                  controller: categoryController,
-                  decoration: const InputDecoration(
-                    labelText: 'Service category',
-                  ),
-                ),
-                DropdownButtonFormField<String>(
-                  initialValue: addressId,
-                  decoration: const InputDecoration(
-                    labelText: 'Service address',
-                  ),
-                  items: addresses.map((raw) {
-                    final address = raw as Map<String, dynamic>;
-                    return DropdownMenuItem(
-                      value: address['id']?.toString(),
-                      child: Text(
-                        address['label']?.toString() ??
-                            address['line1']?.toString() ??
-                            'Address',
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) =>
-                      setState(() => addressId = value ?? addressId),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                if (titleController.text.trim().isEmpty ||
-                    descriptionController.text.trim().isEmpty ||
-                    categoryController.text.trim().isEmpty) {
-                  return;
-                }
-                final result = await ref
-                    .read(portalRepositoryProvider)
-                    .createWorkspaceRequest(
-                      submissionKey:
-                          '${DateTime.now().microsecondsSinceEpoch}-${titleController.text.hashCode}',
-                      serviceAddressId: addressId,
-                      title: titleController.text,
-                      description: descriptionController.text,
-                      serviceCategory: categoryController.text,
-                    );
-                if (context.mounted) {
-                  Navigator.pop(context, result is PortalSessionActive);
-                }
-              },
-              child: const Text('Submit'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (created == true && context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Request submitted')));
-    }
   }
 }
 
@@ -397,7 +306,7 @@ class _ResourceList extends ConsumerWidget {
       if (context.mounted && result is PortalSessionActive) {
         final detail = result.workspace;
         if (detail != null) {
-          await _showInvoice(context, detail);
+          await _showInvoice(context, ref, detail);
         }
       }
     }
@@ -410,6 +319,8 @@ class _ResourceList extends ConsumerWidget {
   ) async {
     final proposals = job['appointmentProposals'] as List<dynamic>? ?? const [];
     final review = job['reviews'] as List<dynamic>? ?? const [];
+    final findings = job['findings'] as List<dynamic>? ?? const [];
+    final reviewState = job['reviewState']?.toString();
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -423,20 +334,81 @@ class _ResourceList extends ConsumerWidget {
               Text('Service details', style: AeraTypography.h2),
               const SizedBox(height: 8),
               Text(job['problemDescription']?.toString() ?? ''),
+              // Phase 6 — completion summary and customer-visible findings
+              // recorded by the technician.
+              if (job['completionSummary'] != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Completion notes',
+                  style: AeraTypography.label.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(job['completionSummary'].toString()),
+              ],
+              if (findings.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Findings',
+                  style: AeraTypography.label.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                ...findings.map(
+                  (finding) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          finding['summary']?.toString() ?? '',
+                          style: AeraTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (finding['recommendedWork'] != null)
+                          Text(
+                            'Recommended: ${finding['recommendedWork']}',
+                            style: AeraTypography.bodySm.copyWith(
+                              color: Colors.grey.shade600,
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              if (reviewState == 'CHANGES_REQUESTED') ...[
+                const SizedBox(height: 8),
+                Text(
+                  'The team is reviewing this job and may follow up with you.',
+                  style: AeraTypography.bodySm.copyWith(
+                    color: Colors.orange.shade800,
+                  ),
+                ),
+              ],
               if (job['scheduledStart'] != null) ...[
                 const SizedBox(height: 12),
                 Text('Appointment: ${job['scheduledStart']}'),
                 if (job['scheduledEnd'] != null)
                   Text('Until ${job['scheduledEnd']}'),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _requestReschedule(context, ref, job),
+                  icon: const Icon(Icons.event_repeat, size: 18),
+                  label: const Text('Request different time'),
+                ),
               ],
               if (proposals.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                Text('Appointment options', style: AeraTypography.labelUpper),
-                ...proposals.map(
-                  (raw) => Text(
-                    '${(raw as Map<String, dynamic>)['status']} · '
-                    '${raw['windows']}',
-                  ),
+                BookingProposals(
+                  proposals: proposals,
+                  fallbackRequestId:
+                      job['serviceRequestId']?.toString() ??
+                      job['id']?.toString(),
                 ),
               ],
               const SizedBox(height: 16),
@@ -461,6 +433,92 @@ class _ResourceList extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _requestReschedule(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, dynamic> job,
+  ) async {
+    final windows = <({DateTime start, DateTime end})>[];
+    var addAnother = true;
+    while (windows.length < 3 && addAnother) {
+      final picked = await _pickWindow(context, windows.length + 1);
+      if (picked == null) break;
+      windows.add((start: picked.start, end: picked.end));
+      addAnother = picked.addAnother;
+    }
+    if (windows.isEmpty || !context.mounted) return;
+    final result = await ref
+        .read(portalRepositoryProvider)
+        .requestJobReschedule(job['id'].toString(), windows);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result is PortalSessionActive
+              ? 'Reschedule request sent'
+              : result is PortalFailure
+              ? result.message
+              : 'Could not send request',
+        ),
+      ),
+    );
+  }
+
+  Future<({DateTime start, DateTime end, bool addAnother})?> _pickWindow(
+    BuildContext context,
+    int index,
+  ) async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 60)),
+    );
+    if (date == null || !context.mounted) return null;
+    final startTime = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 9, minute: 0),
+    );
+    if (startTime == null || !context.mounted) return null;
+    final start = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      startTime.hour,
+      startTime.minute,
+    );
+    final end = start.add(const Duration(hours: 2));
+    // Let the customer add another window or finish.
+    if (!context.mounted) return null;
+    final addAnother = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Window $index'),
+        content: Text(
+          '${_windowLabel(start)} – ${_windowLabel(end)}\n\nAdd another preferred time?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Done'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Add another'),
+          ),
+        ],
+      ),
+    );
+    return (start: start, end: end, addAnother: addAnother ?? false);
+  }
+
+  String _windowLabel(DateTime value) {
+    final hh = value.hour.toString().padLeft(2, '0');
+    final mm = value.minute.toString().padLeft(2, '0');
+    return '${value.month}/${value.day} $hh:$mm';
   }
 
   Future<bool?> _showReviewDialog(
@@ -521,36 +579,48 @@ class _ResourceList extends ConsumerWidget {
 
   Future<void> _showInvoice(
     BuildContext context,
+    WidgetRef ref,
     Map<String, dynamic> invoice,
   ) {
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Invoice ${invoice['invoiceNumber'] ?? ''}',
-              style: AeraTypography.h2,
-            ),
-            const SizedBox(height: 8),
-            Text('Status: ${invoice['status'] ?? ''}'),
-            Text(
-              'Total: ${invoice['currency'] ?? ''} ${_money(invoice['totalMinor'])}',
-            ),
-            Text('Balance due: ${_money(invoice['balanceDueMinor'])}'),
-            if (invoice['dueAt'] != null) Text('Due ${invoice['dueAt']}'),
-          ],
-        ),
-      ),
+      isScrollControlled: true,
+      builder: (context) => _InvoiceSheet(invoice: invoice),
     );
   }
 
-  String _money(dynamic minor) =>
-      ((int.tryParse(minor?.toString() ?? '') ?? 0) / 100).toStringAsFixed(2);
+  Future<String?> _askQuoteQuestion(BuildContext context) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Ask a question'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Your question about this quote…',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isEmpty) return;
+              Navigator.of(dialogContext).pop(value);
+            },
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _showQuote(
     BuildContext context,
@@ -659,6 +729,32 @@ class _ResourceList extends ConsumerWidget {
                 icon: const Icon(Icons.close),
                 label: const Text('Decline quote'),
               ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final question = await _askQuoteQuestion(context);
+                  if (question == null ||
+                      question.isEmpty ||
+                      !context.mounted) {
+                    return;
+                  }
+                  final result = await ref
+                      .read(portalRepositoryProvider)
+                      .askQuoteQuestion(quoteId, question);
+                  if (!context.mounted) return;
+                  if (result is PortalSessionActive) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Question sent')),
+                    );
+                  } else if (result is PortalFailure) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(result.message)));
+                  }
+                },
+                icon: const Icon(Icons.help_outline),
+                label: const Text('Ask a question'),
+              ),
             ],
           ),
         ),
@@ -753,6 +849,332 @@ class _TrackingStatusState extends ConsumerState<_TrackingStatus> {
       );
     },
   );
+}
+
+/// Phase 7.7 — customer invoice sheet: balance, online checkout, payment
+/// states, receipts and disputes.
+class _InvoiceSheet extends ConsumerStatefulWidget {
+  const _InvoiceSheet({required this.invoice});
+  final Map<String, dynamic> invoice;
+
+  @override
+  ConsumerState<_InvoiceSheet> createState() => _InvoiceSheetState();
+}
+
+class _InvoiceSheetState extends ConsumerState<_InvoiceSheet> {
+  bool _paying = false;
+  bool _disputing = false;
+  String? _message;
+  String _payKey = '';
+
+  Map<String, dynamic> get invoice => widget.invoice;
+
+  String _money(dynamic minor) =>
+      ((int.tryParse(minor?.toString() ?? '') ?? 0) / 100).toStringAsFixed(2);
+
+  bool get _payable {
+    final status = invoice['status']?.toString() ?? '';
+    final balance =
+        int.tryParse(invoice['balanceDueMinor']?.toString() ?? '') ?? 0;
+    return balance > 0 &&
+        const {'ISSUED', 'PARTIALLY_PAID', 'OVERDUE'}.contains(status);
+  }
+
+  String? get _latestSessionStatus {
+    final sessions = invoice['paymentSessions'] as List<dynamic>? ?? const [];
+    if (sessions.isEmpty) return null;
+    return sessions.first['status']?.toString();
+  }
+
+  Future<void> _pay() async {
+    final id = invoice['id']?.toString();
+    if (id == null || _paying) return;
+    if (_payKey.isEmpty) {
+      _payKey =
+          'portal-pay-${DateTime.now().microsecondsSinceEpoch}-${UniqueKey().hashCode}';
+    }
+    setState(() {
+      _paying = true;
+      _message = null;
+    });
+    final result = await ref
+        .read(portalRepositoryProvider)
+        .workspaceAction('invoices/$id/pay', body: {'idempotencyKey': _payKey});
+    if (!mounted) return;
+    if (result is PortalSessionActive && result.workspace != null) {
+      final url = result.workspace!['checkoutUrl']?.toString();
+      if (url != null && url.isNotEmpty) {
+        final uri = Uri.tryParse(url);
+        if (uri != null) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+        _payKey = '';
+      } else {
+        setState(() => _message = 'Could not start checkout.');
+      }
+    } else {
+      setState(
+        () => _message = result is PortalFailure
+            ? result.message
+            : 'Payment failed',
+      );
+    }
+    if (mounted) setState(() => _paying = false);
+  }
+
+  Future<void> _showReceipt(Map<String, dynamic> payment) async {
+    final id = payment['id']?.toString();
+    if (id == null) return;
+    final result = await ref
+        .read(portalRepositoryProvider)
+        .workspaceResource('payments/$id/receipt');
+    if (!mounted) return;
+    if (result is! PortalSessionActive || result.workspace == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not load receipt')));
+      return;
+    }
+    final receipt = result.workspace!;
+    final invoiceRef = receipt['invoice'] as Map<String, dynamic>? ?? const {};
+    final company = invoiceRef['company'] as Map<String, dynamic>? ?? const {};
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Receipt — ${invoiceRef['invoiceNumber'] ?? ''}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(company['name']?.toString() ?? ''),
+            Text(
+              'Amount: ${receipt['currency'] ?? ''} ${_money(receipt['amountMinor'])}',
+            ),
+            Text('Method: ${receipt['method'] ?? ''}'),
+            if (receipt['receivedAt'] != null)
+              Text('Paid: ${receipt['receivedAt']}'),
+            if (receipt['providerPaymentId'] != null)
+              Text('Ref: ${receipt['providerPaymentId']}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _dispute() async {
+    final id = invoice['id']?.toString();
+    if (id == null || _disputing) return;
+    const reasons = {
+      'INCORRECT_AMOUNT': 'Incorrect amount',
+      'DUPLICATE_CHARGE': 'Duplicate charge',
+      'SERVICE_NOT_RENDERED': 'Service not rendered',
+      'GOODS_NOT_RECEIVED': 'Goods not received',
+      'OTHER': 'Other',
+    };
+    String reason = reasons.keys.first;
+    final messageController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Dispute this invoice'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: reason,
+                decoration: const InputDecoration(labelText: 'Reason'),
+                items: reasons.entries
+                    .map(
+                      (e) =>
+                          DropdownMenuItem(value: e.key, child: Text(e.value)),
+                    )
+                    .toList(),
+                onChanged: (v) => setDialogState(() => reason = v ?? reason),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: messageController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  hintText: 'Tell us what is wrong…',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Submit dispute'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final message = messageController.text.trim();
+    messageController.dispose();
+    if (confirmed != true || message.isEmpty || !mounted) return;
+    setState(() {
+      _disputing = true;
+      _message = null;
+    });
+    final result = await ref
+        .read(portalRepositoryProvider)
+        .workspaceAction(
+          'invoices/$id/disputes',
+          body: {'reason': reason, 'message': message},
+        );
+    if (!mounted) return;
+    if (result is PortalSessionActive) {
+      setState(() {
+        _message = 'Dispute submitted — our team will review it.';
+        _disputing = false;
+      });
+    } else {
+      setState(() {
+        _message = result is PortalFailure
+            ? result.message
+            : 'Could not submit dispute';
+        _disputing = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = invoice['currency']?.toString() ?? '';
+    final payments = invoice['payments'] as List<dynamic>? ?? const [];
+    final disputes = invoice['disputes'] as List<dynamic>? ?? const [];
+    final openDispute = disputes.any(
+      (d) => const {
+        'OPEN',
+        'UNDER_REVIEW',
+      }.contains((d as Map)['status']?.toString()),
+    );
+    final sessionStatus = _latestSessionStatus;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Invoice ${invoice['invoiceNumber'] ?? ''}',
+              style: AeraTypography.h2,
+            ),
+            const SizedBox(height: 8),
+            Text('Status: ${invoice['status'] ?? ''}'),
+            if (invoice['kind'] == 'DEPOSIT') const Text('Type: Deposit'),
+            Text('Total: $currency ${_money(invoice['totalMinor'])}'),
+            Text('Balance due: ${_money(invoice['balanceDueMinor'])}'),
+            if (invoice['dueAt'] != null) Text('Due ${invoice['dueAt']}'),
+            if (sessionStatus == 'OPEN')
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'Payment pending — complete checkout to confirm.',
+                  style: TextStyle(color: Colors.orange),
+                ),
+              )
+            else if (sessionStatus == 'EXPIRED' || sessionStatus == 'FAILED')
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  sessionStatus == 'EXPIRED'
+                      ? 'Checkout expired — start a new payment.'
+                      : 'Payment failed — please try again.',
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+            if (_message != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_message!),
+              ),
+            if (_payable) ...[
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _paying ? null : _pay,
+                icon: _paying
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.payment),
+                label: Text(
+                  _paying
+                      ? 'Starting checkout…'
+                      : 'Pay $currency ${_money(invoice['balanceDueMinor'])}',
+                ),
+              ),
+            ],
+            if (payments.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text('Payments', style: AeraTypography.h3),
+              ...payments.map((raw) {
+                final p = raw as Map<String, dynamic>;
+                return ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    '$currency ${_money(p['amountMinor'])} — ${p['method'] ?? ''}',
+                  ),
+                  subtitle: Text('${p['receivedAt'] ?? ''}'),
+                  trailing: const Icon(Icons.receipt_long),
+                  onTap: () => _showReceipt(p),
+                );
+              }),
+            ],
+            if (disputes.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text('Disputes', style: AeraTypography.h3),
+              ...disputes.map((raw) {
+                final d = raw as Map<String, dynamic>;
+                return ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('${d['reason'] ?? ''} — ${d['status'] ?? ''}'),
+                  subtitle: d['resolution'] != null
+                      ? Text('Resolved: ${d['resolution']}')
+                      : null,
+                );
+              }),
+            ],
+            if (!openDispute &&
+                invoice['status'] != 'PAID' &&
+                invoice['status'] != 'VOID') ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: _disputing ? null : _dispute,
+                icon: const Icon(Icons.flag_outlined),
+                label: Text(
+                  _disputing ? 'Submitting…' : 'Dispute this invoice',
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _WorkspaceData {

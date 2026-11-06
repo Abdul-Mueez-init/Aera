@@ -1,4 +1,4 @@
-import { Router, type Response } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../../common/auth/auth.middleware.js";
 import {
@@ -11,6 +11,11 @@ import {
   listJobFindings,
   reviewCompletedJob,
   createJobChangeRequest,
+  listJobChangeRequests,
+  quoteJobChangeRequest,
+  authorizeJobChangeRequest,
+  declineJobChangeRequest,
+  withdrawJobChangeRequest,
   createJob,
   getJob,
   getJobHistory,
@@ -23,6 +28,7 @@ import {
   type NoteVisibilityValue,
 } from "./job.service.js";
 import { portalStaffRouter } from "../portal/portal-staff.routes.js";
+import { env } from "../../config/env.js";
 import { overrideStartJob, startJobWithCode } from "./handshake.service.js";
 import { handshakeRateLimiter } from "../../common/rateLimit.js";
 
@@ -132,12 +138,32 @@ const changeRequestSchema = z.object({
   currency: z.string().regex(/^[A-Za-z]{3}$/),
   evidencePhotoIds: z.array(z.string().uuid()).max(20).optional(),
 });
+const authorizeSchema = z.object({
+  reason: z.string().trim().min(5).max(1000),
+});
 const startJobSchema = z.object({
   code: z.string().regex(/^\d{6}$/, "Code must be 6 digits"),
 });
 const overrideStartSchema = z.object({
   reason: z.string().trim().min(5).max(300),
 });
+
+// Phase 6 ships dark: completion review and the change-request workflow
+// only exist when COMPLETION_REVIEW_ENABLED is on (same 404 contract as
+// the portal feature flags).
+function completionReviewEnabled(
+  _request: Request,
+  response: Response,
+  next: (error?: unknown) => void,
+) {
+  if (!env.COMPLETION_REVIEW_ENABLED) {
+    response
+      .status(404)
+      .json({ error: { code: "NOT_FOUND", message: "Route not found" } });
+    return;
+  }
+  next();
+}
 
 function sendValidationError(response: Response, error: z.ZodError) {
   response.status(422).json({
@@ -323,6 +349,7 @@ router.post("/:jobId/findings", requireAuth, async (request, response) => {
 router.post(
   "/:jobId/review",
   requireAuth,
+  completionReviewEnabled,
   requireRole(...managerRoles),
   async (request, response) => {
     const parsed = reviewSchema.safeParse(request.body);
@@ -344,6 +371,7 @@ router.post(
 router.post(
   "/:jobId/change-requests",
   requireAuth,
+  completionReviewEnabled,
   async (request, response) => {
     const parsed = changeRequestSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -355,6 +383,86 @@ router.post(
         request.auth!,
         routeId(request.params.jobId),
         parsed.data,
+      ),
+    });
+  },
+);
+
+router.get(
+  "/:jobId/change-requests",
+  requireAuth,
+  completionReviewEnabled,
+  async (request, response) => {
+    response.status(200).json({
+      data: await listJobChangeRequests(
+        request.auth!,
+        routeId(request.params.jobId),
+      ),
+    });
+  },
+);
+
+router.post(
+  "/:jobId/change-requests/:changeRequestId/quote",
+  requireAuth,
+  completionReviewEnabled,
+  async (request, response) => {
+    response.status(201).json({
+      data: await quoteJobChangeRequest(
+        request.auth!,
+        routeId(request.params.jobId),
+        routeId(request.params.changeRequestId),
+      ),
+    });
+  },
+);
+
+router.post(
+  "/:jobId/change-requests/:changeRequestId/authorize",
+  requireAuth,
+  completionReviewEnabled,
+  async (request, response) => {
+    const parsed = authorizeSchema.safeParse(request.body);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    response.status(200).json({
+      data: await authorizeJobChangeRequest(
+        request.auth!,
+        routeId(request.params.jobId),
+        routeId(request.params.changeRequestId),
+        parsed.data.reason,
+      ),
+    });
+  },
+);
+
+router.post(
+  "/:jobId/change-requests/:changeRequestId/decline",
+  requireAuth,
+  completionReviewEnabled,
+  async (request, response) => {
+    response.status(200).json({
+      data: await declineJobChangeRequest(
+        request.auth!,
+        routeId(request.params.jobId),
+        routeId(request.params.changeRequestId),
+      ),
+    });
+  },
+);
+
+router.post(
+  "/:jobId/change-requests/:changeRequestId/withdraw",
+  requireAuth,
+  completionReviewEnabled,
+  async (request, response) => {
+    response.status(200).json({
+      data: await withdrawJobChangeRequest(
+        request.auth!,
+        routeId(request.params.jobId),
+        routeId(request.params.changeRequestId),
       ),
     });
   },

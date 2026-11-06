@@ -22,6 +22,11 @@ describe("Portal API", () => {
       prisma.invoiceItem.deleteMany(),
       prisma.invoice.deleteMany(),
       prisma.job.deleteMany(),
+      prisma.serviceRequestMessage.deleteMany(),
+      prisma.serviceRequestAttachment.deleteMany(),
+      prisma.serviceRequestUpload.deleteMany(),
+      prisma.serviceRequestEvent.deleteMany(),
+      prisma.serviceRequest.deleteMany(),
       prisma.customer.deleteMany(),
       prisma.company.deleteMany(),
     ]);

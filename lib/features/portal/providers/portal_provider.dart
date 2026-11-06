@@ -34,14 +34,43 @@ class PortalSessionController
 
   /// Establishes the session for the portal screens.
   ///
-  /// Order (handoff 6.3): first try the existing session (a returning
-  /// customer on the same device/browser); only if there is none, burn the
-  /// one-time [fragmentToken] from the link. Ends in exactly one of
-  /// active (snapshot loaded), closed (see [portalClosedProvider]) or error.
+  /// Order (handoff 6.3 + Phase 2): when the URL carries a link token, the
+  /// exchange runs FIRST — a fresh link must replace any stale session on
+  /// this device before anything renders, so old workspace data can never
+  /// appear under a new link. Only when there is no token (or the exchange
+  /// could not reach the server) does the existing session get probed.
+  /// Ends in exactly one of active (snapshot loaded), closed (see
+  /// [portalClosedProvider]) or error.
   Future<PortalBootstrapOutcome> bootstrap({String? fragmentToken}) async {
     _bootstrapped = true;
     state = const AsyncValue.loading();
     _ref.read(portalClosedProvider.notifier).state = null;
+
+    PortalFailure? exchangeFailure;
+    if (fragmentToken != null && fragmentToken.isNotEmpty) {
+      final exchangeResult = await _repository.exchange(fragmentToken);
+      if (exchangeResult is PortalSessionActive) {
+        return _loadJob();
+      }
+      if (exchangeResult is PortalFailure) {
+        // The exchange never got a definitive answer (and the token may or
+        // may not have been burned), so fall through and probe the session.
+        exchangeFailure = exchangeResult;
+      } else {
+        // The link itself is dead (invalid, already used, expired or
+        // deactivated). A still-live session on this device keeps working —
+        // e.g. the customer re-opened an already-consumed link — otherwise
+        // the link's closed state is what the customer needs to see.
+        final deadLinkSession = await _repository.session();
+        if (deadLinkSession is PortalSessionActive) {
+          return _loadJob();
+        }
+        if (exchangeResult is PortalClosed) {
+          return _close(exchangeResult);
+        }
+        return _close(const PortalClosed(variant: PortalClosedVariant.invalid));
+      }
+    }
 
     final sessionResult = await _repository.session();
     if (sessionResult is PortalSessionActive) {
@@ -50,26 +79,12 @@ class PortalSessionController
     if (sessionResult is PortalClosed) {
       return _close(sessionResult);
     }
-
-    if (fragmentToken != null && fragmentToken.isNotEmpty) {
-      final exchangeResult = await _repository.exchange(fragmentToken);
-      if (exchangeResult is PortalSessionActive) {
-        return _loadJob();
-      }
-      if (exchangeResult is PortalClosed) {
-        return _close(exchangeResult);
-      }
-      if (exchangeResult is PortalInvalid) {
-        return _close(const PortalClosed(variant: PortalClosedVariant.invalid));
-      }
-      // PortalFailure: surface as a retryable error on the open screen.
-      state = AsyncValue.error(
-        (exchangeResult as PortalFailure).message,
-        StackTrace.current,
-      );
+    if (exchangeFailure != null) {
+      // Exchange failed AND there is no usable session: retryable error,
+      // not a dead portal — the customer should see "try again".
+      state = AsyncValue.error(exchangeFailure.message, StackTrace.current);
       return PortalBootstrapOutcome.error;
     }
-
     if (sessionResult is PortalFailure) {
       state = AsyncValue.error(sessionResult.message, StackTrace.current);
       return PortalBootstrapOutcome.error;

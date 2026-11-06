@@ -246,6 +246,269 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
     }
   }
 
+  /// Phase 6.4 — approve or request changes on a completed job awaiting
+  /// review. CHANGES_REQUESTED reopens the evidence path for the
+  /// technician; APPROVED unblocks invoicing.
+  Future<void> _reviewJob(String decision) async {
+    final note = decision == 'CHANGES_REQUESTED'
+        ? await showTextPromptDialog(
+            context,
+            title: 'Request Changes',
+            hintText: 'What needs to be corrected? (optional)',
+            confirmLabel: 'Request Changes',
+          )
+        : null;
+    // Require a note for CHANGES_REQUESTED so the technician knows what
+    // to correct — the backend stores it as the review audit note.
+    if (decision == 'CHANGES_REQUESTED' && (note == null || note.isEmpty)) {
+      return;
+    }
+
+    setState(() => _updating = true);
+    try {
+      await ref
+          .read(jobsRepositoryProvider)
+          .reviewJob(widget.jobId, decision: decision, note: note);
+      ref.invalidate(jobDetailProvider(widget.jobId));
+      ref.invalidate(jobFindingsProvider(widget.jobId));
+      ref.invalidate(jobChangeRequestsProvider(widget.jobId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              decision == 'APPROVED'
+                  ? 'Completion approved'
+                  : 'Changes requested',
+            ),
+          ),
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
+  }
+
+  /// Phase 6.5 — staff actions on a change request: quote it as a
+  /// CHANGE_ORDER, authorize it as an emergency, or decline it.
+  Future<void> _changeRequestAction(
+    String changeRequestId,
+    String action,
+  ) async {
+    String? reason;
+    if (action == 'authorize') {
+      reason = await showTextPromptDialog(
+        context,
+        title: 'Emergency Authorization',
+        hintText: 'Reason customer could not approve (required)',
+        confirmLabel: 'Authorize',
+      );
+      if (reason == null || reason.trim().length < 5) return;
+    }
+
+    setState(() => _updating = true);
+    try {
+      final repo = ref.read(jobsRepositoryProvider);
+      switch (action) {
+        case 'quote':
+          await repo.quoteChangeRequest(widget.jobId, changeRequestId);
+        case 'authorize':
+          await repo.authorizeChangeRequest(
+            widget.jobId,
+            changeRequestId,
+            reason!,
+          );
+        case 'decline':
+          await repo.declineChangeRequest(widget.jobId, changeRequestId);
+      }
+      ref.invalidate(jobChangeRequestsProvider(widget.jobId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Change request $action'.replaceAll('_', ' ')),
+          ),
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
+  }
+
+  /// Findings + change-request cards for the job detail screen. Returns
+  /// an empty list while either provider is loading or errored so the
+  /// section never blocks the rest of the page.
+  List<Widget> _fieldReportSection(Job job, bool canManagePortal) {
+    final findings = ref.watch(jobFindingsProvider(widget.jobId)).valueOrNull;
+    final changeRequests = ref
+        .watch(jobChangeRequestsProvider(widget.jobId))
+        .valueOrNull;
+    if (findings == null && changeRequests == null) {
+      return const [];
+    }
+
+    return [
+      if (findings != null && findings.isNotEmpty)
+        AeraCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Field Findings (${findings.length})',
+                style: AeraTypography.h3.copyWith(fontSize: 15),
+              ),
+              const SizedBox(height: 8),
+              ...findings.map(
+                (finding) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        finding.summary,
+                        style: AeraTypography.bodySm.copyWith(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (finding.recommendedWork != null)
+                        Text(
+                          '→ ${finding.recommendedWork}',
+                          style: AeraTypography.bodySm.copyWith(
+                            fontSize: 11,
+                            color: AeraColors.inkSoft,
+                          ),
+                        ),
+                      Text(
+                        '${finding.customerVisible ? 'Shared with customer' : 'Internal'} · ${DateFormat('MMM d, h:mm a').format(finding.createdAt)}',
+                        style: AeraTypography.label.copyWith(fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      if (changeRequests != null && changeRequests.isNotEmpty)
+        AeraCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Change Requests (${changeRequests.length})',
+                style: AeraTypography.h3.copyWith(fontSize: 15),
+              ),
+              const SizedBox(height: 8),
+              ...changeRequests.map(
+                (cr) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${cr.reason} — ${cr.currency} ${(cr.estimatedPriceMinor / 100).toStringAsFixed(2)}',
+                              style: AeraTypography.bodySm.copyWith(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          AeraStatusChip(
+                            label: cr.status,
+                            type: cr.status == 'OPEN'
+                                ? AeraStatusType.warning
+                                : cr.status == 'QUOTED' ||
+                                      cr.authorizedBy != null
+                                ? AeraStatusType.completed
+                                : AeraStatusType.neutral,
+                          ),
+                        ],
+                      ),
+                      Text(
+                        cr.description,
+                        style: AeraTypography.bodySm.copyWith(
+                          fontSize: 11,
+                          color: AeraColors.inkSoft,
+                        ),
+                      ),
+                      if (cr.authorizationReason != null)
+                        Text(
+                          'Authorized: ${cr.authorizationReason}',
+                          style: AeraTypography.label.copyWith(
+                            fontSize: 10,
+                            color: AeraColors.accent,
+                          ),
+                        ),
+                      if (canManagePortal &&
+                          (cr.status == 'OPEN' || cr.status == 'QUOTED'))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Wrap(
+                            spacing: 8,
+                            children: [
+                              if (cr.status == 'OPEN') ...[
+                                TextButton(
+                                  onPressed: _updating
+                                      ? null
+                                      : () => _changeRequestAction(
+                                          cr.id,
+                                          'quote',
+                                        ),
+                                  child: const Text('Quote'),
+                                ),
+                                TextButton(
+                                  onPressed: _updating
+                                      ? null
+                                      : () => _changeRequestAction(
+                                          cr.id,
+                                          'authorize',
+                                        ),
+                                  child: const Text('Authorize'),
+                                ),
+                              ],
+                              TextButton(
+                                onPressed: _updating
+                                    ? null
+                                    : () => _changeRequestAction(
+                                        cr.id,
+                                        'decline',
+                                      ),
+                                child: Text(
+                                  'Decline',
+                                  style: TextStyle(color: AeraColors.danger),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      const SizedBox(height: 14),
+    ];
+  }
+
   void _scheduleThis(Job job) {
     context.push('/schedule-job/${job.id}');
   }
@@ -589,6 +852,96 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
+
+                // Phase 6.4 — completion review. PENDING blocks invoicing
+                // until a manager approves; CHANGES_REQUESTED reopens the
+                // technician's evidence path.
+                if (job.reviewState == 'PENDING' ||
+                    job.reviewState == 'CHANGES_REQUESTED' ||
+                    job.reviewState == 'APPROVED') ...[
+                  AeraCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              job.reviewState == 'APPROVED'
+                                  ? Icons.verified_outlined
+                                  : job.reviewState == 'CHANGES_REQUESTED'
+                                  ? Icons.assignment_return_outlined
+                                  : Icons.rate_review_outlined,
+                              size: 18,
+                              color: job.reviewState == 'APPROVED'
+                                  ? AeraColors.accent
+                                  : job.reviewState == 'CHANGES_REQUESTED'
+                                  ? AeraColors.warning
+                                  : AeraColors.inkSoft,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                switch (job.reviewState) {
+                                  'APPROVED' => 'Completion approved',
+                                  'CHANGES_REQUESTED' => 'Changes requested',
+                                  _ => 'Completion review pending',
+                                },
+                                style: AeraTypography.bodyMedium.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (job.reviewNote != null &&
+                            job.reviewNote!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            job.reviewNote!,
+                            style: AeraTypography.bodySm.copyWith(
+                              color: AeraColors.inkSoft,
+                            ),
+                          ),
+                        ],
+                        if (job.reviewState == 'PENDING' &&
+                            canManagePortal) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: AeraButton(
+                                  text: 'Approve',
+                                  isLoading: _updating,
+                                  onPressed: _updating
+                                      ? null
+                                      : () => _reviewJob('APPROVED'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: AeraButton(
+                                  text: 'Request Changes',
+                                  variant: AeraButtonVariant.secondary,
+                                  isLoading: _updating,
+                                  onPressed: _updating
+                                      ? null
+                                      : () => _reviewJob('CHANGES_REQUESTED'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
+                // Phase 6.3/6.5 — field findings and change requests.
+                // Staff review these before approving completion or
+                // invoicing; technicians mutate them from the work screen.
+                ..._fieldReportSection(job, canManagePortal),
 
                 // Customer & Site Block
                 AeraCard(

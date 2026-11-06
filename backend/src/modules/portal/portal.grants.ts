@@ -26,6 +26,31 @@ async function assertIssuanceCap(db: PrismaLike, jobId: string) {
   }
 }
 
+/**
+ * Per-customer workspace issuance cap: at most 5 workspace grants per
+ * customer per hour, shared by issue and reissue. Each issuance revokes
+ * the customer's live session and can trigger SMS/email delivery, so it
+ * needs the same abuse bound as the per-job cap.
+ */
+async function assertWorkspaceIssuanceCap(
+  db: PrismaLike,
+  companyId: string,
+  customerId: string,
+) {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const recentGrants = await db.portalAccessGrant.count({
+    where: {
+      companyId,
+      customerId,
+      scope: "WORKSPACE",
+      createdAt: { gte: oneHourAgo },
+    },
+  });
+  if (recentGrants >= 5) {
+    throw new AppError("RATE_LIMITED", "Too many portal access issuances", 429);
+  }
+}
+
 async function lockJobForPortalMutation(db: PrismaLike, jobId: string) {
   await db.$queryRaw<Array<{ id: string }>>`
     SELECT "id"
@@ -413,6 +438,7 @@ export async function issueWorkspaceGrant(
           409,
         );
       }
+      await assertWorkspaceIssuanceCap(tx, context.companyId, customerId);
       const created = await tx.portalAccessGrant.create({
         data: {
           companyId: context.companyId,
@@ -466,6 +492,7 @@ export async function reissueWorkspaceGrant(
   );
   const grant = await prisma.$transaction(async (tx) => {
     await lockCustomerForPortalMutation(tx, context.companyId, customerId);
+    await assertWorkspaceIssuanceCap(tx, context.companyId, customerId);
     const current = await tx.portalAccessGrant.findFirst({
       where: {
         companyId: context.companyId,
@@ -534,6 +561,7 @@ export async function revokeWorkspaceGrant(
 ) {
   await loadCustomerInCompany(prisma, context.companyId, customerId);
   await prisma.$transaction(async (tx) => {
+    await lockCustomerForPortalMutation(tx, context.companyId, customerId);
     const grant = await tx.portalAccessGrant.findFirst({
       where: {
         companyId: context.companyId,
@@ -544,8 +572,10 @@ export async function revokeWorkspaceGrant(
       select: { id: true },
     });
     if (!grant) return;
-    await tx.portalAccessGrant.update({
-      where: { id: grant.id },
+    // Claim the ACTIVE grant so a concurrent reissue cannot interleave a
+    // second deactivation/audit for the same grant.
+    const deactivated = await tx.portalAccessGrant.updateMany({
+      where: { id: grant.id, status: "ACTIVE" },
       data: {
         status: "DEACTIVATED",
         deactivatedAt: new Date(),
@@ -553,6 +583,7 @@ export async function revokeWorkspaceGrant(
         deactivatedBy: context.userId,
       },
     });
+    if (deactivated.count !== 1) return;
     await tx.portalSession.updateMany({
       where: { grantId: grant.id, revokedAt: null },
       data: { revokedAt: new Date() },

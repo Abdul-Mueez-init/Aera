@@ -423,7 +423,7 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
       const approveRes = await request(app)
         .post(`/api/v1/quotes/${quote.id}/respond`)
         .set(auth)
-        .send({ action: "APPROVED" });
+        .send({ action: "APPROVED", reason: "Customer approved by phone" });
       expect(approveRes.status).toBe(200);
       expect(approveRes.body.data.status).toBe("APPROVED");
 
@@ -780,7 +780,7 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     const approveRes = await request(app)
       .post(`/api/v1/quotes/${quote.body.data.id}/respond`)
       .set(auth)
-      .send({ action: "APPROVED" });
+      .send({ action: "APPROVED", reason: "Customer approved by phone" });
     expect(approveRes.status).toBe(200);
     expect(approveRes.body.data.status).toBe("APPROVED");
     expect(approveRes.body.data.approvedAt).toBeDefined();
@@ -798,7 +798,7 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     const secondApprove = await request(app)
       .post(`/api/v1/quotes/${quote.body.data.id}/respond`)
       .set(auth)
-      .send({ action: "APPROVED" });
+      .send({ action: "APPROVED", reason: "Customer approved by phone" });
     expect(secondApprove.status).toBe(200); // Idempotent - still returns 200
     expect(secondApprove.body.data.status).toBe("APPROVED");
 

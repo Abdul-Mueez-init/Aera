@@ -66,7 +66,16 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
 
     return Scaffold(
       backgroundColor: AeraColors.canvas,
-      appBar: AppBar(title: const Text('Invoices & Receivables')),
+      appBar: AppBar(
+        title: const Text('Invoices & Receivables'),
+        actions: [
+          IconButton(
+            tooltip: 'Disputes',
+            icon: const Icon(Icons.flag_outlined),
+            onPressed: () => context.push('/invoice-disputes'),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: invoicesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),

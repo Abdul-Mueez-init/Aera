@@ -6,10 +6,19 @@ import { prisma } from "../../db/prisma.js";
 import {
   createRequestMediaReadUrl,
   createRequestMediaUploadUrl,
+  deleteRequestMediaObjects,
   verifyRequestMediaUpload,
 } from "../../common/storage/supabase-storage.adapter.js";
+import { logger } from "../../common/logger.js";
+import { malwareScanner } from "./malware-scan.js";
 
 const maxFilesPerRequest = 20;
+// Per-session presign abuse cap: a stolen portal session cannot mint
+// unlimited upload authorizations even though each file is still capped.
+const maxPresignsPerSessionPerHour = 30;
+// Unconfirmed presigns are swept once they are this far past expiry —
+// long enough that an in-flight slow upload is never reaped mid-PUT.
+const unconfirmedUploadGraceMs = 24 * 60 * 60 * 1000;
 const maxBytesByMime: Record<string, number> = {
   "image/jpeg": 10_000_000,
   "image/png": 10_000_000,
@@ -95,6 +104,23 @@ async function presign(
       422,
     );
   }
+  if (uploader.uploaderType === "PORTAL") {
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const sessionPresigns = await prisma.serviceRequestUpload.count({
+      where: {
+        companyId,
+        portalSessionId: uploader.portalSessionId,
+        createdAt: { gte: hourAgo },
+      },
+    });
+    if (sessionPresigns >= maxPresignsPerSessionPerHour) {
+      throw new AppError(
+        "RATE_LIMITED",
+        "Too many upload authorizations — please try again later",
+        429,
+      );
+    }
+  }
   const result = await createRequestMediaUploadUrl(
     companyId,
     requestId,
@@ -149,6 +175,7 @@ async function confirm(
   requestId: string,
   objectKey: string,
   mimeType: string,
+  caption: string | undefined,
   uploader:
     | { uploaderType: "STAFF"; uploaderUserId: string }
     | { uploaderType: "PORTAL"; portalSessionId: string },
@@ -223,6 +250,14 @@ async function confirm(
       422,
     );
   }
+  const verdict = await malwareScanner().scan(objectKey);
+  if (verdict === "INFECTED") {
+    throw new AppError(
+      "UPLOAD_REJECTED",
+      "The uploaded file was rejected by security scanning",
+      422,
+    );
+  }
   const attachment = await prisma.$transaction(async (transaction) => {
     const claimed = await transaction.serviceRequestUpload.updateMany({
       where: { objectKey, confirmedAt: null },
@@ -245,6 +280,7 @@ async function confirm(
         mimeType: upload.mimeType,
         sizeBytes: BigInt(verification.sizeBytes),
         kind: attachmentKind(upload.mimeType),
+        caption: caption ?? null,
       },
     });
   });
@@ -260,9 +296,10 @@ export async function confirmRequestMedia(
   requestId: string,
   objectKey: string,
   mimeType: string,
+  caption?: string,
 ) {
   await assertRequestForStaff(context, requestId);
-  return confirm(context.companyId, requestId, objectKey, mimeType, {
+  return confirm(context.companyId, requestId, objectKey, mimeType, caption, {
     uploaderType: "STAFF",
     uploaderUserId: context.userId,
   });
@@ -273,9 +310,10 @@ export async function confirmPortalRequestMedia(
   requestId: string,
   objectKey: string,
   mimeType: string,
+  caption?: string,
 ) {
   const context = await assertRequestForPortal(request, requestId);
-  return confirm(context.companyId, requestId, objectKey, mimeType, {
+  return confirm(context.companyId, requestId, objectKey, mimeType, caption, {
     uploaderType: "PORTAL",
     portalSessionId: context.sessionId,
   });
@@ -324,3 +362,41 @@ export async function listPortalRequestMedia(
 }
 
 export { mediaTypes };
+
+/**
+ * Sweep expired, never-confirmed request-media presigns (Phase 3.2).
+ * Runs inside the portal maintenance sweep. Deletes the DB row only when
+ * no attachment references the object; the storage object is removed
+ * best-effort so a transient storage failure cannot block the row cleanup.
+ * Returns the number of uploads swept.
+ */
+export async function sweepExpiredRequestUploads(now = new Date()) {
+  const cutoff = new Date(now.getTime() - unconfirmedUploadGraceMs);
+  const expired = await prisma.serviceRequestUpload.findMany({
+    where: {
+      confirmedAt: null,
+      expiresAt: { lt: cutoff },
+    },
+    select: { id: true, objectKey: true },
+    take: 200,
+  });
+  if (expired.length === 0) return 0;
+  const attachments = await prisma.serviceRequestAttachment.findMany({
+    where: { objectKey: { in: expired.map((u) => u.objectKey) } },
+    select: { objectKey: true },
+  });
+  const referenced = new Set(attachments.map((a) => a.objectKey));
+  const deletable = expired.filter((u) => !referenced.has(u.objectKey));
+  if (deletable.length === 0) return 0;
+  const objectKeys = deletable.map((u) => u.objectKey);
+  await deleteRequestMediaObjects(objectKeys).catch((error) => {
+    logger.warn(
+      { err: error, count: objectKeys.length },
+      "request media sweep: storage delete failed",
+    );
+  });
+  const deleted = await prisma.serviceRequestUpload.deleteMany({
+    where: { id: { in: deletable.map((u) => u.id) }, confirmedAt: null },
+  });
+  return deleted.count;
+}

@@ -104,6 +104,76 @@ class ServiceRequestEvent {
   }
 }
 
+class ServiceRequestAttachment {
+  const ServiceRequestAttachment({
+    required this.id,
+    required this.mimeType,
+    required this.kind,
+    required this.sizeBytes,
+    required this.createdAt,
+    this.caption,
+    this.signedReadUrl,
+  });
+
+  final String id;
+  final String mimeType;
+  final String kind;
+  final int sizeBytes;
+  final DateTime createdAt;
+  final String? caption;
+  final String? signedReadUrl;
+
+  bool get isImage => mimeType.startsWith('image/');
+
+  factory ServiceRequestAttachment.fromJson(Map<String, dynamic> json) {
+    return ServiceRequestAttachment(
+      id: json['id'] as String? ?? '',
+      mimeType: json['mimeType'] as String? ?? '',
+      kind: json['kind'] as String? ?? 'DOCUMENT',
+      sizeBytes: int.tryParse('${json['sizeBytes']}') ?? 0,
+      createdAt: (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+              DateTime.now())
+          .toLocal(),
+      caption: json['caption'] as String?,
+      signedReadUrl: json['signedReadUrl'] as String?,
+    );
+  }
+}
+
+class ServiceRequestMessage {
+  const ServiceRequestMessage({
+    required this.id,
+    required this.authorType,
+    required this.body,
+    required this.createdAt,
+    this.authorName,
+  });
+
+  final String id;
+  final String authorType;
+  final String body;
+  final DateTime createdAt;
+  final String? authorName;
+
+  bool get isStaff => authorType == 'STAFF';
+
+  factory ServiceRequestMessage.fromJson(Map<String, dynamic> json) {
+    final author =
+        (json['authorUser'] ?? json['author']) as Map<String, dynamic>?;
+    return ServiceRequestMessage(
+      id: json['id'] as String? ?? '',
+      authorType: json['authorType'] as String? ?? 'STAFF',
+      body: json['body'] as String? ?? '',
+      createdAt: (DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+              DateTime.now())
+          .toLocal(),
+      authorName: author == null
+          ? null
+          : '${author['firstName'] ?? ''} ${author['lastName'] ?? ''}'.trim(),
+    );
+  }
+}
+
 class PaginatedServiceRequests {
   const PaginatedServiceRequests({required this.items, required this.meta});
   final List<ServiceRequest> items;
@@ -139,6 +209,7 @@ class RequestsRepository {
     String? status,
     String? priority,
     bool? requiresInspection,
+    String? aging,
     String? search,
   }) async {
     final data = await _client.get('/api/v1/service-requests', queryParameters: {
@@ -148,6 +219,7 @@ class RequestsRepository {
       'priority': ?priority,
       if (requiresInspection != null)
         'requiresInspection': '$requiresInspection',
+      'aging': ?aging,
       if (search != null && search.isNotEmpty) 'search': search,
     }) as Map<String, dynamic>;
     return PaginatedServiceRequests(
@@ -183,5 +255,42 @@ class RequestsRepository {
       '/api/v1/service-requests/$id/$action',
     ) as Map<String, dynamic>;
     return ServiceRequest.fromJson(data);
+  }
+
+  Future<List<ServiceRequestAttachment>> listRequestMedia(String id) async {
+    final data = await _client.get('/api/v1/service-requests/$id/media')
+        as List<dynamic>;
+    return data
+        .map((item) =>
+            ServiceRequestAttachment.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<ServiceRequestMessage>> listRequestMessages(String id) async {
+    final data = await _client.get('/api/v1/service-requests/$id/messages')
+        as List<dynamic>;
+    return data
+        .map((item) =>
+            ServiceRequestMessage.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<ServiceRequest> requestInformation(String id, String body) async {
+    final data = await _client.post(
+      '/api/v1/service-requests/$id/request-information',
+      body: {'body': body.trim()},
+    ) as Map<String, dynamic>;
+    return ServiceRequest.fromJson(data);
+  }
+
+  Future<ServiceRequestMessage> postRequestMessage(
+    String id,
+    String body,
+  ) async {
+    final data = await _client.post(
+      '/api/v1/service-requests/$id/messages',
+      body: {'body': body.trim()},
+    ) as Map<String, dynamic>;
+    return ServiceRequestMessage.fromJson(data);
   }
 }

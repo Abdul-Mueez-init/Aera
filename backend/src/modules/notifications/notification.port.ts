@@ -23,7 +23,14 @@ export type NotificationEventType =
   | "QUOTE_APPROVED"
   | "QUOTE_DECLINED"
   | "INVOICE_ISSUED"
-  | "INVOICE_PAYMENT_REMINDER";
+  | "INVOICE_PAYMENT_REMINDER"
+  | "REQUEST_SUBMITTED"
+  | "REQUEST_INFO_PROVIDED"
+  | "REQUEST_STATUS_CHANGED"
+  | "JOB_CHANGE_REQUEST_SUBMITTED"
+  | "JOB_REVIEW_CHANGES_REQUESTED"
+  | "INVOICE_DISPUTE_OPENED"
+  | "INVOICE_DISPUTE_RESOLVED";
 
 export interface NotificationEvent {
   type: NotificationEventType;
@@ -31,6 +38,8 @@ export interface NotificationEvent {
   jobId?: string;
   quoteId?: string;
   invoiceId?: string;
+  requestId?: string;
+  disputeId?: string;
   recipientUserId?: string;
 }
 
@@ -49,6 +58,8 @@ function buildPayload(event: NotificationEvent): Record<string, string> {
   if (event.jobId) payload.jobId = event.jobId;
   if (event.quoteId) payload.quoteId = event.quoteId;
   if (event.invoiceId) payload.invoiceId = event.invoiceId;
+  if (event.requestId) payload.requestId = event.requestId;
+  if (event.disputeId) payload.disputeId = event.disputeId;
   return payload;
 }
 
@@ -318,6 +329,7 @@ export const notificationPublisher: NotificationPublisher = {
                   event.jobId ?? "",
                   event.quoteId ?? "",
                   event.invoiceId ?? "",
+                  event.requestId ?? "",
                 ].join(":"),
               }),
             ),

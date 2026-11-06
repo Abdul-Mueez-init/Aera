@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Your location is used only when you choose it as your company's dispatch headquarters.</string>
+	<string>While a job is en route, your location is shared with the customer so they can see your ETA. Sharing stops when you arrive.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 		<key>NSCameraUsageDescription</key>

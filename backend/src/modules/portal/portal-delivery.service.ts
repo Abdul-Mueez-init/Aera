@@ -3,6 +3,8 @@ import { AppError } from "../../common/errors.js";
 import { logger } from "../../common/logger.js";
 import { inProcessQueue } from "../../queue/in-process-queue.adapter.js";
 import type { QueueJob } from "../../queue/queue.port.js";
+import { env } from "../../config/env.js";
+import { enqueueNotificationOutbox } from "../notifications/notification-outbox.service.js";
 import { resendEmailAdapter } from "../notifications/resend-email.adapter.js";
 import { textbeeSmsAdapter } from "../notifications/textbee-sms.adapter.js";
 import {
@@ -202,22 +204,49 @@ export async function sendPortalLink(
     }
 
     try {
-      await inProcessQueue.enqueue<PortalLinkDeliveryJob>(
-        LINK_DELIVERY_JOB_TYPE,
-        {
+      if (env.NOTIFICATION_OUTBOX_ENABLED) {
+        // Phase 8.1 — durable outbox path: the row stores the grant
+        // reference and destination only; the single-use link token is
+        // minted by the outbox worker at send time, so the plaintext
+        // token is never persisted anywhere.
+        await enqueueNotificationOutbox({
           companyId: input.companyId,
-          customerId: input.customerId,
-          jobId: input.jobId,
-          grantId: input.grantId,
-          jobNumber: input.jobNumber,
-          channel,
-          link: input.link,
-          companyName: company.name,
-          customerFirstName: customer.firstName,
-          destination,
-        },
-        { maxAttempts: LINK_DELIVERY_MAX_ATTEMPTS },
-      );
+          channel: channel === "SMS" ? "SMS" : "EMAIL",
+          template: "PORTAL_LINK",
+          payload: {
+            grantId: input.grantId,
+            destination,
+            companyName: company.name,
+            customerFirstName: customer.firstName,
+            jobNumber: input.jobNumber?.toString() ?? "",
+            jobId: input.jobId ?? "",
+            customerId: input.customerId,
+          },
+          dedupeKey: [
+            input.companyId,
+            input.grantId,
+            channel,
+            "PORTAL_LINK",
+          ].join(":"),
+        });
+      } else {
+        await inProcessQueue.enqueue<PortalLinkDeliveryJob>(
+          LINK_DELIVERY_JOB_TYPE,
+          {
+            companyId: input.companyId,
+            customerId: input.customerId,
+            jobId: input.jobId,
+            grantId: input.grantId,
+            jobNumber: input.jobNumber,
+            channel,
+            link: input.link,
+            companyName: company.name,
+            customerFirstName: customer.firstName,
+            destination,
+          },
+          { maxAttempts: LINK_DELIVERY_MAX_ATTEMPTS },
+        );
+      }
       results.push({ channel, status: "QUEUED" });
     } catch (error) {
       // Enqueue itself failed (e.g. queue at capacity): audit and report,

@@ -30,6 +30,9 @@ export interface DashboardSummary {
   unassignedJobs: number;
   openServiceRequests: number;
   needsInfoServiceRequests: number;
+  newServiceRequests: number;
+  agingServiceRequests: number;
+  waitingOnCustomerServiceRequests: number;
   outstandingInvoices: {
     count: number;
     balanceDueByCurrency: Array<{ currency: string; totalMinor: string }>;
@@ -86,6 +89,7 @@ export async function getDashboardSummary(
 
   const todayBounds = dayBoundsInTimezone(dateStr, timezone);
   const monthBounds = dayBoundsInTimezone(monthStartDateStr(dateStr), timezone);
+  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   // Note: Concurrent queries using Promise.all are safe here because:
   // 1. Prisma manages the connection pool, not the pg driver directly
@@ -101,6 +105,9 @@ export async function getDashboardSummary(
     revenueGroups,
     openServiceRequests,
     needsInfoServiceRequests,
+    newServiceRequests,
+    agingServiceRequests,
+    waitingOnCustomerServiceRequests,
   ] = await Promise.all([
     prisma.job.count({
       where: {
@@ -147,6 +154,22 @@ export async function getDashboardSummary(
     prisma.serviceRequest.count({
       where: { companyId, status: "NEEDS_INFO" },
     }),
+    prisma.serviceRequest.count({
+      where: { companyId, status: "SUBMITTED" },
+    }),
+    prisma.serviceRequest.count({
+      where: {
+        companyId,
+        status: "SUBMITTED",
+        createdAt: { lt: dayAgo },
+      },
+    }),
+    prisma.serviceRequest.count({
+      where: {
+        companyId,
+        status: { in: ["NEEDS_INFO", "QUOTED"] },
+      },
+    }),
   ]);
 
   return {
@@ -160,6 +183,9 @@ export async function getDashboardSummary(
     unassignedJobs,
     openServiceRequests,
     needsInfoServiceRequests,
+    newServiceRequests,
+    agingServiceRequests,
+    waitingOnCustomerServiceRequests,
     outstandingInvoices: {
       count: outstandingGroups.reduce((sum, row) => sum + row._count._all, 0),
       balanceDueByCurrency: outstandingGroups.map((row) => ({

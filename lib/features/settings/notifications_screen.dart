@@ -66,6 +66,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         return Icons.receipt_long;
       case 'INVOICE_PAYMENT_REMINDER':
         return Icons.notifications_active;
+      case 'REQUEST_SUBMITTED':
+        return Icons.assignment_outlined;
+      case 'REQUEST_INFO_PROVIDED':
+        return Icons.forum_outlined;
+      case 'REQUEST_STATUS_CHANGED':
+        return Icons.sync_alt;
+      case 'JOB_CHANGE_REQUEST_SUBMITTED':
+        return Icons.add_circle_outline;
+      case 'JOB_REVIEW_CHANGES_REQUESTED':
+        return Icons.assignment_return_outlined;
       default:
         return Icons.notifications;
     }
@@ -108,6 +118,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         return 'Invoice Issued';
       case 'INVOICE_PAYMENT_REMINDER':
         return 'Payment Reminder';
+      case 'REQUEST_SUBMITTED':
+        return 'New Service Request';
+      case 'REQUEST_INFO_PROVIDED':
+        return 'Customer Replied';
+      case 'REQUEST_STATUS_CHANGED':
+        return 'Request Updated';
+      case 'JOB_CHANGE_REQUEST_SUBMITTED':
+        return 'Change Request';
+      case 'JOB_REVIEW_CHANGES_REQUESTED':
+        return 'Changes Requested';
       default:
         return type.replaceAll('_', ' ');
     }

@@ -10,6 +10,7 @@ import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_status_chip.dart';
 import '../../core/widgets/aera_text_field.dart';
+import '../auth/providers/auth_provider.dart';
 import '../jobs/providers/jobs_provider.dart';
 import 'data/invoices_repository.dart';
 import 'providers/invoices_provider.dart';
@@ -56,6 +57,201 @@ class InvoiceDetailScreen extends ConsumerStatefulWidget {
 
 class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
   bool _issuing = false;
+  bool _addingItem = false;
+  bool _refunding = false;
+
+  /// Phase 7.5 — OWNER-only refund against a recorded payment.
+  Future<void> _refund(Payment payment) async {
+    if (_refunding) return;
+    final amountController = TextEditingController(
+      text: (payment.amountMinor / 100).toStringAsFixed(2),
+    );
+    final reasonController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AeraColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
+        title: Text('Refund payment', style: AeraTypography.h3),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AeraTextField(
+              label: 'Amount (${payment.currency})',
+              controller: amountController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+            ),
+            const SizedBox(height: 12),
+            AeraTextField(
+              label: 'Reason (required)',
+              controller: reasonController,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Refund'),
+          ),
+        ],
+      ),
+    );
+    final amount = (double.tryParse(amountController.text.trim()) ?? 0) * 100;
+    final reason = reasonController.text.trim();
+    amountController.dispose();
+    reasonController.dispose();
+    if (confirmed != true || amount <= 0 || reason.isEmpty || !mounted) {
+      return;
+    }
+    setState(() => _refunding = true);
+    try {
+      await ref
+          .read(invoicesRepositoryProvider)
+          .createRefund(
+            widget.invoiceId,
+            paymentId: payment.id,
+            amountMinor: amount.round(),
+            reason: reason,
+          );
+      ref.invalidate(invoiceDetailProvider(widget.invoiceId));
+      ref.invalidate(invoicesListProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Refund issued')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Refund failed: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _refunding = false);
+    }
+  }
+
+  /// Phase 6.6 — staff add a MANUAL line while reviewing the DRAFT
+  /// preview. Totals are recomputed server-side.
+  Future<void> _addLineItem() async {
+    final descriptionController = TextEditingController();
+    final qtyController = TextEditingController(text: '1');
+    final priceController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AeraColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: AeraRadii.borderLg),
+        title: Text(
+          'Add Line Item',
+          style: AeraTypography.h3.copyWith(fontSize: 17),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AeraTextField(
+              label: 'Description',
+              hintText: 'e.g. Trip charge',
+              controller: descriptionController,
+            ),
+            const SizedBox(height: 12),
+            AeraTextField(
+              label: 'Quantity',
+              controller: qtyController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+            ),
+            const SizedBox(height: 12),
+            AeraTextField(
+              label: 'Unit price (e.g. 25.00)',
+              controller: priceController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              'Cancel',
+              style: AeraTypography.bodyMedium.copyWith(
+                color: AeraColors.inkSoft,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              'Add',
+              style: AeraTypography.bodyMedium.copyWith(
+                color: AeraColors.accent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final description = descriptionController.text.trim();
+    final quantity = double.tryParse(qtyController.text.trim());
+    final price = double.tryParse(priceController.text.trim());
+    if (result != true ||
+        description.isEmpty ||
+        quantity == null ||
+        quantity <= 0 ||
+        price == null ||
+        price < 0) {
+      if (result == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Enter a description, quantity, and price'),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _addingItem = true);
+    try {
+      await ref
+          .read(invoicesRepositoryProvider)
+          .addInvoiceItem(
+            widget.invoiceId,
+            description: description,
+            quantity: quantity,
+            unitPriceMinor: (price * 100).round(),
+          );
+      ref.invalidate(invoiceDetailProvider(widget.invoiceId));
+      ref.invalidate(invoicesListProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Line item added')));
+      }
+    } catch (e) {
+      if (mounted) {
+        final message = e is ApiException
+            ? e.message
+            : 'Could not add line item. Please try again.';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } finally {
+      if (mounted) setState(() => _addingItem = false);
+    }
+  }
 
   Future<void> _issueInvoice() async {
     setState(() => _issuing = true);
@@ -433,6 +629,19 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                                   color: AeraColors.outline,
                                 ),
                               ),
+                              if (ref.watch(currentRoleProvider) == 'OWNER' &&
+                                  payment.amountMinor > 0)
+                                IconButton(
+                                  tooltip: 'Refund',
+                                  icon: const Icon(
+                                    Icons.undo,
+                                    size: 18,
+                                    color: AeraColors.inkSoft,
+                                  ),
+                                  onPressed: _refunding
+                                      ? null
+                                      : () => _refund(payment),
+                                ),
                             ],
                           ),
                         ),
@@ -441,7 +650,15 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
               ),
               const SizedBox(height: 20),
 
-              if (invoice.status == 'DRAFT')
+              if (invoice.status == 'DRAFT') ...[
+                AeraButton(
+                  text: 'Add Line Item',
+                  variant: AeraButtonVariant.secondary,
+                  icon: const Icon(Icons.add, size: 18, color: AeraColors.ink),
+                  isLoading: _addingItem,
+                  onPressed: _addingItem ? null : _addLineItem,
+                ),
+                const SizedBox(height: 10),
                 AeraButton(
                   text: 'Issue Invoice',
                   icon: const Icon(
@@ -452,6 +669,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                   isLoading: _issuing,
                   onPressed: _issuing ? null : _issueInvoice,
                 ),
+              ],
               if (invoice.status == 'ISSUED' ||
                   invoice.status == 'PARTIALLY_PAID' ||
                   invoice.status == 'OVERDUE') ...[
@@ -499,6 +717,25 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                     color: AeraColors.outline,
                   ),
                 ),
+                // Phase 6.6 — provenance label so staff can trace each
+                // line back to the approved quote, logged part, or an
+                // authorized change request.
+                if (item.sourceType != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    switch (item.sourceType) {
+                      'QUOTE_ITEM' => 'From approved quote',
+                      'JOB_PART' => 'Logged part',
+                      'AUTHORIZATION' => 'Authorized change',
+                      'MANUAL' => 'Manual / credit',
+                      _ => item.sourceType!,
+                    },
+                    style: AeraTypography.label.copyWith(
+                      fontSize: 10,
+                      color: AeraColors.accent,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

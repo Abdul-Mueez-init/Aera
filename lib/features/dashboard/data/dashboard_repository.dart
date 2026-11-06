@@ -15,6 +15,9 @@ class DashboardSummary {
     required this.unassignedJobs,
     this.openServiceRequests = 0,
     this.needsInfoServiceRequests = 0,
+    this.newServiceRequests = 0,
+    this.agingServiceRequests = 0,
+    this.waitingOnCustomerServiceRequests = 0,
     required this.outstandingInvoices,
     required this.revenueThisMonth,
   });
@@ -26,6 +29,9 @@ class DashboardSummary {
   final int unassignedJobs;
   final int openServiceRequests;
   final int needsInfoServiceRequests;
+  final int newServiceRequests;
+  final int agingServiceRequests;
+  final int waitingOnCustomerServiceRequests;
   final OutstandingInvoices outstandingInvoices;
   final RevenueThisMonth revenueThisMonth;
 
@@ -43,6 +49,10 @@ class DashboardSummary {
         openServiceRequests: json['openServiceRequests'] as int? ?? 0,
         needsInfoServiceRequests:
             json['needsInfoServiceRequests'] as int? ?? 0,
+        newServiceRequests: json['newServiceRequests'] as int? ?? 0,
+        agingServiceRequests: json['agingServiceRequests'] as int? ?? 0,
+        waitingOnCustomerServiceRequests:
+            json['waitingOnCustomerServiceRequests'] as int? ?? 0,
         outstandingInvoices: OutstandingInvoices.fromJson(
           json['outstandingInvoices'] as Map<String, dynamic>? ?? {},
         ),

@@ -8,6 +8,7 @@ class RequestsQuery {
     this.status,
     this.priority,
     this.requiresInspection,
+    this.aging,
     this.search = '',
   });
   final int page;
@@ -15,6 +16,7 @@ class RequestsQuery {
   final String? status;
   final String? priority;
   final bool? requiresInspection;
+  final String? aging;
   final String search;
 
   RequestsQuery copyWith({
@@ -22,10 +24,12 @@ class RequestsQuery {
     String? status,
     String? priority,
     bool? requiresInspection,
+    String? aging,
     String? search,
     bool clearStatus = false,
     bool clearPriority = false,
     bool clearInspection = false,
+    bool clearAging = false,
   }) =>
       RequestsQuery(
         page: page ?? this.page,
@@ -34,6 +38,7 @@ class RequestsQuery {
         priority: clearPriority ? null : priority ?? this.priority,
         requiresInspection:
             clearInspection ? null : requiresInspection ?? this.requiresInspection,
+        aging: clearAging ? null : aging ?? this.aging,
         search: search ?? this.search,
       );
 
@@ -44,11 +49,12 @@ class RequestsQuery {
       status == other.status &&
       priority == other.priority &&
       requiresInspection == other.requiresInspection &&
+      aging == other.aging &&
       search == other.search;
 
   @override
   int get hashCode =>
-      Object.hash(page, status, priority, requiresInspection, search);
+      Object.hash(page, status, priority, requiresInspection, aging, search);
 }
 
 final requestsQueryProvider =
@@ -62,6 +68,7 @@ final requestsListProvider = FutureProvider<PaginatedServiceRequests>((ref) {
         status: query.status,
         priority: query.priority,
         requiresInspection: query.requiresInspection,
+        aging: query.aging,
         search: query.search,
       );
 });
@@ -69,4 +76,14 @@ final requestsListProvider = FutureProvider<PaginatedServiceRequests>((ref) {
 final requestDetailProvider =
     FutureProvider.family<ServiceRequest, String>((ref, id) {
   return ref.watch(requestsRepositoryProvider).getRequest(id);
+});
+
+final requestMediaProvider =
+    FutureProvider.family<List<ServiceRequestAttachment>, String>((ref, id) {
+  return ref.watch(requestsRepositoryProvider).listRequestMedia(id);
+});
+
+final requestMessagesProvider =
+    FutureProvider.family<List<ServiceRequestMessage>, String>((ref, id) {
+  return ref.watch(requestsRepositoryProvider).listRequestMessages(id);
 });

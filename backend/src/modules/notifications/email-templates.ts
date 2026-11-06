@@ -214,6 +214,89 @@ export async function buildNotificationEmail(
       return { to: recipient.email, subject, html, text };
     }
 
+    case "REQUEST_SUBMITTED":
+    case "REQUEST_INFO_PROVIDED":
+    case "REQUEST_STATUS_CHANGED": {
+      if (!event.requestId) return null;
+      const request = await prisma.serviceRequest.findFirst({
+        where: { id: event.requestId, companyId: event.companyId },
+        select: {
+          requestNumber: true,
+          title: true,
+          status: true,
+          customer: { select: { firstName: true, lastName: true } },
+        },
+      });
+      if (!request) return null;
+
+      const subject =
+        event.type === "REQUEST_SUBMITTED"
+          ? `New service request #${request.requestNumber}`
+          : event.type === "REQUEST_INFO_PROVIDED"
+            ? `Customer replied on request #${request.requestNumber}`
+            : `Service request #${request.requestNumber} updated`;
+      const { html, text } = renderShell(subject, [
+        `${request.title} — ${request.customer.firstName} ${request.customer.lastName}.`,
+        `Status: ${request.status.replace(/_/g, " ").toLowerCase()}.`,
+      ]);
+      return { to: recipient.email, subject, html, text };
+    }
+
+    case "JOB_CHANGE_REQUEST_SUBMITTED":
+    case "JOB_REVIEW_CHANGES_REQUESTED": {
+      if (!event.jobId) return null;
+      const job = await prisma.job.findFirst({
+        where: { id: event.jobId, companyId: event.companyId },
+        select: {
+          jobNumber: true,
+          serviceType: true,
+          reviewNote: true,
+          customer: { select: { firstName: true, lastName: true } },
+        },
+      });
+      if (!job) return null;
+
+      const subject =
+        event.type === "JOB_CHANGE_REQUEST_SUBMITTED"
+          ? `Change request on job #${job.jobNumber}`
+          : `Changes requested on job #${job.jobNumber}`;
+      const lines = [
+        `${job.serviceType} for ${job.customer.firstName} ${job.customer.lastName}.`,
+      ];
+      if (job.reviewNote) lines.push(`Note: ${job.reviewNote}`);
+      const { html, text } = renderShell(subject, lines);
+      return { to: recipient.email, subject, html, text };
+    }
+
+    case "INVOICE_DISPUTE_OPENED":
+    case "INVOICE_DISPUTE_RESOLVED": {
+      if (!event.invoiceId) return null;
+      const dispute = event.disputeId
+        ? await prisma.invoiceDispute.findFirst({
+            where: { id: event.disputeId, companyId: event.companyId },
+            select: {
+              reason: true,
+              status: true,
+              resolution: true,
+              invoice: { select: { invoiceNumber: true } },
+            },
+          })
+        : null;
+      const invoiceNumber =
+        dispute?.invoice.invoiceNumber ?? event.invoiceId;
+      const opened = event.type === "INVOICE_DISPUTE_OPENED";
+      const subject = opened
+        ? `Dispute opened on invoice ${invoiceNumber}`
+        : `Dispute resolved on invoice ${invoiceNumber}`;
+      const lines = [
+        opened
+          ? `A customer disputed invoice ${invoiceNumber} (${(dispute?.reason ?? "OTHER").replace(/_/g, " ").toLowerCase()}).`
+          : `The dispute on invoice ${invoiceNumber} was resolved${dispute?.resolution ? ` as ${dispute.resolution.toLowerCase()}` : ""}.`,
+      ];
+      const { html, text } = renderShell(subject, lines);
+      return { to: recipient.email, subject, html, text };
+    }
+
     default:
       // Safety net for a future NotificationEventType (e.g. an eventual
       // INVOICE_PAYMENT_REMINDER) added to the union without a template yet

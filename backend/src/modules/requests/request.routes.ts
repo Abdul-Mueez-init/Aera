@@ -47,6 +47,7 @@ const listSchema = z.object({
   status: z.enum(requestStatuses).optional(),
   priority: z.enum(priorities).optional(),
   requiresInspection: z.coerce.boolean().optional(),
+  aging: z.enum(["24h", "72h"]).optional(),
   search: z.string().trim().max(100).optional(),
 });
 
@@ -56,6 +57,7 @@ const mediaPresignSchema = z.object({
 const mediaConfirmSchema = z.object({
   objectKey: z.string().trim().min(1).max(500),
   mimeType: z.string().trim().min(1).max(100),
+  caption: z.string().trim().max(500).optional(),
 });
 const messageSchema = z.object({ body: z.string().trim().min(1).max(4000) });
 
@@ -147,6 +149,7 @@ router.post(
         routeId(request.params.requestId),
         parsed.data.objectKey,
         parsed.data.mimeType,
+        parsed.data.caption,
       ),
     });
   },

@@ -13,6 +13,7 @@ import '../../core/widgets/aera_button.dart';
 import '../../core/widgets/aera_card.dart';
 import '../../core/widgets/aera_status_chip.dart';
 import '../jobs/providers/jobs_provider.dart';
+import 'data/location_tracker.dart';
 import 'providers/technician_provider.dart';
 import 'widgets/handshake_code_sheet.dart';
 
@@ -26,6 +27,30 @@ class EnRouteScreen extends ConsumerStatefulWidget {
 }
 
 class _EnRouteScreenState extends ConsumerState<EnRouteScreen> {
+  bool _trackingDenied = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTracking();
+  }
+
+  @override
+  void dispose() {
+    ref.read(jobLocationTrackerProvider).stop();
+    super.dispose();
+  }
+
+  Future<void> _startTracking() async {
+    final result = await ref
+        .read(jobLocationTrackerProvider)
+        .start(widget.jobId);
+    if (!mounted) return;
+    if (result == TrackingStartResult.permissionDenied) {
+      setState(() => _trackingDenied = true);
+    }
+  }
+
   void _refreshEverywhere() {
     ref.invalidate(jobDetailProvider(widget.jobId));
     ref.invalidate(jobsListProvider);
@@ -52,6 +77,7 @@ class _EnRouteScreenState extends ConsumerState<EnRouteScreen> {
     );
     if (!mounted) return;
     if (result == true) {
+      ref.read(jobLocationTrackerProvider).stop();
       _refreshEverywhere();
       context.push('/technician/jobs/${widget.jobId}/work');
     } else if (result is String) {
@@ -114,6 +140,21 @@ class _EnRouteScreenState extends ConsumerState<EnRouteScreen> {
           ),
           data: (job) => Column(
             children: [
+              if (_trackingDenied)
+                Container(
+                  width: double.infinity,
+                  color: AeraColors.warningSoft,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  child: const Text(
+                    'Location sharing is off — the customer can\'t see your '
+                    'ETA. Enable location access in system settings to share '
+                    'your position while en route.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ),
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.symmetric(

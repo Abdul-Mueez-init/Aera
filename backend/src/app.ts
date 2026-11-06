@@ -17,6 +17,8 @@ import { bookingRouter } from "./modules/scheduling/booking.routes.js";
 import { quoteRouter } from "./modules/quotes/quote.routes.js";
 import { invoiceRouter } from "./modules/invoices/invoice.routes.js";
 import { portalRouter } from "./modules/portal/portal.routes.js";
+import { paymentWebhookRouter } from "./modules/payments/payment-webhook.routes.js";
+import { sandboxPaymentRouter } from "./modules/payments/sandbox.routes.js";
 import { notificationRouter } from "./modules/notifications/notification.routes.js";
 import { aiRouter } from "./modules/ai/ai.routes.js";
 import { requestRouter } from "./modules/requests/request.routes.js";
@@ -68,6 +70,10 @@ export function buildApp() {
       }),
     );
   }
+
+  // Phase 7.2 — payment webhooks must see the RAW body for HMAC
+  // verification, so this router is mounted before express.json().
+  app.use("/api/v1/payments/webhook", paymentWebhookRouter);
 
   app.use(express.json({ limit: "1mb" }));
 
@@ -150,6 +156,7 @@ export function buildApp() {
   app.use("/api/v1/quotes", quoteRouter);
   app.use("/api/v1/invoices", invoiceRouter);
   app.use("/api/v1/portal", portalRouter);
+  app.use("/api/v1/payments/sandbox", sandboxPaymentRouter);
   app.use("/api/v1/notifications", notificationRouter);
   app.use("/api/v1/ai", aiRouter);
 

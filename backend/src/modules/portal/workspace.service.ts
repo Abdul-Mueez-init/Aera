@@ -8,6 +8,7 @@ import {
   assertCanReadRequest,
 } from "./portal.access.js";
 import type { QuoteStatus } from "../../generated/prisma/index.js";
+import { createCheckoutSession } from "../payments/payment-session.service.js";
 
 type WorkspaceContext = NonNullable<PortalRequest["portal"]>;
 
@@ -172,6 +173,21 @@ export async function getWorkspaceRequest(
           authorUser: { select: { firstName: true, lastName: true } },
         },
       },
+      appointmentProposals: {
+        where: { status: { in: ["OPEN", "PICKED"] } },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: {
+          id: true,
+          windows: true,
+          pickedWindow: true,
+          status: true,
+          expiresAt: true,
+          pickedAt: true,
+          quoteId: true,
+          jobId: true,
+        },
+      },
     },
   });
   if (!request)
@@ -331,6 +347,7 @@ export async function getWorkspaceJob(
       scheduledStart: true,
       scheduledEnd: true,
       completedAt: true,
+      completionSummary: true,
       handshakeVerifiedAt: true,
       reviewState: true,
       findings: {
@@ -435,6 +452,7 @@ export async function getWorkspaceInvoice(
     select: {
       id: true,
       invoiceNumber: true,
+      kind: true,
       status: true,
       totalMinor: true,
       amountPaidMinor: true,
@@ -442,6 +460,7 @@ export async function getWorkspaceInvoice(
       currency: true,
       issuedAt: true,
       dueAt: true,
+      paidAt: true,
       items: {
         orderBy: { sortOrder: "asc" },
         select: {
@@ -451,9 +470,166 @@ export async function getWorkspaceInvoice(
           totalMinor: true,
         },
       },
+      // Credits applied TO this invoice (e.g. a deposit invoice covering
+      // part of this one). Whitelisted: only the source invoice number,
+      // the applied amount and when it was applied.
+      creditTargets: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          amountMinor: true,
+          createdAt: true,
+          sourceInvoice: { select: { invoiceNumber: true } },
+        },
+      },
+      // Phase 7.3 — payments the customer made against this invoice.
+      payments: {
+        orderBy: { receivedAt: "desc" },
+        select: {
+          id: true,
+          amountMinor: true,
+          currency: true,
+          method: true,
+          provider: true,
+          receivedAt: true,
+        },
+      },
+      // Phase 7.3 — checkout sessions so the client can show
+      // pending/failed/expired payment states without trusting redirects.
+      paymentSessions: {
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: {
+          id: true,
+          status: true,
+          amountMinor: true,
+          currency: true,
+          expiresAt: true,
+          createdAt: true,
+        },
+      },
+      disputes: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          reason: true,
+          status: true,
+          resolution: true,
+          resolutionNote: true,
+          createdAt: true,
+          resolvedAt: true,
+        },
+      },
     },
   });
   if (!invoice)
     throw new AppError("RESOURCE_NOT_FOUND", "Invoice not found", 404);
   return jsonSafe(invoice);
+}
+
+/**
+ * Phase 7.3 — start (or idempotently replay) an online checkout session
+ * for this invoice's outstanding balance.
+ */
+export async function payWorkspaceInvoice(
+  context: WorkspaceContext,
+  invoiceId: string,
+  idempotencyKey: string,
+) {
+  await assertCanReadInvoice(context, invoiceId);
+  const invoice = await prisma.invoice.findFirst({
+    where: {
+      id: invoiceId,
+      companyId: context.companyId,
+      customerId: context.customerId,
+      status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] },
+    },
+    select: { id: true, balanceDueMinor: true },
+  });
+  if (!invoice || invoice.balanceDueMinor <= 0n) {
+    throw new AppError("INVOICE_NOT_PAYABLE", "Invoice is not payable", 409);
+  }
+  const session = await createCheckoutSession({
+    companyId: context.companyId,
+    invoiceId,
+    portalSessionId: context.sessionId,
+    idempotencyKey,
+  });
+  return jsonSafe({
+    sessionId: session.id,
+    checkoutUrl: session.checkoutUrl,
+    amountMinor: session.amountMinor,
+    currency: session.currency,
+    status: session.status,
+    expiresAt: session.expiresAt,
+  });
+}
+
+/** Phase 7.3 — customer's payment history across their invoices. */
+export async function listWorkspacePayments(
+  context: WorkspaceContext,
+  page: number,
+  pageSize: number,
+) {
+  const where = {
+    companyId: context.companyId,
+    invoice: { customerId: context.customerId, status: { not: "DRAFT" as const } },
+  };
+  const [items, total] = await prisma.$transaction([
+    prisma.payment.findMany({
+      where,
+      orderBy: { receivedAt: "desc" },
+      ...pageArgs(page, pageSize),
+      select: {
+        id: true,
+        invoiceId: true,
+        amountMinor: true,
+        currency: true,
+        method: true,
+        provider: true,
+        reference: true,
+        receivedAt: true,
+        invoice: { select: { invoiceNumber: true, kind: true } },
+      },
+    }),
+    prisma.payment.count({ where }),
+  ]);
+  return jsonSafe({ items, meta: pageMeta(page, pageSize, total) });
+}
+
+/** Phase 7.3 — receipt for a single payment. */
+export async function getWorkspacePaymentReceipt(
+  context: WorkspaceContext,
+  paymentId: string,
+) {
+  const payment = await prisma.payment.findFirst({
+    where: {
+      id: paymentId,
+      companyId: context.companyId,
+      invoice: { customerId: context.customerId },
+    },
+    select: {
+      id: true,
+      invoiceId: true,
+      amountMinor: true,
+      currency: true,
+      method: true,
+      provider: true,
+      providerPaymentId: true,
+      reference: true,
+      receivedAt: true,
+      invoice: {
+        select: {
+          invoiceNumber: true,
+          kind: true,
+          totalMinor: true,
+          company: { select: { name: true } },
+        },
+      },
+    },
+  });
+  if (!payment) {
+    throw new AppError("RESOURCE_NOT_FOUND", "Payment not found", 404);
+  }
+  await assertCanReadInvoice(context, payment.invoiceId);
+  return jsonSafe(payment);
 }

@@ -1,8 +1,12 @@
 import { AppError } from "../../common/errors.js";
 import type { AuthContext } from "../../common/auth/auth.types.js";
 import { prisma } from "../../db/prisma.js";
+import { distanceKm } from "../companies/osm-geo.service.js";
 
 const STALE_AFTER_MS = 2 * 60 * 1000;
+// Phase 8.2 — ETA is distance × a fixed urban-speed factor, labeled
+// approximate everywhere it is shown. ~30 km/h including typical stops.
+const ETA_KM_PER_HOUR = 30;
 
 function assertCoordinates(latitude: number, longitude: number): void {
   if (
@@ -40,7 +44,11 @@ export async function updateJobLocation(
       companyId: context.companyId,
       assignedTechnicianId: context.userId,
     },
-    select: { id: true, status: true },
+    select: {
+      id: true,
+      status: true,
+      serviceAddress: { select: { lat: true, lng: true } },
+    },
   });
   if (!job) throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
   if (job.status !== "EN_ROUTE") {
@@ -51,6 +59,27 @@ export async function updateJobLocation(
     );
   }
 
+  // Approximate ETA: straight-line distance to the job's service address
+  // at a fixed urban speed. Null when the address has no coordinates.
+  const destLat = job.serviceAddress?.lat;
+  const destLng = job.serviceAddress?.lng;
+  const etaMinutes =
+    destLat != null && destLng != null
+      ? Math.max(
+          1,
+          Math.round(
+            (distanceKm(
+              input.latitude,
+              input.longitude,
+              Number(destLat),
+              Number(destLng),
+            ) /
+              ETA_KM_PER_HOUR) *
+              60,
+          ),
+        )
+      : null;
+
   const state = await prisma.jobTrackingState.upsert({
     where: { jobId },
     create: {
@@ -59,6 +88,7 @@ export async function updateJobLocation(
       lastLat: input.latitude,
       lastLng: input.longitude,
       accuracy: input.accuracy,
+      etaMinutes,
       sharingActive: true,
       consentAt: new Date(),
     },
@@ -66,6 +96,7 @@ export async function updateJobLocation(
       lastLat: input.latitude,
       lastLng: input.longitude,
       accuracy: input.accuracy,
+      etaMinutes,
       sharingActive: true,
     },
     select: {

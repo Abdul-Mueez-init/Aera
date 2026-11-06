@@ -54,6 +54,21 @@ final jobDetailProvider = FutureProvider.family<Job, String>((
   return repo.getJob(jobId);
 });
 
+/// Phase 6.3 findings for a job. Auto-disposed: findings are added during
+/// active field work and must refresh when the technician returns.
+final jobFindingsProvider = FutureProvider.autoDispose
+    .family<List<JobFinding>, String>((ref, jobId) async {
+      final repo = ref.watch(jobsRepositoryProvider);
+      return repo.listFindings(jobId);
+    });
+
+/// Phase 6.5 change requests for a job. Auto-disposed for the same reason.
+final jobChangeRequestsProvider = FutureProvider.autoDispose
+    .family<List<JobChangeRequest>, String>((ref, jobId) async {
+      final repo = ref.watch(jobsRepositoryProvider);
+      return repo.listChangeRequests(jobId);
+    });
+
 /// Active technicians for the assign list.
 ///
 /// Auto-disposed on purpose: the roster changes outside this screen (an

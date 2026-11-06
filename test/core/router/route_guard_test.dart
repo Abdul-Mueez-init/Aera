@@ -547,6 +547,9 @@ void main() {
         '/ai-insight/abc',
         '/company-settings',
         '/team',
+        '/service-requests',
+        '/service-requests/abc',
+        '/create-service-request',
       ]) {
         expect(
           _redirect(AuthGate.signedIn, path, role: 'TECHNICIAN'),

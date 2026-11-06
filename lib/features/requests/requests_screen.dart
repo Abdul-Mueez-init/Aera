@@ -18,6 +18,12 @@ const _statuses = <String, String?>{
   'Accepted': 'ACCEPTED',
 };
 
+const _agingFilters = <String, String?>{
+  'Any age': null,
+  'Over 24h': '24h',
+  'Over 72h': '72h',
+};
+
 AeraStatusType _statusType(String status) {
   switch (status) {
     case 'ACCEPTED':
@@ -90,6 +96,44 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                       ),
                     );
                   }).toList(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    ..._agingFilters.entries.map((entry) {
+                      final selected = query.aging == entry.value;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(entry.key),
+                          selected: selected,
+                          onSelected: (_) {
+                            ref.read(requestsQueryProvider.notifier).state =
+                                query.copyWith(
+                              page: 1,
+                              aging: entry.value,
+                              clearAging: entry.value == null,
+                            );
+                          },
+                        ),
+                      );
+                    }),
+                    FilterChip(
+                      label: const Text('Inspection'),
+                      selected: query.requiresInspection == true,
+                      onSelected: (selected) {
+                        ref.read(requestsQueryProvider.notifier).state =
+                            query.copyWith(
+                          page: 1,
+                          requiresInspection: selected ? true : null,
+                          clearInspection: !selected,
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 12),

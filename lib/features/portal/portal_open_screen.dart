@@ -13,8 +13,9 @@ import 'providers/portal_provider.dart';
 /// The link landing screen (`/open#t=…`, handoff 6.3).
 ///
 /// Reads the one-time token out of the URL fragment, establishes the
-/// portal session via [PortalSessionController.bootstrap] (existing
-/// session first, then the exchange), and routes onward:
+/// portal session via [PortalSessionController.bootstrap] (link exchange
+/// first so a new link replaces any stale session, then the existing
+/// session as fallback), and routes onward:
 /// active → `/p` (which drops the fragment — and the token — from the
 /// URL), closed → `/p/closed`. The token is never put in a route param,
 /// a logging provider, or analytics.

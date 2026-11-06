@@ -8,6 +8,8 @@ import {
   type PaymentRequest,
 } from "./payment.port.js";
 import { closePortalIfDone } from "../portal/portal.grants.js";
+import { recomputeInvoiceBalance } from "../invoices/invoice-balance.js";
+import { resumeJobAfterDepositPayment } from "../quotes/quote.service.js";
 
 const MAX_RETRIES = 3;
 const RETRY_BACKOFF_MS = [30_000, 120_000] as const;
@@ -311,8 +313,16 @@ export async function processProviderAcceptedOperations(
         // Mark operation as COMPLETED
         await completePaymentOperation(operation.id, payment.id, tx);
 
+        // Phase 7.5 — recompute balances from source rows; Phase 7.4 —
+        // a paid deposit invoice resumes job creation.
+        const balance = await recomputeInvoiceBalance(operation.invoiceId, tx);
+        await resumeJobAfterDepositPayment(tx, {
+          companyId: operation.companyId,
+          invoiceId: operation.invoiceId,
+        });
+
         // Close portal if invoice is now fully paid
-        if (newStatus === "PAID" && updatedInvoice.jobId) {
+        if (balance.status === "PAID" && updatedInvoice.jobId) {
           await closePortalIfDone(updatedInvoice.jobId, tx);
         }
 

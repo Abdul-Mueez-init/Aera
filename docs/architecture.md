@@ -410,14 +410,19 @@ balance inside the same transaction that updates invoice state.
 ## 9. Customer portal
 
 ```text
-POST /customers/:customerId/portal-access
-GET  /portal/:token
-POST /quotes/shared/:shareToken/respond
+POST /customers/:customerId/portal-access        (staff: issue workspace link)
+POST /portal/exchange                            (single-use link → session)
+GET  /portal/me | /requests | /quotes | /jobs | /invoices   (workspace reads)
+GET  /portal/job                                 (legacy JOB-scope snapshot)
 ```
 
-Portal tokens expire after 30 days and are scoped to one customer and company.
-The public portal exposes appointment details, shared quotes, issued invoice
-balances, and completed service history without exposing staff-only records.
+Portal links are exchanged once for a session scoped to either a single job
+(legacy JOB grant) or a whole customer workspace within one company
+(WORKSPACE grant). The workspace surface ships behind
+`WORKSPACE_PORTAL_ENABLED` and is off by default until its release gate.
+Sessions expose only the session customer's own records; cross-tenant and
+cross-customer reads return 404. Legacy `CustomerPortalToken` rows and
+`Quote.shareToken` are deprecated (ADR-020) and must not be read by new code.
 
 ## 9. Dashboard
 
@@ -650,6 +655,25 @@ background errors.
 
 **Revisit when:** Change-order authorization becomes a separate financial aggregate in the payments phase.
 
+## ADR-020 — Legacy portal tokens are deprecated, not removed
+
+**Decision:** `CustomerPortalToken` and `Quote.shareToken` are deprecated in favour of `PortalAccessGrant` link tokens exchanged for `PortalSession`s. Existing rows and live job-scoped links keep working unchanged; staff may still issue job links until the workspace rollout gate. No new code may read the deprecated fields.
+
+**Why:** Removing them would break live customer links; keeping both paths indefinitely would split the authorization surface.
+
+**Revisit when:** All legacy job links have expired and usage telemetry shows zero reads of the deprecated fields.
+
 ## Architecture ownership
 
 This file owns system boundaries, technology choices, module structure, tenancy and authorization architecture, job-state architecture, transactions, REST API conventions, deployment, and ADRs. Coding standards and verification gates belong in `rules.md`.
+
+## v2 architecture (Phases 1–8)
+
+- Lifecycle is backend-authoritative: `request → quote → job → invoice → payment`. Clients never supply totals, authorization decisions, or lifecycle transitions the server can derive.
+- Money is integer minor units (BigInt at the DB edge, serialized safely in DTOs); invoices recompute totals from line items at issue time.
+- Quote acceptance runs pluggable gates (`QUOTE_ACCEPTANCE_GATES`): `DepositGate` blocks job creation until the deposit invoice is paid; `BookingGate` enforces the company booking mode.
+- Scheduling uses an availability engine expanding wall-clock hours in `company.timezone`, advisory-lock-serialized hold confirmation, and idempotent job creation via `sourceQuoteId`.
+- Notifications are durable: `notificationPublisher` enqueues `NotificationOutbox` rows when `NOTIFICATION_OUTBOX_ENABLED`; a queue worker claims batches with conditional updates, applies exponential backoff, and dead-letters after max attempts. Portal links are minted at send time via `PortalDeliveryToken` — no plaintext token is persisted.
+- Tracking is polling-based (no WebSockets): technicians POST positions to a rate-limited endpoint only while EN_ROUTE; customers poll `GET /portal/jobs/:id/tracking`, which returns coordinates only when fresh (<2 min) and audits every read.
+- Payments go through a provider port (sandbox adapter shipped; production provider is owner decision D-1) with HMAC webhook verification, timestamp/replay checks, and a deduplicated `ProviderWebhookEvent` inbox.
+- Rollout is flag-ordered (`REQUESTS_ENABLED`, `WORKSPACE_PORTAL_ENABLED`, `QUOTE_BEFORE_JOB_ENABLED`, `BOOKING_ENABLED`, `COMPLETION_REVIEW_ENABLED`, `INVOICE_FROM_SCOPE_ENABLED`, `ONLINE_PAYMENTS_ENABLED`, `LIVE_TRACKING_ENABLED`, `NOTIFICATION_OUTBOX_ENABLED`); rollback is flag-off since the schema is additive. See `docs/phase_8_release_runbook.md`.

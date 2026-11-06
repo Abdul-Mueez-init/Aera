@@ -16,6 +16,11 @@ import { notificationPublisher } from "../notifications/notification.port.js";
 import { getNextInvoiceNumber } from "../../common/counters/counter.service.js";
 import { calculateLineItemTotal } from "../../common/money/money.service.js";
 import { closePortalIfDone } from "../portal/portal.grants.js";
+import {
+  applyDepositCredits,
+  recomputeInvoiceBalance,
+} from "./invoice-balance.js";
+import { resumeJobAfterDepositPayment } from "../quotes/quote.service.js";
 
 export type InvoiceStatusValue =
   "DRAFT" | "ISSUED" | "PARTIALLY_PAID" | "PAID" | "VOID" | "OVERDUE";
@@ -90,6 +95,16 @@ const invoiceSelect = {
       receivedAt: true,
     },
   },
+  // Phase 7.5 — deposit credits consumed by this invoice.
+  creditTargets: {
+    orderBy: { createdAt: "asc" as const },
+    select: {
+      id: true,
+      amountMinor: true,
+      createdAt: true,
+      sourceInvoice: { select: { id: true, invoiceNumber: true, kind: true } },
+    },
+  },
 } as const;
 
 function isUniqueConstraintError(error: unknown): boolean {
@@ -132,12 +147,15 @@ async function getCompletedJobSource(
       serviceType: true,
       problemDescription: true,
       assignedTechnicianId: true,
+      type: true,
+      serviceRequestId: true,
       quotes: {
         where: { status: "APPROVED" },
         orderBy: { approvedAt: "desc" },
-        take: 1,
+        take: 10,
         select: {
           id: true,
+          kind: true,
           subtotalMinor: true,
           discountMinor: true,
           taxMinor: true,
@@ -204,8 +222,12 @@ export async function generateInvoiceFromJob(
   }
 
   const job = await getCompletedJobSource(context, jobId, db);
-  const quote = job.quotes[0];
-  const currency = quote?.currency ?? job.parts[0]?.currency ?? "USD";
+  // Phase 6.6 — ALL approved quotes bill (base + change orders), not just
+  // the latest. getCompletedJobSource already filters to APPROVED.
+  const quotes = job.quotes;
+  const primaryQuote = quotes[0];
+  const currency =
+    primaryQuote?.currency ?? job.parts[0]?.currency ?? "USD";
 
   type InvoiceItemDraft = {
     description: string;
@@ -213,22 +235,30 @@ export async function generateInvoiceFromJob(
     unitPriceMinor: bigint;
     totalMinor: bigint;
     sortOrder: number;
-    sourceType: "QUOTE_ITEM" | "JOB_PART" | "MANUAL";
+    sourceType: "QUOTE_ITEM" | "JOB_PART" | "AUTHORIZATION" | "MANUAL";
     sourceId?: string;
+    /** Negative credit lines (diagnostic fee, deposits) are the only
+     *  items allowed to carry negative amounts. */
+    credit?: boolean;
   };
 
   let items: InvoiceItemDraft[];
 
-  if (quote && quote.items.length > 0) {
-    items = quote.items.map((item) => ({
-      description: item.description,
-      quantity: item.quantity,
-      unitPriceMinor: item.unitPriceMinor,
-      totalMinor: item.totalMinor,
-      sortOrder: item.sortOrder,
-      sourceType: "QUOTE_ITEM",
-      sourceId: item.id,
-    }));
+  if (quotes.some((q) => q.items.length > 0)) {
+    // Merge every approved quote's line items in approval order; sortOrder
+    // is reassigned sequentially across the merged list.
+    let sortOrder = 0;
+    items = quotes.flatMap((q) =>
+      q.items.map((item) => ({
+        description: item.description,
+        quantity: item.quantity,
+        unitPriceMinor: item.unitPriceMinor,
+        totalMinor: item.totalMinor,
+        sortOrder: sortOrder++,
+        sourceType: "QUOTE_ITEM" as const,
+        sourceId: item.id,
+      })),
+    );
   } else if (job.parts.length > 0) {
     items = job.parts.map((part, index) => ({
       description: part.name,
@@ -262,13 +292,88 @@ export async function generateInvoiceFromJob(
     ];
   }
 
-  const subtotalMinor = quote
-    ? quote.subtotalMinor
+  // Phase 6.6 — scope traceability: authorized change requests become
+  // AUTHORIZATION lines unless an approved CHANGE_ORDER quote already
+  // covers the job (prevents double billing). Gated by the Phase 6 flag.
+  let appendedTotal = BigInt(0);
+  const scopeLinesEnabled = env.INVOICE_FROM_SCOPE_ENABLED;
+  // job.quotes is already filtered to APPROVED in getCompletedJobSource —
+  // only an approved CHANGE_ORDER suppresses AUTHORIZATION lines.
+  const hasApprovedChangeOrder = job.quotes.some(
+    (q) => q.kind === "CHANGE_ORDER",
+  );
+  if (scopeLinesEnabled && !hasApprovedChangeOrder) {
+    const authorized = await db.jobChangeRequest.findMany({
+      where: {
+        companyId: context.companyId,
+        jobId,
+        authorizedBy: { not: null },
+        status: "OPEN",
+      },
+      orderBy: { authorizedAt: "asc" },
+    });
+    for (const changeRequest of authorized) {
+      items.push({
+        description: `Authorized change: ${changeRequest.reason}`,
+        quantity: 1,
+        unitPriceMinor: changeRequest.estimatedPriceMinor,
+        totalMinor: changeRequest.estimatedPriceMinor,
+        sortOrder: items.length,
+        sourceType: "AUTHORIZATION",
+        sourceId: changeRequest.id,
+      });
+      appendedTotal += changeRequest.estimatedPriceMinor;
+    }
+  }
+
+  // Diagnostic-fee credit: a paid diagnostic invoice on the same service
+  // request becomes a negative line on the follow-up job's invoice.
+  if (
+    scopeLinesEnabled &&
+    job.type !== "DIAGNOSTIC" &&
+    job.serviceRequestId
+  ) {
+    const diagnosticInvoice = await db.invoice.findFirst({
+      where: {
+        companyId: context.companyId,
+        status: { in: ["PAID", "PARTIALLY_PAID"] },
+        job: {
+          type: "DIAGNOSTIC",
+          serviceRequestId: job.serviceRequestId,
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, totalMinor: true },
+    });
+    if (diagnosticInvoice) {
+      items.push({
+        description: "Credit: diagnostic fee",
+        quantity: 1,
+        unitPriceMinor: -diagnosticInvoice.totalMinor,
+        totalMinor: -diagnosticInvoice.totalMinor,
+        sortOrder: items.length,
+        sourceType: "MANUAL",
+        sourceId: diagnosticInvoice.id,
+        credit: true,
+      });
+      appendedTotal -= diagnosticInvoice.totalMinor;
+    }
+  }
+
+  // Quote-path subtotals sum every approved quote plus appended scope
+  // lines; the parts path already sums every item including appended ones.
+  const hasQuoteItems = quotes.some((q) => q.items.length > 0);
+  const subtotalMinor = hasQuoteItems
+    ? quotes.reduce((sum, q) => sum + q.subtotalMinor, BigInt(0)) +
+      appendedTotal
     : items.reduce((sum, item) => sum + item.totalMinor, BigInt(0));
-  const discountMinor = quote?.discountMinor ?? BigInt(0);
-  const taxMinor = quote?.taxMinor ?? BigInt(0);
-  const totalMinor =
-    quote?.totalMinor ?? subtotalMinor - discountMinor + taxMinor;
+  const discountMinor = hasQuoteItems
+    ? quotes.reduce((sum, q) => sum + q.discountMinor, BigInt(0))
+    : BigInt(0);
+  const taxMinor = hasQuoteItems
+    ? quotes.reduce((sum, q) => sum + q.taxMinor, BigInt(0))
+    : BigInt(0);
+  const totalMinor = subtotalMinor - discountMinor + taxMinor;
 
   // Money invariant: an invoice must never be persisted with negative or
   // internally inconsistent totals. Quote totals are normally recomputed
@@ -280,7 +385,12 @@ export async function generateInvoiceFromJob(
     taxMinor < 0n ||
     totalMinor < 0n ||
     totalMinor !== subtotalMinor - discountMinor + taxMinor ||
-    items.some((item) => item.totalMinor < 0n || item.unitPriceMinor < 0n)
+    items.some(
+      (item) =>
+        (!item.credit &&
+          (item.totalMinor < 0n || item.unitPriceMinor < 0n)) ||
+        (item.credit && item.totalMinor > 0n),
+    )
   ) {
     throw new AppError(
       "INVOICE_INVALID_TOTALS",
@@ -312,12 +422,13 @@ export async function generateInvoiceFromJob(
       transaction,
       context.companyId,
     );
-    return transaction.invoice.create({
+    const created = await transaction.invoice.create({
       data: {
         companyId: context.companyId,
         customerId: job.customerId,
         jobId: job.id,
-        quoteId: quote?.id,
+        quoteId: primaryQuote?.id,
+        serviceRequestId: job.serviceRequestId ?? null,
         createdBy: context.userId,
         invoiceNumber,
         subtotalMinor,
@@ -339,6 +450,22 @@ export async function generateInvoiceFromJob(
           })),
         },
       },
+      select: { id: true },
+    });
+
+    // Phase 7.4/7.5 — a paid deposit invoice on the same service request
+    // credits this final invoice exactly once (row-locked source,
+    // unique (source,target) application).
+    if (job.serviceRequestId) {
+      await applyDepositCredits(transaction, {
+        companyId: context.companyId,
+        serviceRequestId: job.serviceRequestId,
+        targetInvoiceId: created.id,
+      });
+    }
+
+    return transaction.invoice.findUniqueOrThrow({
+      where: { id: created.id },
       select: invoiceSelect,
     });
   };
@@ -407,6 +534,124 @@ export async function getInvoice(context: AuthContext, invoiceId: string) {
   return jsonSafe(invoice);
 }
 
+/**
+ * Phase 6.6 — staff add a MANUAL line to a DRAFT invoice during preview.
+ * Totals are recomputed server-side from the item list; negative amounts
+ * are rejected and the invoice must still be DRAFT (guarded update).
+ */
+export async function addInvoiceManualItem(
+  context: AuthContext,
+  invoiceId: string,
+  input: {
+    description: string;
+    quantity: number;
+    unitPriceMinor: number;
+  },
+) {
+  if (
+    !Number.isFinite(input.quantity) ||
+    input.quantity <= 0 ||
+    Math.abs(input.quantity * 100 - Math.round(input.quantity * 100)) > 1e-9
+  ) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Quantity must be positive with at most 2 decimal places",
+      422,
+    );
+  }
+  if (
+    !Number.isInteger(input.unitPriceMinor) ||
+    input.unitPriceMinor < 0 ||
+    input.unitPriceMinor > 100_000_000
+  ) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Unit price must be a non-negative integer in minor units",
+      422,
+    );
+  }
+  const description = input.description.trim();
+  if (!description || description.length > 500) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Description is required (max 500 characters)",
+      422,
+    );
+  }
+
+  return prisma.$transaction(async (transaction) => {
+    const invoice = await transaction.invoice.findFirst({
+      where: { id: invoiceId, companyId: context.companyId },
+      select: {
+        id: true,
+        status: true,
+        currency: true,
+        discountMinor: true,
+        taxMinor: true,
+        _count: { select: { items: true } },
+      },
+    });
+    if (!invoice) {
+      throw new AppError("RESOURCE_NOT_FOUND", "Invoice not found", 404);
+    }
+    if (invoice.status !== "DRAFT") {
+      throw new AppError(
+        "INVOICE_NOT_EDITABLE",
+        "Only draft invoices can be edited",
+        409,
+      );
+    }
+
+    const lineTotal = calculateLineItemTotal(
+      BigInt(input.unitPriceMinor),
+      input.quantity.toString(),
+    );
+    const existing = await transaction.invoiceItem.findMany({
+      where: { invoiceId: invoice.id },
+      select: { totalMinor: true },
+    });
+    const subtotalMinor =
+      existing.reduce((sum, item) => sum + item.totalMinor, BigInt(0)) +
+      lineTotal;
+    const totalMinor =
+      subtotalMinor - invoice.discountMinor + invoice.taxMinor;
+    if (subtotalMinor < 0n || totalMinor < 0n) {
+      throw new AppError(
+        "INVOICE_INVALID_TOTALS",
+        "Invoice totals cannot be negative",
+        422,
+      );
+    }
+
+    const item = await transaction.invoiceItem.create({
+      data: {
+        companyId: context.companyId,
+        invoiceId: invoice.id,
+        description,
+        quantity: input.quantity,
+        unitPriceMinor: BigInt(input.unitPriceMinor),
+        totalMinor: lineTotal,
+        sortOrder: invoice._count.items,
+        sourceType: "MANUAL",
+      },
+    });
+    // Guarded recompute: only persist totals while still DRAFT so a
+    // concurrent issue can't be undercut by a late edit.
+    const updated = await transaction.invoice.updateMany({
+      where: { id: invoice.id, status: "DRAFT" },
+      data: { subtotalMinor, totalMinor, balanceDueMinor: totalMinor },
+    });
+    if (updated.count !== 1) {
+      throw new AppError(
+        "INVOICE_NOT_EDITABLE",
+        "Invoice is no longer a draft",
+        409,
+      );
+    }
+    return jsonSafe({ ...item, invoiceCurrency: invoice.currency });
+  });
+}
+
 export async function listInvoicePayments(
   context: AuthContext,
   invoiceId: string,
@@ -428,7 +673,12 @@ export async function issueInvoice(context: AuthContext, invoiceId: string) {
       id: true,
       status: true,
       dueAt: true,
+      subtotalMinor: true,
+      discountMinor: true,
+      taxMinor: true,
+      totalMinor: true,
       job: { select: { reviewState: true } },
+      items: { select: { totalMinor: true } },
     },
   });
   if (!invoice) {
@@ -452,6 +702,26 @@ export async function issueInvoice(context: AuthContext, invoiceId: string) {
     throw new AppError(
       "INVOICE_REVIEW_REQUIRED",
       "Completion review must be approved before invoicing",
+      422,
+    );
+  }
+  // Phase 6.6 — refuse to issue when the stored totals disagree with a
+  // fresh server-side recomputation from the line items. This is the
+  // last line of defence against a corrupt or hand-edited draft.
+  const recomputedSubtotal = invoice.items.reduce(
+    (sum, item) => sum + item.totalMinor,
+    BigInt(0),
+  );
+  const recomputedTotal =
+    recomputedSubtotal - invoice.discountMinor + invoice.taxMinor;
+  if (
+    recomputedSubtotal !== invoice.subtotalMinor ||
+    recomputedTotal !== invoice.totalMinor ||
+    recomputedTotal < 0n
+  ) {
+    throw new AppError(
+      "INVOICE_TOTALS_MISMATCH",
+      "Invoice totals do not match its line items; regenerate the draft",
       422,
     );
   }
@@ -784,8 +1054,17 @@ export async function recordPayment(
         transaction,
       );
 
+      // Phase 7.5 — recompute amountPaid/balanceDue/status from the
+      // underlying payment + credit rows (single source of truth), then
+      // Phase 7.4 — a paid deposit invoice resumes job creation.
+      const balance = await recomputeInvoiceBalance(invoiceId, transaction);
+      await resumeJobAfterDepositPayment(transaction, {
+        companyId: context.companyId,
+        invoiceId,
+      });
+
       // Close portal if invoice is now fully paid
-      if (newStatus === "PAID" && updatedInvoice.jobId) {
+      if (balance.status === "PAID" && updatedInvoice.jobId) {
         await closePortalIfDone(updatedInvoice.jobId, transaction);
       }
     });

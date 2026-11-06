@@ -135,7 +135,7 @@ async function portalRespond(
     .post(`/api/v1/portal/quotes/${quoteId}/respond`)
     .set("Cookie", cookie)
     .set("X-Aera-Portal", "1")
-    .send({ action });
+    .send({ action, ...(action === "APPROVED" ? { reason: "Customer approved by phone" } : {}) });
 }
 
 async function staffRespond(
@@ -735,7 +735,7 @@ describe("Phase C1/C2 — Quote Approval Advances Linked Job", () => {
     const staffApprove = await request(app)
       .post(`/api/v1/quotes/${quote.id}/respond`)
       .set(authA)
-      .send({ action: "APPROVED" });
+      .send({ action: "APPROVED", reason: "Customer approved by phone" });
     expect(staffApprove.status).toBe(200);
     expect(staffApprove.body.data.status).toBe("APPROVED");
 

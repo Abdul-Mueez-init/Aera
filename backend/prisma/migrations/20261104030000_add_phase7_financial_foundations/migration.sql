@@ -61,7 +61,7 @@ ALTER TABLE "invoice_credit_applications"
   ADD CONSTRAINT "invoice_credit_applications_targetInvoiceId_fkey"
   FOREIGN KEY ("targetInvoiceId") REFERENCES "invoices"("id")
   ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT "invoice_credit_applications_amount_positive"
+  ADD CONSTRAINT "invoice_credit_applications_amount_positive"
   CHECK ("amountMinor" > 0);
 
 CREATE TABLE "refunds" (
@@ -89,7 +89,7 @@ ALTER TABLE "refunds"
   ADD CONSTRAINT "refunds_createdBy_fkey"
   FOREIGN KEY ("createdBy") REFERENCES "users"("id")
   ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT "refunds_amount_positive"
+  ADD CONSTRAINT "refunds_amount_positive"
   CHECK ("amountMinor" > 0);
 
 CREATE TABLE "payment_sessions" (
@@ -127,7 +127,7 @@ ALTER TABLE "payment_sessions"
   ADD CONSTRAINT "payment_sessions_portalSessionId_fkey"
   FOREIGN KEY ("portalSessionId") REFERENCES "portal_sessions"("id")
   ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT "payment_sessions_amount_positive"
+  ADD CONSTRAINT "payment_sessions_amount_positive"
   CHECK ("amountMinor" > 0);
 
 CREATE TABLE "provider_webhook_events" (

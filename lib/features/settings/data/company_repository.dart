@@ -13,6 +13,8 @@ class Company {
     required this.slug,
     required this.timezone,
     required this.defaultCurrency,
+    this.defaultDepositType = 'NONE',
+    this.defaultDepositValue = 0,
   });
 
   final String id;
@@ -20,6 +22,8 @@ class Company {
   final String slug;
   final String timezone;
   final String defaultCurrency;
+  final String defaultDepositType;
+  final int defaultDepositValue;
 
   factory Company.fromJson(Map<String, dynamic> json) => Company(
     id: json['id'] as String,
@@ -27,6 +31,9 @@ class Company {
     slug: json['slug'] as String,
     timezone: json['timezone'] as String? ?? 'UTC',
     defaultCurrency: json['defaultCurrency'] as String? ?? 'USD',
+    defaultDepositType: json['defaultDepositType'] as String? ?? 'NONE',
+    defaultDepositValue:
+        int.tryParse(json['defaultDepositValue']?.toString() ?? '') ?? 0,
   );
 }
 
@@ -52,16 +59,26 @@ class CreateCompanyInput {
 }
 
 class UpdateCompanyInput {
-  const UpdateCompanyInput({this.name, this.timezone, this.defaultCurrency});
+  const UpdateCompanyInput({
+    this.name,
+    this.timezone,
+    this.defaultCurrency,
+    this.defaultDepositType,
+    this.defaultDepositValue,
+  });
 
   final String? name;
   final String? timezone;
   final String? defaultCurrency;
+  final String? defaultDepositType;
+  final int? defaultDepositValue;
 
   Map<String, dynamic> toJson() => {
     if (name != null && name!.trim().isNotEmpty) 'name': name!.trim(),
     if (timezone != null) 'timezone': timezone,
     if (defaultCurrency != null) 'defaultCurrency': defaultCurrency,
+    if (defaultDepositType != null) 'defaultDepositType': defaultDepositType,
+    if (defaultDepositValue != null) 'defaultDepositValue': defaultDepositValue,
   };
 }
 

@@ -3,6 +3,7 @@ import type { AuthContext } from "../../common/auth/auth.types.js";
 import type { PortalRequest } from "../portal/portal.middleware.js";
 import { prisma } from "../../db/prisma.js";
 import { assertRequestTransition } from "./request.state.js";
+import { notificationPublisher } from "../notifications/notification.port.js";
 
 type PortalContext = NonNullable<PortalRequest["portal"]>;
 
@@ -54,6 +55,7 @@ export async function postStaffMessage(
   body: string,
 ) {
   const request = await assertRequest(context.companyId, undefined, requestId);
+  let replied = false;
   const message = await prisma.$transaction(async (transaction) => {
     const created = await transaction.serviceRequestMessage.create({
       data: {
@@ -84,10 +86,18 @@ export async function postStaffMessage(
             toStatus: "SUBMITTED",
           },
         });
+        replied = true;
       }
     }
     return created;
   });
+  if (replied) {
+    void notificationPublisher.publish({
+      type: "REQUEST_STATUS_CHANGED",
+      companyId: context.companyId,
+      requestId,
+    });
+  }
   return message;
 }
 
@@ -102,6 +112,7 @@ export async function postPortalMessage(
     context.customerId,
     requestId,
   );
+  let replied = false;
   const message = await prisma.$transaction(async (transaction) => {
     const created = await transaction.serviceRequestMessage.create({
       data: {
@@ -132,10 +143,18 @@ export async function postPortalMessage(
             metadata: { portalSessionId: context.sessionId },
           },
         });
+        replied = true;
       }
     }
     return created;
   });
+  if (replied) {
+    void notificationPublisher.publish({
+      type: "REQUEST_INFO_PROVIDED",
+      companyId: context.companyId,
+      requestId,
+    });
+  }
   return message;
 }
 
@@ -146,7 +165,7 @@ export async function requestInformation(
 ) {
   const current = await assertRequest(context.companyId, undefined, requestId);
   assertRequestTransition(current.status, "NEEDS_INFO");
-  return prisma.$transaction(async (transaction) => {
+  const message = await prisma.$transaction(async (transaction) => {
     const claimed = await transaction.serviceRequest.updateMany({
       where: {
         id: requestId,
@@ -182,4 +201,10 @@ export async function requestInformation(
       },
     });
   });
+  void notificationPublisher.publish({
+    type: "REQUEST_STATUS_CHANGED",
+    companyId: context.companyId,
+    requestId,
+  });
+  return message;
 }

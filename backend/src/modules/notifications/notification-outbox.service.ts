@@ -14,12 +14,91 @@ import {
   removeInvalidToken,
   listTokensForUsers,
 } from "./device-token.service.js";
+import { generateToken, hashToken } from "../portal/portal.tokens.js";
+import {
+  portalLinkEmail,
+  portalLinkSms,
+} from "../portal/portal-messages.js";
 
 const OUTBOX_JOB_TYPE = "notification.outbox";
+// Phase 8.1 — portal link deliveries ride the same durable outbox. The
+// payload stores the grant reference only; the single-use link token is
+// minted here at send time and never persisted.
+const PORTAL_LINK_TEMPLATE = "PORTAL_LINK";
+
+async function processPortalLinkOutbox(
+  row: {
+    id: string;
+    companyId: string;
+    channel: string;
+    payload: unknown;
+  },
+): Promise<void> {
+  const payload = (row.payload ?? {}) as Record<string, string>;
+  const grantId = payload.grantId;
+  const destination = payload.destination;
+  if (!grantId || !destination) {
+    throw new Error("Portal link outbox payload missing grantId/destination");
+  }
+
+  const grant = await prisma.portalAccessGrant.findFirst({
+    where: { id: grantId, companyId: row.companyId, status: "ACTIVE" },
+    select: { id: true, linkExpiresAt: true },
+  });
+  if (!grant || grant.linkExpiresAt <= new Date()) {
+    throw new Error("Portal grant is no longer active for link delivery");
+  }
+
+  // Mint the single-use delivery token now — plaintext lives only in
+  // this function's memory and inside the outgoing message.
+  const token = generateToken();
+  await prisma.portalDeliveryToken.create({
+    data: {
+      grantId: grant.id,
+      tokenHash: hashToken(token),
+      expiresAt: grant.linkExpiresAt,
+    },
+  });
+  const link = `${env.PORTAL_PUBLIC_BASE_URL}/open#t=${token}`;
+
+  const messageInput = {
+    link,
+    companyName: payload.companyName ?? "",
+    customerFirstName: payload.customerFirstName ?? "",
+    jobNumber: payload.jobNumber
+      ? Number(payload.jobNumber)
+      : undefined,
+  };
+  if (row.channel === "SMS") {
+    await textbeeSmsAdapter.send({
+      to: destination,
+      body: portalLinkSms(messageInput),
+    });
+  } else {
+    const message = portalLinkEmail(messageInput);
+    await resendEmailAdapter.send({
+      to: destination,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    });
+  }
+
+  await prisma.portalAuditEvent.create({
+    data: {
+      companyId: row.companyId,
+      jobId: payload.jobId || null,
+      customerId: payload.customerId || null,
+      grantId: grant.id,
+      action: "PORTAL_LINK_SENT",
+      metadata: { channel: row.channel, status: "SENT", via: "outbox" },
+    },
+  });
+}
 
 export async function enqueueNotificationOutbox(input: {
   companyId: string;
-  recipientUserId: string;
+  recipientUserId?: string;
   channel: "IN_APP" | "EMAIL" | "SMS" | "PUSH";
   template: string;
   payload: Record<string, string>;
@@ -28,7 +107,7 @@ export async function enqueueNotificationOutbox(input: {
   await prisma.notificationOutbox.create({
     data: {
       companyId: input.companyId,
-      recipientUserId: input.recipientUserId,
+      recipientUserId: input.recipientUserId ?? null,
       channel: input.channel,
       template: input.template,
       payload: input.payload,
@@ -77,6 +156,9 @@ async function processOutbox(): Promise<void> {
     if (claimed.count !== 1) continue;
 
     try {
+      if (row.template === PORTAL_LINK_TEMPLATE) {
+        await processPortalLinkOutbox(row);
+      } else {
       if (!row.recipientUserId)
         throw new Error("Outbox recipient no longer exists");
       const event = {
@@ -88,7 +170,12 @@ async function processOutbox(): Promise<void> {
           | "QUOTE_APPROVED"
           | "QUOTE_DECLINED"
           | "INVOICE_ISSUED"
-          | "INVOICE_PAYMENT_REMINDER",
+          | "INVOICE_PAYMENT_REMINDER"
+          | "REQUEST_SUBMITTED"
+          | "REQUEST_INFO_PROVIDED"
+          | "REQUEST_STATUS_CHANGED"
+          | "JOB_CHANGE_REQUEST_SUBMITTED"
+          | "JOB_REVIEW_CHANGES_REQUESTED",
         companyId: row.companyId,
         ...(typeof row.payload === "object" && row.payload !== null
           ? row.payload
@@ -99,6 +186,7 @@ async function processOutbox(): Promise<void> {
         jobId?: string;
         quoteId?: string;
         invoiceId?: string;
+        requestId?: string;
       };
 
       const recipient = row.recipientUserId
@@ -163,6 +251,7 @@ async function processOutbox(): Promise<void> {
             }
           }
         }
+      }
       }
       await prisma.notificationOutbox.update({
         where: { id: row.id },

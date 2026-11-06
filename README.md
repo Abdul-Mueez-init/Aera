@@ -592,3 +592,14 @@ For now, refer to the demo workflow section to experience the application locall
 ## Support
 
 For support, questions, or issues, please [add contact information or issue tracker link here].
+
+## v2 service-request-first flow
+
+Aera v2 implements `request → quote → job → invoice → payment` end-to-end:
+
+- **Customer portal workspace** — requests, quotes, booking, tracking, invoices, payments, disputes.
+- **Staff app** — triage, quoting (with deposits), scheduling, dispatch, field execution, completion review, invoicing, refunds, disputes.
+- **Technician app** — job brief, en-route navigation + live location sharing, findings, change requests, completion.
+- **Backend** — Express + Prisma + PostgreSQL/Supabase; durable notification outbox, provider-port payments with verified webhooks, tenant-scoped portal sessions, feature flags per phase.
+
+Operational docs: `docs/phase_8_release_runbook.md` (rollout/rollback), `docs/architecture.md` (v2 architecture), `docs/schema.md` (v2 entities). Backend tests run against a local `aera_test` PostgreSQL via `.env.test` — never production Supabase.

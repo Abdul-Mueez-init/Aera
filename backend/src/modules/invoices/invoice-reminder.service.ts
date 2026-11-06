@@ -64,6 +64,8 @@ export async function runInvoiceReminderSweep(
       where: {
         status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] },
         balanceDueMinor: { gt: BigInt(0) },
+        // Phase 7.6 — an open or under-review dispute suppresses reminders.
+        disputes: { none: { status: { in: ["OPEN", "UNDER_REVIEW"] } } },
         OR: [
           { dueAt: { lt: now } },
           { dueAt: null, issuedAt: { lt: legacyIssuedBefore } },

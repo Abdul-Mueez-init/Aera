@@ -24,6 +24,8 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
   final _nameController = TextEditingController();
   final _timezoneController = TextEditingController();
   final _currencyController = TextEditingController();
+  final _depositValueController = TextEditingController();
+  String? _depositType;
   bool _isSaving = false;
 
   @override
@@ -31,6 +33,7 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
     _nameController.dispose();
     _timezoneController.dispose();
     _currencyController.dispose();
+    _depositValueController.dispose();
     super.dispose();
   }
 
@@ -38,6 +41,14 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
     _nameController.text = company.name;
     _timezoneController.text = company.timezone;
     _currencyController.text = company.defaultCurrency;
+    _depositType = company.defaultDepositType == 'NONE'
+        ? null
+        : company.defaultDepositType;
+    _depositValueController.text = company.defaultDepositValue > 0
+        ? (company.defaultDepositType == 'FIXED'
+              ? (company.defaultDepositValue / 100).toStringAsFixed(2)
+              : (company.defaultDepositValue / 100).toStringAsFixed(2))
+        : '';
     setState(() => _isEditing = true);
   }
 
@@ -72,10 +83,18 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
 
     setState(() => _isSaving = true);
     try {
+      // FIXED: UI collects major units → minor. PERCENT: UI collects
+      // percent → basis points. Both multiply by 100.
+      final depositRaw =
+          double.tryParse(_depositValueController.text.trim()) ?? 0;
       final input = UpdateCompanyInput(
         name: name,
         timezone: timezone.isNotEmpty ? timezone : null,
         defaultCurrency: currency.isNotEmpty ? currency : null,
+        defaultDepositType: _depositType ?? 'NONE',
+        defaultDepositValue: _depositType == null
+            ? 0
+            : (depositRaw * 100).round(),
       );
       await ref.read(companyRepositoryProvider).updateCompany(input);
       if (!mounted) return;
@@ -157,6 +176,9 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
             nameController: _nameController,
             timezoneController: _timezoneController,
             currencyController: _currencyController,
+            depositType: _depositType,
+            depositValueController: _depositValueController,
+            onDepositTypeChanged: (v) => setState(() => _depositType = v),
           ),
         ),
       ),
@@ -172,6 +194,9 @@ class _CompanyDetails extends StatelessWidget {
     required this.nameController,
     required this.timezoneController,
     required this.currencyController,
+    required this.depositType,
+    required this.depositValueController,
+    required this.onDepositTypeChanged,
   });
 
   final Company company;
@@ -180,6 +205,9 @@ class _CompanyDetails extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController timezoneController;
   final TextEditingController currencyController;
+  final String? depositType;
+  final TextEditingController depositValueController;
+  final ValueChanged<String?> onDepositTypeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +271,10 @@ class _CompanyDetails extends StatelessWidget {
                       uppercase: true,
                     )
                   : _detailRow('Currency', company.defaultCurrency),
+              const Divider(color: AeraColors.line, height: 1),
+              isEditing && canEdit
+                  ? _depositEditor()
+                  : _detailRow('Default deposit', _depositLabel(company)),
             ],
           ),
         ),
@@ -259,6 +291,67 @@ class _CompanyDetails extends StatelessWidget {
           ),
         const SizedBox(height: 24),
       ],
+    );
+  }
+
+  String _depositLabel(Company company) {
+    if (company.defaultDepositType == 'NONE' ||
+        company.defaultDepositValue <= 0) {
+      return 'None';
+    }
+    final value = company.defaultDepositValue / 100;
+    return company.defaultDepositType == 'FIXED'
+        ? '${company.defaultCurrency} ${value.toStringAsFixed(2)}'
+        : '${value.toStringAsFixed(2)}%';
+  }
+
+  Widget _depositEditor() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Default deposit',
+            style: AeraTypography.bodySm.copyWith(color: AeraColors.inkSoft),
+          ),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            initialValue: depositType,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(value: null, child: Text('None')),
+              DropdownMenuItem(value: 'FIXED', child: Text('Fixed amount')),
+              DropdownMenuItem(
+                value: 'PERCENT',
+                child: Text('Percent of total'),
+              ),
+            ],
+            onChanged: onDepositTypeChanged,
+          ),
+          if (depositType != null) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: depositValueController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                labelText: depositType == 'FIXED'
+                    ? 'Amount (${company.defaultCurrency})'
+                    : 'Percent (%)',
+                isDense: true,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

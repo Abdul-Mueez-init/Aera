@@ -209,3 +209,16 @@ Payments, analytics, recurring maintenance plans, route optimization, inventory,
 ## Requirement ownership
 
 This file owns user stories, functional requirements, acceptance criteria, business invariants, prioritization, and MVP behavior. It does not own database table definitions, architecture decisions, visual tokens, or coding workflow rules.
+
+## v2 — service-request-first lifecycle (Phases 1–8)
+
+The product flow is now `request → quote → job → invoice → payment`, with the customer workspace as the primary surface and the legacy job-linked portal preserved for compatibility.
+
+- Customers submit service requests (text + media) from the portal workspace; staff triage them into quotes.
+- Quotes may exist before a job (`QUOTE_BEFORE_JOB_ENABLED`), carry kinds (GENERAL/INSPECTION/REPAIR/INSTALLATION/CHANGE_ORDER), optional deposit terms, and require a recorded approval reason.
+- Jobs are created from approved quotes or directly by staff (which auto-creates a `STAFF_DIRECT` request).
+- Scheduling supports business hours, technician availability, appointment proposals, atomic holds, and self-serve or dispatcher-confirmed booking modes.
+- Field execution captures findings, completion review, and change requests; invoices are generated from approved scope with AUTHORIZATION lines and diagnostic-fee credits.
+- Payments support deposits, online checkout (HMAC-verified webhooks), credits, refunds (OWNER-only), and disputes.
+- Live tracking shares only the last known position while a job is EN_ROUTE; positions older than two minutes degrade to status-only.
+- All customer-facing delivery is tenant-scoped, IDOR-protected, and audited.

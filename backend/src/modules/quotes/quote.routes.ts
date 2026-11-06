@@ -35,6 +35,7 @@ const createSchema = z.object({
   customerId: z.string().uuid(),
   jobId: z.string().uuid().optional(),
   serviceRequestId: z.string().uuid().optional(),
+  basisJobId: z.string().uuid().optional(),
   kind: z
     .enum(["INSPECTION", "REPAIR", "INSTALLATION", "CHANGE_ORDER", "GENERAL"])
     .optional(),
@@ -47,6 +48,9 @@ const createSchema = z.object({
   expiresAt: z.coerce.date().optional(),
   assumptions: z.string().trim().max(4000).optional(),
   exclusions: z.string().trim().max(4000).optional(),
+  // Phase 7.4 — deposit terms. FIXED: minor units; PERCENT: basis points.
+  depositType: z.enum(["NONE", "FIXED", "PERCENT"]).optional(),
+  depositValue: z.number().int().nonnegative().max(100_000_000).optional(),
   items: z.array(itemSchema).min(1).max(100),
 });
 const listSchema = z.object({
@@ -54,7 +58,11 @@ const listSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
 });
-const responseSchema = z.object({ action: z.enum(["APPROVED", "DECLINED"]) });
+const responseSchema = z.object({
+  action: z.enum(["APPROVED", "DECLINED"]),
+  // Phase 4.7: staff accept-on-behalf requires an audit reason.
+  reason: z.string().trim().min(1).max(500).optional(),
+});
 
 function sendValidationError(response: Response, error: z.ZodError) {
   response.status(422).json({
@@ -174,6 +182,7 @@ router.post(
         request.auth!,
         routeId(request.params.quoteId),
         parsed.data.action,
+        parsed.data.reason,
       ),
     });
   },
