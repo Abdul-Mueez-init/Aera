@@ -44,6 +44,7 @@ class TechnicianRepository {
     required double latitude,
     required double longitude,
     double? accuracy,
+    bool? consent,
   }) async {
     await _client.post(
       '/api/v1/jobs/$jobId/location',
@@ -51,6 +52,7 @@ class TechnicianRepository {
         'latitude': latitude,
         'longitude': longitude,
         ...?accuracy == null ? null : {'accuracy': accuracy},
+        ...?consent == null ? null : {'consent': consent},
       },
     );
   }

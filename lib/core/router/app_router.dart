@@ -416,7 +416,17 @@ final List<RouteBase> _staffRoutes = [
         ],
       ),
 
-      // Tab 2: Schedule / Calendar
+      // Tab 2: Requests inbox (Phase 1.6)
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/requests',
+            builder: (context, state) => const RequestsScreen(),
+          ),
+        ],
+      ),
+
+      // Tab 3: Schedule / Calendar
       StatefulShellBranch(
         routes: [
           GoRoute(
@@ -426,7 +436,7 @@ final List<RouteBase> _staffRoutes = [
         ],
       ),
 
-      // Tab 3: Customers
+      // Tab 4: Customers
       StatefulShellBranch(
         routes: [
           GoRoute(
@@ -436,7 +446,7 @@ final List<RouteBase> _staffRoutes = [
         ],
       ),
 
-      // Tab 4: More
+      // Tab 5: More
       StatefulShellBranch(
         routes: [
           GoRoute(

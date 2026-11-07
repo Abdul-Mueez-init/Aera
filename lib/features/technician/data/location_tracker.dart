@@ -50,7 +50,9 @@ class JobLocationTracker {
     }
 
     // Post once immediately so the customer sees movement right away.
-    await _post(jobId);
+    // The first post carries the explicit location-sharing consent the
+    // backend records; later ticks reuse the stored consent.
+    await _post(jobId, consent: true);
     _timer = Timer.periodic(_interval, (_) => _post(jobId));
     return TrackingStartResult.started;
   }
@@ -60,7 +62,7 @@ class JobLocationTracker {
     _timer = null;
   }
 
-  Future<void> _post(String jobId) async {
+  Future<void> _post(String jobId, {bool consent = false}) async {
     if (_posting) return;
     _posting = true;
     try {
@@ -75,6 +77,7 @@ class JobLocationTracker {
         latitude: position.latitude,
         longitude: position.longitude,
         accuracy: position.accuracy,
+        consent: consent ? true : null,
       );
     } catch (_) {
       // Offline / permission revoked mid-route / job left EN_ROUTE —
