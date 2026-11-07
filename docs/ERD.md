@@ -138,7 +138,7 @@ Important state changes are not overwritten without trace. History records prese
 - `CompanyBusinessHours`, `TechnicianWorkingHours`, `TechnicianTimeOff`, `TechnicianSkill` — availability inputs.
 - `JobFinding`, `JobChangeRequest`, `Job.reviewState` — field execution and completion review.
 - `InvoiceItem.sourceType/sourceId` — provenance (QUOTE_ITEM, JOB_PART, AUTHORIZATION, CREDIT/MANUAL); credit lines may be negative.
-- `Payment`, `PaymentSession`, `InvoiceCreditApplication`, `Refund`, `PaymentDispute` — money movement; integer minor units only.
+- `Payment`, `PaymentSession`, `InvoiceCreditApplication`, `Refund`, `InvoiceDispute` — money movement; integer minor units only.
 - `ProviderWebhookEvent` — deduplicated webhook inbox.
 - `JobTrackingState` — one row per job, last position only (no history), wiped on arrival/cancel/reassign/complete.
 - `NotificationOutbox` — durable at-least-once delivery with dedupeKey, backoff, dead-letter.
