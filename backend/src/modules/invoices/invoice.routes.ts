@@ -8,10 +8,12 @@ import {
   issueInvoice,
   listInvoicePayments,
   listInvoices,
+  previewInvoiceFromJob,
   recordPayment,
   type InvoiceStatusValue,
   type PaymentMethodValue,
 } from "./invoice.service.js";
+import { cancelDepositInvoice } from "./deposit.service.js";
 import { createRefund, listInvoiceRefunds } from "./refund.service.js";
 import {
   listDisputes,
@@ -165,6 +167,22 @@ const fromJobSchema = z.object({
   allowZeroAmount: z.boolean().optional(),
 });
 
+// Phase 6.5 — read-only preview of the invoice a completed job would
+// generate, including parts excluded as unapproved.
+router.get(
+  "/from-job/:jobId/preview",
+  requireAuth,
+  requireRole(...managerRoles),
+  async (request, response) => {
+    response.json({
+      data: await previewInvoiceFromJob(
+        request.auth!,
+        routeId(request.params.jobId),
+      ),
+    });
+  },
+);
+
 router.post(
   "/from-job/:jobId",
   requireAuth,
@@ -194,6 +212,33 @@ router.post(
     }
     response.status(201).json({
       data: await addInvoiceManualItem(
+        request.auth!,
+        routeId(request.params.invoiceId),
+        parsed.data,
+      ),
+    });
+  },
+);
+
+// Phase 7.4 — cancel a DEPOSIT invoice: refund payments or retain the
+// deposit, with a required reason and an audit record.
+const cancelDepositSchema = z.object({
+  reason: z.string().trim().min(1).max(500),
+  refund: z.boolean(),
+});
+
+router.post(
+  "/:invoiceId/cancel-deposit",
+  requireAuth,
+  requireRole(...managerRoles),
+  async (request, response) => {
+    const parsed = cancelDepositSchema.safeParse(request.body);
+    if (!parsed.success) {
+      sendValidationError(response, parsed.error);
+      return;
+    }
+    response.status(200).json({
+      data: await cancelDepositInvoice(
         request.auth!,
         routeId(request.params.invoiceId),
         parsed.data,

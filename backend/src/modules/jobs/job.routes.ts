@@ -13,6 +13,7 @@ import {
   createJobChangeRequest,
   listJobChangeRequests,
   quoteJobChangeRequest,
+  createRepairQuoteFromFindings,
   authorizeJobChangeRequest,
   declineJobChangeRequest,
   withdrawJobChangeRequest,
@@ -395,6 +396,20 @@ router.get(
   async (request, response) => {
     response.status(200).json({
       data: await listJobChangeRequests(
+        request.auth!,
+        routeId(request.params.jobId),
+      ),
+    });
+  },
+);
+
+router.post(
+  "/:jobId/repair-quote",
+  requireAuth,
+  completionReviewEnabled,
+  async (request, response) => {
+    response.status(201).json({
+      data: await createRepairQuoteFromFindings(
         request.auth!,
         routeId(request.params.jobId),
       ),

@@ -37,6 +37,29 @@ export type JobStatusValue =
   | "WAITING_PARTS"
   | "COMPLETED"
   | "CANCELLED";
+
+/**
+ * Phase 6.3 — per-job-type completion requirements, enforced inside
+ * completeJob when COMPLETION_REVIEW_ENABLED is on. Diagnostics must
+ * record findings; hands-on work (repair/installation) must show
+ * before-and-after photo evidence; maintenance and catch-all jobs have
+ * no hard minimums. This is the single server-side source of truth —
+ * the technician checklist UI renders the same shape.
+ */
+export const completionRequirements: Record<
+  "DIAGNOSTIC" | "REPAIR" | "INSTALLATION" | "MAINTENANCE" | "OTHER",
+  {
+    minBeforePhotos: number;
+    minAfterPhotos: number;
+    findingRequired: boolean;
+  }
+> = {
+  DIAGNOSTIC: { minBeforePhotos: 0, minAfterPhotos: 0, findingRequired: true },
+  REPAIR: { minBeforePhotos: 1, minAfterPhotos: 1, findingRequired: false },
+  INSTALLATION: { minBeforePhotos: 1, minAfterPhotos: 1, findingRequired: false },
+  MAINTENANCE: { minBeforePhotos: 0, minAfterPhotos: 0, findingRequired: false },
+  OTHER: { minBeforePhotos: 0, minAfterPhotos: 0, findingRequired: false },
+};
 export type JobPriorityValue = "LOW" | "NORMAL" | "HIGH" | "URGENT";
 export type NoteVisibilityValue = "INTERNAL" | "CUSTOMER";
 export type JobPhotoKindValue = "BEFORE" | "AFTER" | "OTHER";
@@ -1415,25 +1438,50 @@ export async function completeJob(
     );
   }
 
-  const [findingCount, company] = await prisma.$transaction([
-    prisma.jobFinding.count({ where: { companyId: context.companyId, jobId } }),
-    prisma.company.findUnique({
-      where: { id: context.companyId },
-      select: { requireCompletionReview: true },
-    }),
-  ]);
-  // Phase 6 ships dark: the diagnostic finding requirement only applies
-  // when COMPLETION_REVIEW_ENABLED is on.
-  if (
-    env.COMPLETION_REVIEW_ENABLED &&
-    existingJob.type === "DIAGNOSTIC" &&
-    findingCount < 1
-  ) {
-    throw new AppError(
-      "JOB_FINDING_REQUIRED",
-      "Diagnostic jobs require at least one finding before completion",
-      422,
-    );
+  const requirements =
+    completionRequirements[
+      existingJob.type as keyof typeof completionRequirements
+    ] ?? completionRequirements.OTHER;
+  const [findingCount, beforePhotoCount, afterPhotoCount, company] =
+    await prisma.$transaction([
+      prisma.jobFinding.count({
+        where: { companyId: context.companyId, jobId },
+      }),
+      prisma.jobPhoto.count({
+        where: { companyId: context.companyId, jobId, kind: "BEFORE" },
+      }),
+      prisma.jobPhoto.count({
+        where: { companyId: context.companyId, jobId, kind: "AFTER" },
+      }),
+      prisma.company.findUnique({
+        where: { id: context.companyId },
+        select: { requireCompletionReview: true },
+      }),
+    ]);
+  // Phase 6 ships dark: completion requirements only apply when
+  // COMPLETION_REVIEW_ENABLED is on.
+  if (env.COMPLETION_REVIEW_ENABLED) {
+    if (requirements.findingRequired && findingCount < 1) {
+      throw new AppError(
+        "JOB_FINDING_REQUIRED",
+        "Diagnostic jobs require at least one finding before completion",
+        422,
+      );
+    }
+    if (beforePhotoCount < requirements.minBeforePhotos) {
+      throw new AppError(
+        "JOB_BEFORE_PHOTO_REQUIRED",
+        `This job type requires at least ${requirements.minBeforePhotos} before photo(s) before completion`,
+        422,
+      );
+    }
+    if (afterPhotoCount < requirements.minAfterPhotos) {
+      throw new AppError(
+        "JOB_AFTER_PHOTO_REQUIRED",
+        `This job type requires at least ${requirements.minAfterPhotos} after photo(s) before completion`,
+        422,
+      );
+    }
   }
   const reviewRequired =
     env.COMPLETION_REVIEW_ENABLED && company?.requireCompletionReview === true;
@@ -1649,6 +1697,132 @@ export async function quoteJobChangeRequest(
   await prisma.jobChangeRequest.update({
     where: { id: changeRequest.id },
     data: { status: "QUOTED" },
+  });
+  return jsonSafe(quote);
+}
+
+/**
+ * Phase 4.6 / 6.3 — staff action: create a REPAIR quote on the same
+ * service request from a completed DIAGNOSTIC job's findings. Items are
+ * pre-filled only from recorded findings (recommendedWork, falling back
+ * to the finding summary, plus priced likelyParts entries); staff price
+ * and edit the draft before sending. The diagnostic job is linked via
+ * basisJobId so the diagnostic-fee credit policy applies at invoice
+ * time. Acceptance creates the REPAIR job through the normal
+ * acceptQuote → createJobFromQuote path.
+ */
+export async function createRepairQuoteFromFindings(
+  context: AuthContext,
+  jobId: string,
+) {
+  if (context.role !== "OWNER" && context.role !== "DISPATCHER") {
+    throw new AppError(
+      "AUTH_FORBIDDEN",
+      "Only staff can create repair quotes",
+      403,
+    );
+  }
+  const job = await prisma.job.findFirst({
+    where: { id: jobId, companyId: context.companyId },
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      customerId: true,
+      serviceRequestId: true,
+    },
+  });
+  if (!job) throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+  if (job.type !== "DIAGNOSTIC" || job.status !== "COMPLETED") {
+    throw new AppError(
+      "REPAIR_QUOTE_REQUIRES_DIAGNOSTIC",
+      "Repair quotes can only be created from a completed diagnostic job",
+      422,
+    );
+  }
+  if (!job.serviceRequestId) {
+    throw new AppError(
+      "REPAIR_QUOTE_REQUIRES_REQUEST",
+      "The diagnostic job is not linked to a service request",
+      422,
+    );
+  }
+  const findings = await prisma.jobFinding.findMany({
+    where: { companyId: context.companyId, jobId },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      summary: true,
+      recommendedWork: true,
+      likelyParts: true,
+    },
+  });
+  if (findings.length === 0) {
+    throw new AppError(
+      "JOB_FINDING_REQUIRED",
+      "Record at least one finding before creating a repair quote",
+      422,
+    );
+  }
+
+  type RepairItem = {
+    description: string;
+    quantity: string;
+    unitPriceMinor: number;
+  };
+  const items: RepairItem[] = [];
+  for (const finding of findings) {
+    const work = finding.recommendedWork?.trim() || finding.summary.trim();
+    items.push({ description: work, quantity: "1", unitPriceMinor: 0 });
+    // likelyParts is technician-entered JSON; only well-formed entries
+    // with a name/description become priced lines — anything else stays
+    // out of the quote rather than fabricating scope.
+    if (Array.isArray(finding.likelyParts)) {
+      for (const part of finding.likelyParts) {
+        if (typeof part !== "object" || part === null) continue;
+        const record = part as Record<string, unknown>;
+        const name =
+          typeof record.name === "string"
+            ? record.name.trim()
+            : typeof record.description === "string"
+              ? record.description.trim()
+              : "";
+        if (!name) continue;
+        const quantity =
+          typeof record.quantity === "number" && record.quantity > 0
+            ? String(record.quantity)
+            : "1";
+        const unitPriceMinor =
+          typeof record.unitPriceMinor === "number" &&
+          Number.isInteger(record.unitPriceMinor) &&
+          record.unitPriceMinor >= 0
+            ? record.unitPriceMinor
+            : 0;
+        items.push({ description: name, quantity, unitPriceMinor });
+      }
+    }
+  }
+  if (items.length === 0) {
+    throw new AppError(
+      "REPAIR_QUOTE_EMPTY",
+      "Findings did not produce any quoteable work items",
+      422,
+    );
+  }
+
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { id: context.companyId },
+    select: { defaultCurrency: true },
+  });
+  const { createQuote } = await import("../quotes/quote.service.js");
+  const quote = await createQuote(context, {
+    customerId: job.customerId,
+    serviceRequestId: job.serviceRequestId,
+    basisJobId: job.id,
+    kind: "REPAIR",
+    currency: company.defaultCurrency,
+    assumptions: `Generated from ${findings.length} diagnostic finding(s) on job ${jobId}. Prices are placeholders — review before sending.`,
+    items,
   });
   return jsonSafe(quote);
 }

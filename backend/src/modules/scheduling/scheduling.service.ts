@@ -77,6 +77,112 @@ async function findConflicts(
   });
 }
 
+type ScheduleTransaction = Parameters<
+  Parameters<typeof prisma.$transaction>[0]
+>[0];
+
+export interface ScheduleJobTxResult {
+  job: { id: string; status: string; assignedTechnicianId: string | null };
+  technicianId: string;
+  conflicts: Awaited<ReturnType<typeof findConflicts>>;
+}
+
+/**
+ * Canonical schedule write, callable inside an existing transaction.
+ * Performs the same guards as scheduleJob — final-job immutability,
+ * technician requirement, technician row lock, conflict detection and the
+ * status-guarded update — plus JobStatusHistory. Booking hold
+ * confirmation uses this so hold-confirmed jobs cannot diverge from the
+ * normal scheduling rules. `technicianId` optionally assigns a technician
+ * as part of the schedule (hold-pinned technician).
+ */
+export async function scheduleJobInTransaction(
+  transaction: ScheduleTransaction,
+  context: { companyId: string; userId?: string | null },
+  jobId: string,
+  input: ScheduleInput,
+  options: { reschedule: boolean; technicianId?: string },
+): Promise<ScheduleJobTxResult> {
+  const job = await transaction.job.findFirst({
+    where: { id: jobId, companyId: context.companyId },
+    select: { id: true, status: true, assignedTechnicianId: true },
+  });
+  if (!job) {
+    throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
+  }
+  if (["COMPLETED", "CANCELLED"].includes(job.status)) {
+    throw new AppError("JOB_IMMUTABLE", "Final jobs cannot be scheduled", 409);
+  }
+  if (options.reschedule && job.status !== "SCHEDULED") {
+    throw new AppError(
+      "SCHEDULE_INVALID_RESCHEDULE",
+      "Only scheduled jobs can be rescheduled",
+      422,
+    );
+  }
+
+  // Require technician assignment for scheduling
+  const technicianId = options.technicianId ?? job.assignedTechnicianId;
+  if (!technicianId) {
+    throw new AppError(
+      "JOB_REQUIRES_TECHNICIAN",
+      "A technician must be assigned before scheduling the job",
+      422,
+    );
+  }
+
+  // Lock the technician row to serialize concurrent scheduling for the same technician
+  // We update a dummy field to force a row-level lock
+  await transaction.user.update({
+    where: { id: technicianId },
+    data: { updatedAt: new Date() },
+  });
+
+  const conflicts = await findConflicts(
+    context.companyId,
+    jobId,
+    technicianId,
+    input,
+    transaction,
+  );
+  const nextStatus =
+    job.status === "NEW" || job.status === "QUOTING" ? "SCHEDULED" : job.status;
+
+  // Guard the write with the status we validated: if the job was
+  // cancelled/completed between the read and this update, the write
+  // must not resurrect it.
+  const updated = await transaction.job.updateMany({
+    where: { id: jobId, companyId: context.companyId, status: job.status },
+    data: {
+      assignedTechnicianId: technicianId,
+      scheduledStart: input.scheduledStart,
+      scheduledEnd: input.scheduledEnd,
+      status: nextStatus,
+    },
+  });
+  if (updated.count !== 1) {
+    throw new AppError(
+      "JOB_STATE_CHANGED",
+      "Job changed while it was being scheduled; please retry",
+      409,
+    );
+  }
+  if (nextStatus !== job.status && context.userId) {
+    await transaction.jobStatusHistory.create({
+      data: {
+        companyId: context.companyId,
+        jobId,
+        actorUserId: context.userId,
+        fromStatus: job.status,
+        toStatus: "SCHEDULED",
+        reason: "Scheduled for dispatch",
+      },
+    });
+  }
+
+  return { job, technicianId, conflicts };
+}
+
 export async function scheduleJob(
   context: AuthContext,
   jobId: string,
@@ -86,102 +192,17 @@ export async function scheduleJob(
   assertScheduleRange(input);
 
   return prisma
-    .$transaction(async (transaction) => {
-      const job = await transaction.job.findFirst({
-        where: { id: jobId, companyId: context.companyId },
-        select: { id: true, status: true, assignedTechnicianId: true },
-      });
-      if (!job) {
-        throw new AppError("RESOURCE_NOT_FOUND", "Job not found", 404);
-      }
-      if (["COMPLETED", "CANCELLED"].includes(job.status)) {
-        throw new AppError(
-          "JOB_IMMUTABLE",
-          "Final jobs cannot be scheduled",
-          409,
-        );
-      }
-      if (reschedule && job.status !== "SCHEDULED") {
-        throw new AppError(
-          "SCHEDULE_INVALID_RESCHEDULE",
-          "Only scheduled jobs can be rescheduled",
-          422,
-        );
-      }
-
-      // Require technician assignment for scheduling
-      if (!job.assignedTechnicianId) {
-        throw new AppError(
-          "JOB_REQUIRES_TECHNICIAN",
-          "A technician must be assigned before scheduling the job",
-          422,
-        );
-      }
-
-      // Lock the technician row to serialize concurrent scheduling for the same technician
-      // We update a dummy field to force a row-level lock
-      if (job.assignedTechnicianId) {
-        await transaction.user.update({
-          where: { id: job.assignedTechnicianId },
-          data: { updatedAt: new Date() },
-        });
-      }
-
-      const conflicts = await findConflicts(
-        context.companyId,
-        jobId,
-        job.assignedTechnicianId,
-        input,
-        transaction,
-      );
-      const nextStatus =
-        job.status === "NEW" || job.status === "QUOTING"
-          ? "SCHEDULED"
-          : job.status;
-
-      // Guard the write with the status we validated: if the job was
-      // cancelled/completed between the read and this update, the write
-      // must not resurrect it.
-      const updated = await transaction.job.updateMany({
-        where: { id: jobId, companyId: context.companyId, status: job.status },
-        data: {
-          scheduledStart: input.scheduledStart,
-          scheduledEnd: input.scheduledEnd,
-          status: nextStatus,
-        },
-      });
-      if (updated.count !== 1) {
-        throw new AppError(
-          "JOB_STATE_CHANGED",
-          "Job changed while it was being scheduled; please retry",
-          409,
-        );
-      }
-      if (nextStatus !== job.status) {
-        await transaction.jobStatusHistory.create({
-          data: {
-            companyId: context.companyId,
-            jobId,
-            actorUserId: context.userId,
-            fromStatus: job.status,
-            toStatus: "SCHEDULED",
-            reason: "Scheduled for dispatch",
-          },
-        });
-      }
-
-      return {
-        job,
-        conflicts,
+    .$transaction(async (transaction) =>
+      scheduleJobInTransaction(transaction, context, jobId, input, {
         reschedule,
-      };
-    })
-    .then(async ({ job, conflicts, reschedule }) => {
+      }),
+    )
+    .then(async ({ technicianId, conflicts }) => {
       void notificationPublisher.publish({
         type: reschedule ? "JOB_RESCHEDULED" : "JOB_SCHEDULED",
         companyId: context.companyId,
         jobId,
-        recipientUserId: job.assignedTechnicianId ?? undefined,
+        recipientUserId: technicianId,
       });
 
       return {

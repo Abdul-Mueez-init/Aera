@@ -2,6 +2,8 @@ import { AppError } from "../../common/errors.js";
 import { getNextInvoiceNumber } from "../../common/counters/counter.service.js";
 import { prisma } from "../../db/prisma.js";
 import type { Prisma } from "../../generated/prisma/index.js";
+import type { AuthContext } from "../../common/auth/auth.types.js";
+import { createRefund } from "./refund.service.js";
 
 type Tx = Prisma.TransactionClient;
 
@@ -145,5 +147,182 @@ export async function depositInvoiceForQuote(
   return {
     quoteId: invoice.quoteId,
     serviceRequestId: invoice.serviceRequestId,
+  };
+}
+
+/**
+ * Phase 7.4 — deposit cancellation.
+ *
+ * Staff cancel a DEPOSIT invoice with an explicit reason and a
+ * refund-vs-retain decision:
+ *  - `refund: true`  → every payment on the invoice is refunded in full
+ *    through the durable refund path (provider idempotency keys make
+ *    retries safe) before the invoice is voided.
+ *  - `refund: false` → the deposit is retained as revenue; the invoice
+ *    is voided and the retention is recorded in the audit metadata.
+ *
+ * The void itself is a status-guarded write under a FOR UPDATE row lock,
+ * so concurrent cancels, payment settlement and refund creation
+ * serialize. Cancelling an already-VOID invoice is idempotent. When the
+ * deposit was still gating an ACCEPTED service request (no job created
+ * yet), the request is moved to CANCELLED with a ServiceRequestEvent.
+ */
+export async function cancelDepositInvoice(
+  context: AuthContext,
+  invoiceId: string,
+  input: { reason: string; refund: boolean },
+) {
+  const reason = input.reason.trim();
+  if (!reason) {
+    throw new AppError(
+      "DEPOSIT_CANCEL_REASON_REQUIRED",
+      "A cancellation reason is required",
+      422,
+    );
+  }
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, companyId: context.companyId },
+    select: {
+      id: true,
+      kind: true,
+      status: true,
+      quoteId: true,
+      serviceRequestId: true,
+      customerId: true,
+      invoiceNumber: true,
+    },
+  });
+  if (!invoice) {
+    throw new AppError("RESOURCE_NOT_FOUND", "Invoice not found", 404);
+  }
+  if (invoice.kind !== "DEPOSIT") {
+    throw new AppError(
+      "INVOICE_NOT_DEPOSIT",
+      "Only deposit invoices can be cancelled through this action",
+      422,
+    );
+  }
+  if (invoice.status === "VOID") {
+    return { invoiceId: invoice.id, alreadyCancelled: true, refunds: [] };
+  }
+
+  // Refund before voiding: createRefund only accepts PAID/PARTIALLY_PAID
+  // invoices, and each refund is independently idempotent/resumable.
+  const refunds: { paymentId: string; refundId: string; status: string }[] =
+    [];
+  if (input.refund) {
+    const payments = await prisma.payment.findMany({
+      where: { invoiceId: invoice.id, companyId: context.companyId },
+      select: { id: true, amountMinor: true },
+    });
+    for (const payment of payments) {
+      const refunded = await prisma.refund.aggregate({
+        where: {
+          paymentId: payment.id,
+          status: { not: "FAILED" },
+        },
+        _sum: { amountMinor: true },
+      });
+      const refundable =
+        payment.amountMinor - (refunded._sum.amountMinor ?? 0n);
+      if (refundable <= 0n) continue;
+      const refund = await createRefund(context, invoice.id, {
+        paymentId: payment.id,
+        amountMinor: Number(refundable),
+        reason: `Deposit cancellation: ${reason}`,
+      });
+      refunds.push({
+        paymentId: payment.id,
+        refundId: refund.id,
+        status: refund.status,
+      });
+    }
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<{ id: string; status: string }[]>`
+      SELECT id, status FROM invoices WHERE id = ${invoice.id}::uuid FOR UPDATE`;
+    if (locked.length === 0) {
+      throw new AppError("RESOURCE_NOT_FOUND", "Invoice not found", 404);
+    }
+    if (locked[0].status === "VOID") {
+      return { alreadyCancelled: true as const };
+    }
+
+    await tx.invoice.update({
+      where: { id: invoice.id },
+      data: { status: "VOID", balanceDueMinor: 0n },
+    });
+
+    // If the deposit was still gating the request (accepted quote, no
+    // job materialized yet), cancel the request too so it cannot be
+    // worked on after the money is gone.
+    let requestCancelled = false;
+    if (invoice.serviceRequestId && invoice.quoteId) {
+      const jobExists = await tx.job.findFirst({
+        where: {
+          companyId: context.companyId,
+          sourceQuoteId: invoice.quoteId,
+        },
+        select: { id: true },
+      });
+      if (!jobExists) {
+        const updated = await tx.serviceRequest.updateMany({
+          where: {
+            id: invoice.serviceRequestId,
+            companyId: context.companyId,
+            status: "ACCEPTED",
+          },
+          data: { status: "CANCELLED" },
+        });
+        if (updated.count > 0) {
+          requestCancelled = true;
+          await tx.serviceRequestEvent.create({
+            data: {
+              companyId: context.companyId,
+              requestId: invoice.serviceRequestId,
+              actorUserId: context.userId,
+              type: "CANCELLED",
+              fromStatus: "ACCEPTED",
+              toStatus: "CANCELLED",
+              metadata: {
+                reason,
+                depositInvoiceId: invoice.id,
+                depositRetained: !input.refund,
+              },
+            },
+          });
+        }
+      }
+    }
+
+    await tx.portalAuditEvent.create({
+      data: {
+        companyId: context.companyId,
+        customerId: invoice.customerId,
+        actorUserId: context.userId,
+        action: "DEPOSIT_INVOICE_CANCELLED",
+        resourceType: "INVOICE",
+        resourceId: invoice.id,
+        metadata: {
+          invoiceNumber: invoice.invoiceNumber,
+          reason,
+          refundRequested: input.refund,
+          depositRetained: !input.refund,
+          requestCancelled,
+        },
+      },
+    });
+
+    return { alreadyCancelled: false as const, requestCancelled };
+  });
+
+  return {
+    invoiceId: invoice.id,
+    alreadyCancelled: result.alreadyCancelled,
+    refunds,
+    requestCancelled:
+      "requestCancelled" in result ? result.requestCancelled : false,
   };
 }

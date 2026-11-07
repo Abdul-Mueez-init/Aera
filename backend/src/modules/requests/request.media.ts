@@ -10,9 +10,10 @@ import {
   verifyRequestMediaUpload,
 } from "../../common/storage/supabase-storage.adapter.js";
 import { logger } from "../../common/logger.js";
+import { env } from "../../config/env.js";
 import { malwareScanner } from "./malware-scan.js";
 
-const maxFilesPerRequest = 20;
+const maxFilesPerRequest = env.REQUEST_MEDIA_MAX_FILES_PER_REQUEST;
 // Per-session presign abuse cap: a stolen portal session cannot mint
 // unlimited upload authorizations even though each file is still capped.
 const maxPresignsPerSessionPerHour = 30;
@@ -259,6 +260,20 @@ async function confirm(
     );
   }
   const attachment = await prisma.$transaction(async (transaction) => {
+    // Serialize confirms per request: the FOR UPDATE row lock makes the
+    // attachment count accurate while parallel uploads race — without it
+    // N concurrent confirms could all pass the cap check and exceed it.
+    await transaction.$executeRaw`SELECT id FROM service_requests WHERE id = ${requestId}::uuid AND "companyId" = ${companyId}::uuid FOR UPDATE`;
+    const attachmentCount = await transaction.serviceRequestAttachment.count({
+      where: { companyId, requestId },
+    });
+    if (attachmentCount >= maxFilesPerRequest) {
+      throw new AppError(
+        "UPLOAD_LIMIT_REACHED",
+        "This request already has the maximum number of files",
+        422,
+      );
+    }
     const claimed = await transaction.serviceRequestUpload.updateMany({
       where: { objectKey, confirmedAt: null },
       data: { confirmedAt: new Date() },

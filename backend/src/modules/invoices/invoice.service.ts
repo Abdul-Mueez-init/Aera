@@ -18,6 +18,7 @@ import { calculateLineItemTotal } from "../../common/money/money.service.js";
 import { closePortalIfDone } from "../portal/portal.grants.js";
 import {
   applyDepositCredits,
+  applyPaidInvoiceCredit,
   recomputeInvoiceBalance,
 } from "./invoice-balance.js";
 import { resumeJobAfterDepositPayment } from "../quotes/quote.service.js";
@@ -130,6 +131,264 @@ export interface GenerateInvoiceOptions {
   allowZeroAmount?: boolean;
 }
 
+type InvoiceItemDraft = {
+  description: string;
+  quantity: string | number | { toString(): string };
+  unitPriceMinor: bigint;
+  totalMinor: bigint;
+  sortOrder: number;
+  sourceType: "QUOTE_ITEM" | "JOB_PART" | "AUTHORIZATION" | "MANUAL";
+  sourceId?: string;
+  /** Negative credit lines (diagnostic fee, deposits) are the only
+   *  items allowed to carry negative amounts. */
+  credit?: boolean;
+};
+
+type InvoiceDraft = {
+  job: Awaited<ReturnType<typeof getCompletedJobSource>>;
+  items: InvoiceItemDraft[];
+  /** Job parts excluded from billing because approved scope already
+   *  covers the job — surfaced in previews so staff can add them as
+   *  MANUAL lines or a change order deliberately. */
+  unapprovedParts: {
+    id: string;
+    name: string;
+    quantity: { toString(): string };
+    unitPriceMinor: bigint;
+    currency: string;
+  }[];
+  subtotalMinor: bigint;
+  discountMinor: bigint;
+  taxMinor: bigint;
+  totalMinor: bigint;
+  currency: string;
+  primaryQuote: { id: string } | undefined;
+};
+
+/**
+ * Phase 6.5 — deterministic invoice draft builder. Pure with respect to
+ * persistence: it reads the completed job, approved quotes, authorized
+ * change requests and parts, then returns the exact line items, totals
+ * and the parts that were excluded as unapproved. Used by both
+ * generateInvoiceFromJob (which persists) and previewInvoiceFromJob
+ * (which only reports).
+ */
+async function buildInvoiceDraft(
+  context: AuthContext,
+  jobId: string,
+  db:
+    | typeof prisma
+    | Parameters<Parameters<typeof prisma.$transaction>[0]>[0] = prisma,
+  options: GenerateInvoiceOptions = {},
+): Promise<InvoiceDraft> {
+  const job = await getCompletedJobSource(context, jobId, db);
+  // Phase 6.6 — ALL approved quotes bill (base + change orders), not just
+  // the latest. getCompletedJobSource already filters to APPROVED.
+  const quotes = job.quotes;
+  const primaryQuote = quotes[0];
+  const currency = primaryQuote?.currency ?? job.parts[0]?.currency ?? "USD";
+  const scopeLinesEnabled = env.INVOICE_FROM_SCOPE_ENABLED;
+  // job.quotes is already filtered to APPROVED in getCompletedJobSource —
+  // only an approved CHANGE_ORDER suppresses AUTHORIZATION lines.
+  const hasApprovedChangeOrder = job.quotes.some(
+    (q) => q.kind === "CHANGE_ORDER",
+  );
+  // Authorized (staff-approved) change requests are approved scope too.
+  const authorizedChangeRequests = scopeLinesEnabled
+    ? await db.jobChangeRequest.findMany({
+        where: {
+          companyId: context.companyId,
+          jobId,
+          authorizedBy: { not: null },
+          status: "OPEN",
+        },
+        orderBy: { authorizedAt: "asc" },
+      })
+    : [];
+  // With scope invoicing on, job parts only bill when the job has NO
+  // approved scope at all (pure direct dispatch). Parts on a job that
+  // already bills approved quotes or authorized change requests are
+  // unapproved extras and must not reach the invoice silently — staff
+  // add them deliberately as MANUAL lines or via a change order.
+  const hasApprovedScope =
+    quotes.some((q) => q.items.length > 0) ||
+    hasApprovedChangeOrder ||
+    authorizedChangeRequests.length > 0;
+  const partsAreUnapproved =
+    scopeLinesEnabled && hasApprovedScope && job.parts.length > 0;
+  const unapprovedParts = partsAreUnapproved
+    ? job.parts.map((part) => ({
+        id: part.id,
+        name: part.name,
+        quantity: part.quantity,
+        unitPriceMinor: part.unitPriceMinor,
+        currency: part.currency,
+      }))
+    : [];
+
+  let items: InvoiceItemDraft[];
+
+  if (quotes.some((q) => q.items.length > 0)) {
+    // Merge every approved quote's line items in approval order; sortOrder
+    // is reassigned sequentially across the merged list.
+    let sortOrder = 0;
+    items = quotes.flatMap((q) =>
+      q.items.map((item) => ({
+        description: item.description,
+        quantity: item.quantity,
+        unitPriceMinor: item.unitPriceMinor,
+        totalMinor: item.totalMinor,
+        sortOrder: sortOrder++,
+        sourceType: "QUOTE_ITEM" as const,
+        sourceId: item.id,
+      })),
+    );
+  } else if (
+    job.parts.length > 0 &&
+    (!scopeLinesEnabled || !hasApprovedScope)
+  ) {
+    items = job.parts.map((part, index) => ({
+      description: part.name,
+      quantity: part.quantity,
+      unitPriceMinor: part.unitPriceMinor,
+      totalMinor: calculateLineItemTotal(
+        part.unitPriceMinor,
+        part.quantity.toString(),
+      ),
+      sortOrder: index,
+      sourceType: "JOB_PART",
+      sourceId: part.id,
+    }));
+  } else {
+    if (!options.allowZeroAmount) {
+      throw new AppError(
+        "INVOICE_ZERO_AMOUNT",
+        "Cannot generate a $0 invoice without billable items (approved quote or parts). To generate a zero-cost invoice, set allowZeroAmount to true.",
+        422,
+      );
+    }
+    items = [
+      {
+        description: `${job.serviceType} (Zero-cost / Courtesy Service)`,
+        quantity: 1,
+        unitPriceMinor: BigInt(0),
+        totalMinor: BigInt(0),
+        sortOrder: 0,
+        sourceType: "MANUAL",
+      },
+    ];
+  }
+
+  // Phase 6.6 — scope traceability: authorized change requests become
+  // AUTHORIZATION lines unless an approved CHANGE_ORDER quote already
+  // covers the job (prevents double billing). Gated by the Phase 6 flag.
+  let appendedTotal = BigInt(0);
+  if (scopeLinesEnabled && !hasApprovedChangeOrder) {
+    for (const changeRequest of authorizedChangeRequests) {
+      items.push({
+        description: `Authorized change: ${changeRequest.reason}`,
+        quantity: 1,
+        unitPriceMinor: changeRequest.estimatedPriceMinor,
+        totalMinor: changeRequest.estimatedPriceMinor,
+        sortOrder: items.length,
+        sourceType: "AUTHORIZATION",
+        sourceId: changeRequest.id,
+      });
+      appendedTotal += changeRequest.estimatedPriceMinor;
+    }
+  }
+
+  // Diagnostic-fee credit is NOT a line item: it is applied inside the
+  // create transaction as an InvoiceCreditApplication (see executeCreate),
+  // capped at the source invoice's actually-paid amount and consumed at
+  // most once per (source, target) pair.
+
+  // Quote-path subtotals sum every approved quote plus appended scope
+  // lines; the parts path already sums every item including appended ones.
+  const hasQuoteItems = quotes.some((q) => q.items.length > 0);
+  const subtotalMinor = hasQuoteItems
+    ? quotes.reduce((sum, q) => sum + q.subtotalMinor, BigInt(0)) +
+      appendedTotal
+    : items.reduce((sum, item) => sum + item.totalMinor, BigInt(0));
+  const discountMinor = hasQuoteItems
+    ? quotes.reduce((sum, q) => sum + q.discountMinor, BigInt(0))
+    : BigInt(0);
+  const taxMinor = hasQuoteItems
+    ? quotes.reduce((sum, q) => sum + q.taxMinor, BigInt(0))
+    : BigInt(0);
+  const totalMinor = subtotalMinor - discountMinor + taxMinor;
+
+  // Money invariant: an invoice must never be persisted with negative or
+  // internally inconsistent totals. Quote totals are normally recomputed
+  // at quote-write time, but this is the last line of defence before a
+  // corrupt total becomes a customer-facing balance.
+  if (
+    subtotalMinor < 0n ||
+    discountMinor < 0n ||
+    taxMinor < 0n ||
+    totalMinor < 0n ||
+    totalMinor !== subtotalMinor - discountMinor + taxMinor ||
+    items.some(
+      (item) =>
+        (!item.credit && (item.totalMinor < 0n || item.unitPriceMinor < 0n)) ||
+        (item.credit && item.totalMinor > 0n),
+    )
+  ) {
+    throw new AppError(
+      "INVOICE_INVALID_TOTALS",
+      "Invoice totals are inconsistent (total must equal subtotal - discount + tax, with no negative amounts)",
+      422,
+    );
+  }
+
+  if (totalMinor === BigInt(0) && !options.allowZeroAmount) {
+    throw new AppError(
+      "INVOICE_ZERO_AMOUNT",
+      "Cannot generate a $0 invoice without billable items (approved quote or parts). To generate a zero-cost invoice, set allowZeroAmount to true.",
+      422,
+    );
+  }
+
+  return {
+    job,
+    items,
+    unapprovedParts,
+    subtotalMinor,
+    discountMinor,
+    taxMinor,
+    totalMinor,
+    currency,
+    primaryQuote,
+  };
+}
+
+/**
+ * Phase 6.5 — read-only invoice preview. Returns the exact draft that
+ * generateInvoiceFromJob would persist (approved items, appended
+ * authorization lines, totals) plus the job parts excluded as
+ * unapproved, without creating anything.
+ */
+export async function previewInvoiceFromJob(
+  context: AuthContext,
+  jobId: string,
+) {
+  const draft = await buildInvoiceDraft(context, jobId, prisma, {
+    allowZeroAmount: true,
+  });
+  return jsonSafe({
+    jobId: draft.job.id,
+    customerId: draft.job.customerId,
+    currency: draft.currency,
+    items: draft.items,
+    unapprovedParts: draft.unapprovedParts,
+    subtotalMinor: draft.subtotalMinor,
+    discountMinor: draft.discountMinor,
+    taxMinor: draft.taxMinor,
+    totalMinor: draft.totalMinor,
+    issueable: draft.totalMinor !== BigInt(0),
+  });
+}
+
 async function getCompletedJobSource(
   context: AuthContext,
   jobId: string,
@@ -221,185 +480,17 @@ export async function generateInvoiceFromJob(
     return jsonSafe(existing);
   }
 
-  const job = await getCompletedJobSource(context, jobId, db);
-  // Phase 6.6 — ALL approved quotes bill (base + change orders), not just
-  // the latest. getCompletedJobSource already filters to APPROVED.
-  const quotes = job.quotes;
-  const primaryQuote = quotes[0];
-  const currency = primaryQuote?.currency ?? job.parts[0]?.currency ?? "USD";
-
-  type InvoiceItemDraft = {
-    description: string;
-    quantity: string | number | { toString(): string };
-    unitPriceMinor: bigint;
-    totalMinor: bigint;
-    sortOrder: number;
-    sourceType: "QUOTE_ITEM" | "JOB_PART" | "AUTHORIZATION" | "MANUAL";
-    sourceId?: string;
-    /** Negative credit lines (diagnostic fee, deposits) are the only
-     *  items allowed to carry negative amounts. */
-    credit?: boolean;
-  };
-
-  let items: InvoiceItemDraft[];
-
-  if (quotes.some((q) => q.items.length > 0)) {
-    // Merge every approved quote's line items in approval order; sortOrder
-    // is reassigned sequentially across the merged list.
-    let sortOrder = 0;
-    items = quotes.flatMap((q) =>
-      q.items.map((item) => ({
-        description: item.description,
-        quantity: item.quantity,
-        unitPriceMinor: item.unitPriceMinor,
-        totalMinor: item.totalMinor,
-        sortOrder: sortOrder++,
-        sourceType: "QUOTE_ITEM" as const,
-        sourceId: item.id,
-      })),
-    );
-  } else if (job.parts.length > 0) {
-    items = job.parts.map((part, index) => ({
-      description: part.name,
-      quantity: part.quantity,
-      unitPriceMinor: part.unitPriceMinor,
-      totalMinor: calculateLineItemTotal(
-        part.unitPriceMinor,
-        part.quantity.toString(),
-      ),
-      sortOrder: index,
-      sourceType: "JOB_PART",
-      sourceId: part.id,
-    }));
-  } else {
-    if (!options.allowZeroAmount) {
-      throw new AppError(
-        "INVOICE_ZERO_AMOUNT",
-        "Cannot generate a $0 invoice without billable items (approved quote or parts). To generate a zero-cost invoice, set allowZeroAmount to true.",
-        422,
-      );
-    }
-    items = [
-      {
-        description: `${job.serviceType} (Zero-cost / Courtesy Service)`,
-        quantity: 1,
-        unitPriceMinor: BigInt(0),
-        totalMinor: BigInt(0),
-        sortOrder: 0,
-        sourceType: "MANUAL",
-      },
-    ];
-  }
-
-  // Phase 6.6 — scope traceability: authorized change requests become
-  // AUTHORIZATION lines unless an approved CHANGE_ORDER quote already
-  // covers the job (prevents double billing). Gated by the Phase 6 flag.
-  let appendedTotal = BigInt(0);
-  const scopeLinesEnabled = env.INVOICE_FROM_SCOPE_ENABLED;
-  // job.quotes is already filtered to APPROVED in getCompletedJobSource —
-  // only an approved CHANGE_ORDER suppresses AUTHORIZATION lines.
-  const hasApprovedChangeOrder = job.quotes.some(
-    (q) => q.kind === "CHANGE_ORDER",
-  );
-  if (scopeLinesEnabled && !hasApprovedChangeOrder) {
-    const authorized = await db.jobChangeRequest.findMany({
-      where: {
-        companyId: context.companyId,
-        jobId,
-        authorizedBy: { not: null },
-        status: "OPEN",
-      },
-      orderBy: { authorizedAt: "asc" },
-    });
-    for (const changeRequest of authorized) {
-      items.push({
-        description: `Authorized change: ${changeRequest.reason}`,
-        quantity: 1,
-        unitPriceMinor: changeRequest.estimatedPriceMinor,
-        totalMinor: changeRequest.estimatedPriceMinor,
-        sortOrder: items.length,
-        sourceType: "AUTHORIZATION",
-        sourceId: changeRequest.id,
-      });
-      appendedTotal += changeRequest.estimatedPriceMinor;
-    }
-  }
-
-  // Diagnostic-fee credit: a paid diagnostic invoice on the same service
-  // request becomes a negative line on the follow-up job's invoice.
-  if (scopeLinesEnabled && job.type !== "DIAGNOSTIC" && job.serviceRequestId) {
-    const diagnosticInvoice = await db.invoice.findFirst({
-      where: {
-        companyId: context.companyId,
-        status: { in: ["PAID", "PARTIALLY_PAID"] },
-        job: {
-          type: "DIAGNOSTIC",
-          serviceRequestId: job.serviceRequestId,
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, totalMinor: true },
-    });
-    if (diagnosticInvoice) {
-      items.push({
-        description: "Credit: diagnostic fee",
-        quantity: 1,
-        unitPriceMinor: -diagnosticInvoice.totalMinor,
-        totalMinor: -diagnosticInvoice.totalMinor,
-        sortOrder: items.length,
-        sourceType: "MANUAL",
-        sourceId: diagnosticInvoice.id,
-        credit: true,
-      });
-      appendedTotal -= diagnosticInvoice.totalMinor;
-    }
-  }
-
-  // Quote-path subtotals sum every approved quote plus appended scope
-  // lines; the parts path already sums every item including appended ones.
-  const hasQuoteItems = quotes.some((q) => q.items.length > 0);
-  const subtotalMinor = hasQuoteItems
-    ? quotes.reduce((sum, q) => sum + q.subtotalMinor, BigInt(0)) +
-      appendedTotal
-    : items.reduce((sum, item) => sum + item.totalMinor, BigInt(0));
-  const discountMinor = hasQuoteItems
-    ? quotes.reduce((sum, q) => sum + q.discountMinor, BigInt(0))
-    : BigInt(0);
-  const taxMinor = hasQuoteItems
-    ? quotes.reduce((sum, q) => sum + q.taxMinor, BigInt(0))
-    : BigInt(0);
-  const totalMinor = subtotalMinor - discountMinor + taxMinor;
-
-  // Money invariant: an invoice must never be persisted with negative or
-  // internally inconsistent totals. Quote totals are normally recomputed
-  // at quote-write time, but this is the last line of defence before a
-  // corrupt total becomes a customer-facing balance.
-  if (
-    subtotalMinor < 0n ||
-    discountMinor < 0n ||
-    taxMinor < 0n ||
-    totalMinor < 0n ||
-    totalMinor !== subtotalMinor - discountMinor + taxMinor ||
-    items.some(
-      (item) =>
-        (!item.credit && (item.totalMinor < 0n || item.unitPriceMinor < 0n)) ||
-        (item.credit && item.totalMinor > 0n),
-    )
-  ) {
-    throw new AppError(
-      "INVOICE_INVALID_TOTALS",
-      "Invoice totals are inconsistent (total must equal subtotal - discount + tax, with no negative amounts)",
-      422,
-    );
-  }
-
-  if (totalMinor === BigInt(0) && !options.allowZeroAmount) {
-    throw new AppError(
-      "INVOICE_ZERO_AMOUNT",
-      "Cannot generate a $0 invoice without billable items (approved quote or parts). To generate a zero-cost invoice, set allowZeroAmount to true.",
-      422,
-    );
-  }
+  const draft = await buildInvoiceDraft(context, jobId, db, options);
+  const {
+    job,
+    items,
+    subtotalMinor,
+    discountMinor,
+    taxMinor,
+    totalMinor,
+    currency,
+    primaryQuote,
+  } = draft;
 
   const executeCreate = async (
     transaction: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
@@ -456,6 +547,37 @@ export async function generateInvoiceFromJob(
         serviceRequestId: job.serviceRequestId,
         targetInvoiceId: created.id,
       });
+    }
+
+    // Diagnostic-fee credit: paid diagnostic invoices on the same service
+    // request credit this invoice. applyPaidInvoiceCredit caps the credit
+    // at the source's actually-paid amount (PARTIALLY_PAID sources cannot
+    // credit money never received) and the unique (source,target) pair
+    // plus FOR UPDATE lock make repeated/concurrent application impossible.
+    if (
+      env.INVOICE_FROM_SCOPE_ENABLED &&
+      job.type !== "DIAGNOSTIC" &&
+      job.serviceRequestId
+    ) {
+      const diagnosticInvoices = await transaction.invoice.findMany({
+        where: {
+          companyId: context.companyId,
+          status: { in: ["PAID", "PARTIALLY_PAID"] },
+          job: {
+            type: "DIAGNOSTIC",
+            serviceRequestId: job.serviceRequestId,
+          },
+        },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      });
+      for (const diagnosticInvoice of diagnosticInvoices) {
+        await applyPaidInvoiceCredit(transaction, {
+          companyId: context.companyId,
+          sourceInvoiceId: diagnosticInvoice.id,
+          targetInvoiceId: created.id,
+        });
+      }
     }
 
     return transaction.invoice.findUniqueOrThrow({

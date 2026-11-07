@@ -244,15 +244,38 @@ export async function getAvailability(
     if (source.length === 0) {
       return [{ startsAt, endsAt }];
     }
-    return intervals.filter(
-      (interval) =>
-        !timeOff.some(
-          (blocked) =>
-            blocked.technicianId === technicianId &&
-            blocked.startsAt < interval.endsAt &&
-            blocked.endsAt > interval.startsAt,
-        ),
+    // Subtract each overlapping time-off block rather than dropping the
+    // whole interval — a two-hour lunch break must not erase a full day.
+    const blocked = timeOff.filter(
+      (entry) => entry.technicianId === technicianId,
     );
+    const result: Array<{ startsAt: Date; endsAt: Date }> = [];
+    for (const interval of intervals) {
+      let segments = [interval];
+      for (const off of blocked) {
+        segments = segments.flatMap((segment) => {
+          if (off.endsAt <= segment.startsAt || off.startsAt >= segment.endsAt) {
+            return [segment];
+          }
+          const parts: Array<{ startsAt: Date; endsAt: Date }> = [];
+          if (off.startsAt > segment.startsAt) {
+            parts.push({
+              startsAt: segment.startsAt,
+              endsAt: off.startsAt < segment.endsAt ? off.startsAt : segment.endsAt,
+            });
+          }
+          if (off.endsAt < segment.endsAt) {
+            parts.push({
+              startsAt: off.endsAt > segment.startsAt ? off.endsAt : segment.startsAt,
+              endsAt: segment.endsAt,
+            });
+          }
+          return parts;
+        });
+      }
+      result.push(...segments);
+    }
+    return result;
   };
   const windows = computeWindows({
     range: { startsAt, endsAt },
@@ -441,7 +464,9 @@ export async function confirmHold(
   context: { companyId: string; userId?: string },
   holdId: string,
 ) {
-  return prisma.$transaction(async (transaction) => {
+  let scheduledJob:
+    { jobId: string; technicianId: string; wasScheduled: boolean } | undefined;
+  const confirmed = await prisma.$transaction(async (transaction) => {
     const hold = await transaction.appointmentHold.findFirst({
       where: {
         id: holdId,
@@ -543,45 +568,28 @@ export async function confirmHold(
       }
     }
 
-    // Job-linked hold: schedule the existing job (requires a technician).
+    // Job-linked hold: schedule the existing job through the canonical
+    // scheduling path so hold-confirmed jobs get the same guards,
+    // technician row lock, conflict detection, status-guarded write and
+    // JobStatusHistory as a normal scheduleJob call.
     if (hold.jobId) {
-      const job = await transaction.job.findFirst({
-        where: { id: hold.jobId, companyId: context.companyId },
-        select: { status: true, assignedTechnicianId: true },
-      });
-      if (!job)
-        throw new AppError("RESOURCE_NOT_FOUND", "Booking job not found", 404);
-      const technicianId = hold.technicianId ?? job.assignedTechnicianId;
-      if (!technicianId) {
-        throw new AppError(
-          "JOB_REQUIRES_TECHNICIAN",
-          "A technician must be assigned before confirming the booking",
-          422,
-        );
-      }
-      const nextStatus =
-        job.status === "NEW" || job.status === "QUOTING"
-          ? "SCHEDULED"
-          : job.status;
-      const updatedJob = await transaction.job.updateMany({
-        where: {
-          id: hold.jobId,
-          companyId: context.companyId,
-          status: job.status,
-        },
-        data: {
-          assignedTechnicianId: technicianId,
+      const { scheduleJobInTransaction } =
+        await import("./scheduling.service.js");
+      const result = await scheduleJobInTransaction(
+        transaction,
+        context,
+        hold.jobId,
+        {
           scheduledStart: hold.windowStart,
           scheduledEnd: hold.windowEnd,
-          status: nextStatus,
         },
-      });
-      if (updatedJob.count !== 1)
-        throw new AppError(
-          "JOB_STATE_CHANGED",
-          "Job changed while booking; please retry",
-          409,
-        );
+        { reschedule: false, technicianId: hold.technicianId ?? undefined },
+      );
+      scheduledJob = {
+        jobId: hold.jobId,
+        technicianId: result.technicianId,
+        wasScheduled: result.job.status !== "SCHEDULED",
+      };
     }
 
     // Quote-linked hold (SELF_SERVE_WINDOWS): confirming resumes the
@@ -621,6 +629,19 @@ export async function confirmHold(
       },
     });
   });
+
+  // Side effect after commit — mirrors scheduleJob's post-commit publish.
+  if (scheduledJob) {
+    const { notificationPublisher } =
+      await import("../notifications/notification.port.js");
+    void notificationPublisher.publish({
+      type: scheduledJob.wasScheduled ? "JOB_SCHEDULED" : "JOB_RESCHEDULED",
+      companyId: context.companyId,
+      jobId: scheduledJob.jobId,
+      recipientUserId: scheduledJob.technicianId,
+    });
+  }
+  return confirmed;
 }
 
 /**

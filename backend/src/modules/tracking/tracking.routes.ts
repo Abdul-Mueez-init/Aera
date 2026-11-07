@@ -10,6 +10,9 @@ const locationSchema = z.object({
   latitude: z.number(),
   longitude: z.number(),
   accuracy: z.number().nonnegative().optional(),
+  // Explicit consent to share location — required on the first update
+  // for a job; the recorded consentAt is reused by later updates.
+  consent: z.boolean().optional(),
 });
 
 router.post(
