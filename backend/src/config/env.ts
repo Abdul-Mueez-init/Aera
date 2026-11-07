@@ -41,6 +41,14 @@ const envSchema = z
       .trim()
       .min(1)
       .default("request-media"),
+    // Max confirmed attachments per service request (staff + portal
+    // uploads combined). Enforced atomically at confirm time.
+    REQUEST_MEDIA_MAX_FILES_PER_REQUEST: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(200)
+      .default(20),
     // OpenStreetMap configuration for geocoding and neighborhood discovery.
     // No API keys required; these are public services with usage policies.
     // OSM_USER_AGENT identifies the client to OSM services (required by policy).
@@ -299,6 +307,34 @@ const envSchema = z
         code: "custom",
         path: ["CORS_ORIGINS"],
         message: "CORS_ORIGINS is required in production/staging",
+      });
+    }
+    // The sandbox provider keeps checkout state in process memory and can
+    // mark ledger payments paid without real money moving. It is a
+    // development/test adapter only — production must never boot with it,
+    // even if ONLINE_PAYMENTS_ENABLED is off (defense in depth: a later
+    // flag flip must not silently expose it).
+    if (data.NODE_ENV === "production" && data.PAYMENT_PROVIDER === "sandbox") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PAYMENT_PROVIDER"],
+        message:
+          "PAYMENT_PROVIDER=sandbox is not allowed in production; configure the approved payment provider",
+      });
+    }
+    // Sandbox webhooks are HMAC-signed with PAYMENT_WEBHOOK_SECRET; without
+    // it every delivery fails closed at runtime. Catch the misconfiguration
+    // at boot instead.
+    if (
+      data.ONLINE_PAYMENTS_ENABLED &&
+      data.PAYMENT_PROVIDER === "sandbox" &&
+      !data.PAYMENT_WEBHOOK_SECRET
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PAYMENT_WEBHOOK_SECRET"],
+        message:
+          "PAYMENT_WEBHOOK_SECRET is required when online payments use the sandbox provider",
       });
     }
   });

@@ -256,6 +256,54 @@ describe("Production/staging boot-time env enforcement", () => {
     });
   }
 
+  describe("NODE_ENV=production payment provider", () => {
+    const base = { ...VALID_DEPLOY_ENV, NODE_ENV: "production" };
+
+    it("fails to boot with PAYMENT_PROVIDER=sandbox", async () => {
+      await expect(
+        loadEnvWith({ ...base, PAYMENT_PROVIDER: "sandbox" }),
+      ).rejects.toThrow("Invalid environment configuration");
+    });
+
+    it("boots with the manual provider and online payments disabled", async () => {
+      const loaded = await loadEnvWith(base);
+      expect(loaded.PAYMENT_PROVIDER).toBe("manual");
+    });
+  });
+
+  describe("NODE_ENV=staging payment provider", () => {
+    const base = { ...VALID_DEPLOY_ENV, NODE_ENV: "staging" };
+
+    it("allows the sandbox provider for staging payment verification", async () => {
+      const loaded = await loadEnvWith({
+        ...base,
+        PAYMENT_PROVIDER: "sandbox",
+      });
+      expect(loaded.PAYMENT_PROVIDER).toBe("sandbox");
+    });
+
+    it("fails to boot with sandbox online payments but no webhook secret", async () => {
+      await expect(
+        loadEnvWith({
+          ...base,
+          PAYMENT_PROVIDER: "sandbox",
+          ONLINE_PAYMENTS_ENABLED: "true",
+          PAYMENT_WEBHOOK_SECRET: undefined,
+        }),
+      ).rejects.toThrow("Invalid environment configuration");
+    });
+
+    it("boots with sandbox online payments and a webhook secret", async () => {
+      const loaded = await loadEnvWith({
+        ...base,
+        PAYMENT_PROVIDER: "sandbox",
+        ONLINE_PAYMENTS_ENABLED: "true",
+        PAYMENT_WEBHOOK_SECRET: "s".repeat(40),
+      });
+      expect(loaded.ONLINE_PAYMENTS_ENABLED).toBe(true);
+    });
+  });
+
   it("stays permissive in test env: portal vars may be unset", async () => {
     const loaded = await loadEnvWith({
       ...VALID_DEPLOY_ENV,

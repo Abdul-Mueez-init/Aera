@@ -36,6 +36,8 @@ jobs:
       JWT_SECRET: ci-only-secret-that-is-at-least-32-characters-long
       SUPABASE_URL: https://test-project.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: test-only-service-role-key-not-real
+      PORTAL_PUBLIC_BASE_URL: http://localhost:3000
+      PORTAL_CODE_SECRET: ci-only-portal-code-secret-for-tests-0123456789
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
