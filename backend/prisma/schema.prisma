@@ -409,8 +409,8 @@ model Company {
   portalAuditEvents             PortalAuditEvent[]
   notifications                 Notification[]
   deviceTokens                  DeviceToken[]
-  notificationOutbox             NotificationOutbox[]
-  jobTrackingStates              JobTrackingState[]
+  notificationOutbox            NotificationOutbox[]
+  jobTrackingStates             JobTrackingState[]
   aiConversations               AiConversation[]
   counters                      CompanyCounter[]
   presignedUploads              PresignedUpload[]
@@ -946,7 +946,7 @@ model QuoteAcceptance {
   company         Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   quote           Quote                    @relation(fields: [quoteId, companyId], references: [id, companyId], onDelete: Cascade)
   actorUser       User?                    @relation("QuoteAcceptanceActors", fields: [actorUserId], references: [id], onDelete: SetNull)
-  portalSession   PortalSession?           @relation(fields: [portalSessionId], references: [id], onDelete: SetNull)
+  portalSession   PortalSession?           @relation(fields: [portalSessionId, companyId], references: [id, companyId], onDelete: SetNull)
 
   @@unique([quoteId, companyId])
   @@index([companyId, acceptedAt])
@@ -1037,8 +1037,8 @@ model ServiceRequestUpload {
   company         Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   request         ServiceRequest             @relation(fields: [requestId, companyId], references: [id, companyId], onDelete: Cascade)
   uploaderUser    User?                      @relation("ServiceRequestUploaders", fields: [uploaderUserId], references: [id], onDelete: Restrict)
-  portalSession   PortalSession?             @relation(fields: [portalSessionId], references: [id], onDelete: Cascade)
-  customer        Customer?                  @relation(fields: [customerId], references: [id])
+  portalSession   PortalSession?             @relation(fields: [portalSessionId, companyId], references: [id, companyId], onDelete: Cascade)
+  customer        Customer?                  @relation(fields: [customerId, companyId], references: [id, companyId])
   customerId      String?                    @db.Uuid
 
   @@unique([id, companyId])
@@ -1063,8 +1063,8 @@ model ServiceRequestAttachment {
   company         Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   request         ServiceRequest               @relation(fields: [requestId, companyId], references: [id, companyId], onDelete: Cascade)
   uploaderUser    User?                        @relation("ServiceRequestAttachmentUploaders", fields: [uploaderUserId], references: [id], onDelete: Restrict)
-  portalSession   PortalSession?               @relation(fields: [portalSessionId], references: [id], onDelete: Cascade)
-  customer        Customer?                    @relation(fields: [customerId], references: [id])
+  portalSession   PortalSession?               @relation(fields: [portalSessionId, companyId], references: [id, companyId], onDelete: Cascade)
+  customer        Customer?                    @relation(fields: [customerId, companyId], references: [id, companyId])
   customerId      String?                      @db.Uuid
 
   @@unique([companyId, objectKey])
@@ -1084,8 +1084,8 @@ model ServiceRequestMessage {
   company         Company                         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   request         ServiceRequest                  @relation(fields: [requestId, companyId], references: [id, companyId], onDelete: Cascade)
   authorUser      User?                           @relation("ServiceRequestMessageAuthors", fields: [authorUserId], references: [id], onDelete: Restrict)
-  portalSession   PortalSession?                  @relation(fields: [portalSessionId], references: [id], onDelete: Cascade)
-  customer        Customer?                       @relation(fields: [customerId], references: [id])
+  portalSession   PortalSession?                  @relation(fields: [portalSessionId, companyId], references: [id, companyId], onDelete: Cascade)
+  customer        Customer?                       @relation(fields: [customerId, companyId], references: [id, companyId])
   customerId      String?                         @db.Uuid
 
   @@index([companyId, requestId, createdAt(sort: Desc)])
@@ -1164,6 +1164,7 @@ model Invoice {
   paymentSessions   PaymentSession[]
   disputes          InvoiceDispute[]
 
+  @@unique([id, companyId])
   @@unique([companyId, invoiceNumber])
   @@unique([companyId, jobId])
   @@index([companyId, status, dueAt])
@@ -1212,6 +1213,7 @@ model Payment {
 
   // Idempotency is enforced by PaymentOperation's unique constraint on (companyId, idempotencyKey).
   // Payment retains idempotencyKey for traceability but does not enforce uniqueness separately.
+  @@unique([id, companyId])
   @@index([companyId, invoiceId, receivedAt(sort: Desc)])
   @@index([companyId, createdBy])
   @@map("payments")
@@ -1225,8 +1227,8 @@ model InvoiceCreditApplication {
   amountMinor     BigInt
   createdAt       DateTime @default(now())
   company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  sourceInvoice   Invoice  @relation("CreditSource", fields: [sourceInvoiceId], references: [id], onDelete: Restrict)
-  targetInvoice   Invoice  @relation("CreditTarget", fields: [targetInvoiceId], references: [id], onDelete: Restrict)
+  sourceInvoice   Invoice  @relation("CreditSource", fields: [sourceInvoiceId, companyId], references: [id, companyId], onDelete: Restrict)
+  targetInvoice   Invoice  @relation("CreditTarget", fields: [targetInvoiceId, companyId], references: [id, companyId], onDelete: Restrict)
 
   @@unique([sourceInvoiceId, targetInvoiceId])
   @@index([companyId, sourceInvoiceId])
@@ -1245,9 +1247,9 @@ model Refund {
   createdBy        String?      @db.Uuid
   createdAt        DateTime     @default(now())
   company          Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  payment          Payment      @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  payment          Payment      @relation(fields: [paymentId, companyId], references: [id, companyId], onDelete: Restrict)
   creator          User?        @relation("RefundCreators", fields: [createdBy], references: [id], onDelete: SetNull)
-  invoice          Invoice?     @relation(fields: [invoiceId], references: [id])
+  invoice          Invoice?     @relation(fields: [invoiceId, companyId], references: [id, companyId])
   invoiceId        String?      @db.Uuid
 
   @@index([companyId, paymentId, createdAt(sort: Desc)])
@@ -1270,8 +1272,8 @@ model PaymentSession {
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   company           Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  invoice           Invoice              @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  portalSession     PortalSession?       @relation(fields: [portalSessionId], references: [id], onDelete: SetNull)
+  invoice           Invoice              @relation(fields: [invoiceId, companyId], references: [id, companyId], onDelete: Cascade)
+  portalSession     PortalSession?       @relation(fields: [portalSessionId, companyId], references: [id, companyId], onDelete: SetNull)
 
   @@unique([companyId, idempotencyKey])
   @@index([companyId, invoiceId, status])
@@ -1290,6 +1292,7 @@ model ProviderWebhookEvent {
   receivedAt  DateTime  @default(now())
   processedAt DateTime?
   outcome     String?
+  attempts    Int       @default(0)
   company     Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@unique([provider, eventId])
@@ -1298,43 +1301,44 @@ model ProviderWebhookEvent {
 }
 
 model InvoiceDispute {
-  id               String                  @id @default(uuid()) @db.Uuid
-  companyId        String                  @db.Uuid
-  invoiceId        String                  @db.Uuid
-  customerId       String                  @db.Uuid
-  reason           InvoiceDisputeReason
-  message          String
-  status           InvoiceDisputeStatus    @default(OPEN)
-  resolution       InvoiceDisputeResolution?
-  resolutionNote   String?
-  resolvedBy       String?                 @db.Uuid
-  resolvedAt       DateTime?
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
-  company          Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  invoice          Invoice                 @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  customer         Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  resolver         User?                   @relation("InvoiceDisputeResolvers", fields: [resolvedBy], references: [id], onDelete: SetNull)
-  events           InvoiceDisputeEvent[]
+  id             String                    @id @default(uuid()) @db.Uuid
+  companyId      String                    @db.Uuid
+  invoiceId      String                    @db.Uuid
+  customerId     String                    @db.Uuid
+  reason         InvoiceDisputeReason
+  message        String
+  status         InvoiceDisputeStatus      @default(OPEN)
+  resolution     InvoiceDisputeResolution?
+  resolutionNote String?
+  resolvedBy     String?                   @db.Uuid
+  resolvedAt     DateTime?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  company        Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice        Invoice                   @relation(fields: [invoiceId, companyId], references: [id, companyId], onDelete: Cascade)
+  customer       Customer                  @relation(fields: [customerId, companyId], references: [id, companyId], onDelete: Restrict)
+  resolver       User?                     @relation("InvoiceDisputeResolvers", fields: [resolvedBy], references: [id], onDelete: SetNull)
+  events         InvoiceDisputeEvent[]
 
+  @@unique([id, companyId])
   @@index([companyId, status, createdAt(sort: Desc)])
   @@index([companyId, invoiceId])
   @@map("invoice_disputes")
 }
 
 model InvoiceDisputeEvent {
-  id          String   @id @default(uuid()) @db.Uuid
-  companyId   String   @db.Uuid
-  disputeId   String   @db.Uuid
-  actorUserId String?  @db.Uuid
+  id          String                @id @default(uuid()) @db.Uuid
+  companyId   String                @db.Uuid
+  disputeId   String                @db.Uuid
+  actorUserId String?               @db.Uuid
   type        String
   fromStatus  InvoiceDisputeStatus?
   toStatus    InvoiceDisputeStatus?
   note        String?
-  createdAt   DateTime @default(now())
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  dispute     InvoiceDispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)
-  actor       User?    @relation("InvoiceDisputeEventActors", fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt   DateTime              @default(now())
+  company     Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  dispute     InvoiceDispute        @relation(fields: [disputeId, companyId], references: [id, companyId], onDelete: Cascade)
+  actor       User?                 @relation("InvoiceDisputeEventActors", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([companyId, disputeId, createdAt])
   @@map("invoice_dispute_events")
@@ -1420,7 +1424,7 @@ model NotificationOutbox {
   template          String
   payload           Json
   dedupeKey         String                    @unique
-  status            NotificationOutboxStatus   @default(QUEUED)
+  status            NotificationOutboxStatus  @default(QUEUED)
   attempts          Int                       @default(0)
   nextAttemptAt     DateTime                  @default(now())
   providerMessageId String?
@@ -1436,21 +1440,21 @@ model NotificationOutbox {
 }
 
 model JobTrackingState {
-  id            String   @id @default(uuid()) @db.Uuid
-  companyId     String   @db.Uuid
-  jobId         String   @unique @db.Uuid
+  id            String    @id @default(uuid()) @db.Uuid
+  companyId     String    @db.Uuid
+  jobId         String    @unique @db.Uuid
   lastLat       Float
   lastLng       Float
   accuracy      Float?
-  updatedAt     DateTime @updatedAt
+  updatedAt     DateTime  @updatedAt
   etaMinutes    Int?
-  sharingActive Boolean  @default(true)
+  sharingActive Boolean   @default(true)
   consentAt     DateTime?
-  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  job           Job      @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Cascade)
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  job           Job       @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Cascade)
 
-  @@index([companyId, updatedAt])
   @@unique([jobId, companyId])
+  @@index([companyId, updatedAt])
   @@map("job_tracking_states")
 }
 
@@ -1588,12 +1592,13 @@ model PortalAccessGrant {
   deactivatedBy     String?                   @db.Uuid
   createdAt         DateTime                  @default(now())
   company           Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customer          Customer                  @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  job               Job?                      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customer          Customer                  @relation(fields: [customerId, companyId], references: [id, companyId], onDelete: Cascade)
+  job               Job?                      @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Cascade)
   issuer            User?                     @relation("PortalGrantIssuers", fields: [issuedBy], references: [id], onDelete: SetNull)
   sessions          PortalSession[]
   deliveryTokens    PortalDeliveryToken[]
 
+  @@unique([id, companyId])
   @@index([companyId, jobId, status])
   @@index([companyId, customerId, scope, status])
   @@index([status, linkExpiresAt])
@@ -1604,12 +1609,12 @@ model PortalAccessGrant {
 // NotificationOutbox row stores only the grant reference; the plaintext
 // token exists solely in the worker's memory for the duration of the send.
 model PortalDeliveryToken {
-  id         String           @id @default(uuid()) @db.Uuid
-  grantId    String           @db.Uuid
-  tokenHash  String           @unique
+  id         String            @id @default(uuid()) @db.Uuid
+  grantId    String            @db.Uuid
+  tokenHash  String            @unique
   expiresAt  DateTime
   consumedAt DateTime?
-  createdAt  DateTime         @default(now())
+  createdAt  DateTime          @default(now())
   grant      PortalAccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
 
   @@index([grantId])
@@ -1629,16 +1634,17 @@ model PortalSession {
   lastSeenAt                DateTime                   @default(now())
   expiresAt                 DateTime
   revokedAt                 DateTime?
-  grant                     PortalAccessGrant          @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  grant                     PortalAccessGrant          @relation(fields: [grantId, companyId], references: [id, companyId], onDelete: Cascade)
   company                   Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customer                  Customer                   @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  job                       Job?                       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customer                  Customer                   @relation(fields: [customerId, companyId], references: [id, companyId], onDelete: Cascade)
+  job                       Job?                       @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Cascade)
   serviceRequestUploads     ServiceRequestUpload[]
   serviceRequestAttachments ServiceRequestAttachment[]
   serviceRequestMessages    ServiceRequestMessage[]
   quoteAcceptances          QuoteAcceptance[]
   paymentSessions           PaymentSession[]
 
+  @@unique([id, companyId])
   @@index([grantId, revokedAt])
   @@map("portal_sessions")
 }
@@ -1656,8 +1662,8 @@ model PortalAuditEvent {
   metadata     Json?
   createdAt    DateTime  @default(now())
   company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customer     Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  job          Job?      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customer     Customer? @relation(fields: [customerId, companyId], references: [id, companyId], onDelete: Cascade)
+  job          Job?      @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Cascade)
 
   @@index([companyId, jobId, createdAt(sort: Desc)])
   @@index([companyId, customerId, createdAt(sort: Desc)])
