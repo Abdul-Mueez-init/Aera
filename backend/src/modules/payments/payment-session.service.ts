@@ -21,7 +21,20 @@ const RECONCILE_MIN_AGE_MS = 2 * 60 * 1000;
 
 export function getPaymentProvider(name?: string): PaymentProvider {
   const key = name ?? env.PAYMENT_PROVIDER;
-  if (key === "sandbox") return sandboxPaymentProvider;
+  // Defense in depth: env validation already refuses to boot production
+  // with the sandbox provider, but never resolve it here either — a
+  // misconfigured deploy must not be able to settle ledger payments
+  // through the in-memory test adapter.
+  if (key === "sandbox") {
+    if (env.NODE_ENV === "production") {
+      throw new AppError(
+        "PAYMENT_PROVIDER_UNAVAILABLE",
+        "The sandbox payment provider is not available in production",
+        503,
+      );
+    }
+    return sandboxPaymentProvider;
+  }
   return manualPaymentProvider;
 }
 
@@ -107,6 +120,35 @@ export async function createCheckoutSession(args: {
     return existing as CheckoutSessionView;
   }
 
+  // One OPEN session per invoice (enforced by the
+  // payment_sessions_one_open_per_invoice partial unique index). Expire
+  // OPEN sessions that can no longer be paid correctly — past their
+  // provider expiry or priced for a stale balance — then reuse a live
+  // session that already covers the full current balance instead of
+  // opening a second payable checkout for the same money.
+  await prisma.paymentSession.updateMany({
+    where: {
+      invoiceId: invoice.id,
+      status: "OPEN",
+      OR: [
+        { expiresAt: { lte: new Date() } },
+        { amountMinor: { not: invoice.balanceDueMinor } },
+      ],
+    },
+    data: { status: "EXPIRED" },
+  });
+  const reusable = await prisma.paymentSession.findFirst({
+    where: {
+      invoiceId: invoice.id,
+      status: "OPEN",
+      amountMinor: invoice.balanceDueMinor,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (reusable) {
+    return reusable as CheckoutSessionView;
+  }
+
   const checkout = await provider.createCheckout({
     amountMinor: invoice.balanceDueMinor,
     currency: invoice.currency,
@@ -143,6 +185,19 @@ export async function createCheckoutSession(args: {
         },
       });
       if (raced) return raced as CheckoutSessionView;
+      // Lost the race on the one-OPEN-session-per-invoice index: a
+      // concurrent request already opened a payable checkout for this
+      // balance. Return it — the provider-side session we just created
+      // is left unpaid and expires unused.
+      const open = await prisma.paymentSession.findFirst({
+        where: {
+          invoiceId: invoice.id,
+          status: "OPEN",
+          amountMinor: invoice.balanceDueMinor,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (open) return open as CheckoutSessionView;
     }
     throw error;
   }
@@ -329,7 +384,17 @@ export async function settlePaymentSession(
     ) {
       // Provider took the money but the invoice can't accept it (voided,
       // balance consumed). Park the session as FAILED so it stops being
-      // retried; the PaymentOperation was rolled back with the tx.
+      // retried; the PaymentOperation was rolled back with the tx. This
+      // is a money-at-risk state — the customer was charged provider-side
+      // with no ledger payment — so it must be loud, not silent.
+      logger.error(
+        { providerSessionId },
+        "Payment session settlement conflict: provider captured funds the invoice cannot accept",
+      );
+      captureBackgroundError(
+        new Error("PAYMENT_SESSION_SETTLEMENT_CONFLICT"),
+        "payment-session-settlement-conflict",
+      );
       await prisma.paymentSession.updateMany({
         where: { providerSessionId, status: "OPEN" },
         data: { status: "FAILED" },
@@ -349,39 +414,27 @@ export async function settlePaymentSession(
  * provider+eventId makes replays harmless), then process by type.
  * Unknown types are acknowledged and logged, never errors.
  */
-export async function processWebhookEvent(
+const WEBHOOK_MAX_ATTEMPTS = 8;
+const WEBHOOK_RETRY_MIN_AGE_MS = 60 * 1000;
+
+/**
+ * Apply a verified webhook to ledger state and record the outcome.
+ *
+ * Retryable by design: deterministic rejections (`rejected:*`,
+ * `ignored`, `settled`, …) are marked processed immediately, but
+ * processing exceptions leave `processedAt` NULL with an `error:*`
+ * outcome so a provider replay — or `sweepUnprocessedWebhookEvents` —
+ * re-runs the event instead of the dedupe row swallowing the failure.
+ * After WEBHOOK_MAX_ATTEMPTS the event is dead-lettered (processedAt
+ * set) so a permanently poisoned event cannot retry forever.
+ */
+async function applyWebhookEvent(
   provider: PaymentProvider,
+  event: { id: string; companyId: string | null; attempts: number },
   verified: VerifiedWebhook,
-  rawBody: Buffer,
-): Promise<{ outcome: string; duplicate?: boolean }> {
-  const payloadHash = createHash("sha256").update(rawBody).digest("hex");
-
-  let event;
-  try {
-    event = await prisma.providerWebhookEvent.create({
-      data: {
-        provider: provider.name,
-        eventId: verified.eventId,
-        type: verified.type,
-        payloadHash,
-        payload: {
-          providerSessionId: verified.providerSessionId ?? null,
-          paymentId: verified.paymentId ?? null,
-          refundId: verified.refundId ?? null,
-          amountMinor: verified.amountMinor?.toString() ?? null,
-          currency: verified.currency ?? null,
-        },
-      },
-    });
-  } catch (error) {
-    if (isUniqueConstraintError(error)) {
-      return { outcome: "duplicate", duplicate: true };
-    }
-    throw error;
-  }
-
+): Promise<string> {
   let outcome = "ignored";
-  let companyId: string | null = null;
+  let companyId = event.companyId;
   try {
     if (
       verified.type === "checkout.completed" ||
@@ -448,13 +501,131 @@ export async function processWebhookEvent(
       { provider: provider.name, eventId: verified.eventId, error },
       "Payment webhook processing failed",
     );
+    captureBackgroundError(error, "payment-webhook-processing");
   }
 
+  const failed = outcome.startsWith("error:");
+  const attempts = event.attempts + 1;
+  const deadLettered = failed && attempts >= WEBHOOK_MAX_ATTEMPTS;
   await prisma.providerWebhookEvent.update({
     where: { id: event.id },
-    data: { processedAt: new Date(), outcome, companyId },
+    data: {
+      outcome,
+      companyId,
+      attempts: { increment: 1 },
+      ...(failed && !deadLettered ? {} : { processedAt: new Date() }),
+    },
   });
+  return outcome;
+}
+
+export async function processWebhookEvent(
+  provider: PaymentProvider,
+  verified: VerifiedWebhook,
+  rawBody: Buffer,
+): Promise<{ outcome: string; duplicate?: boolean }> {
+  const payloadHash = createHash("sha256").update(rawBody).digest("hex");
+
+  let event;
+  try {
+    event = await prisma.providerWebhookEvent.create({
+      data: {
+        provider: provider.name,
+        eventId: verified.eventId,
+        type: verified.type,
+        payloadHash,
+        payload: {
+          providerSessionId: verified.providerSessionId ?? null,
+          paymentId: verified.paymentId ?? null,
+          refundId: verified.refundId ?? null,
+          amountMinor: verified.amountMinor?.toString() ?? null,
+          currency: verified.currency ?? null,
+        },
+      },
+    });
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) {
+      throw error;
+    }
+    const existing = await prisma.providerWebhookEvent.findUnique({
+      where: {
+        provider_eventId: {
+          provider: provider.name,
+          eventId: verified.eventId,
+        },
+      },
+    });
+    if (!existing) {
+      throw error;
+    }
+    if (existing.processedAt) {
+      // Fully processed (or dead-lettered) delivery — replay is harmless.
+      return { outcome: "duplicate", duplicate: true };
+    }
+    // Received earlier but processing failed: re-run it now.
+    event = existing;
+  }
+
+  const outcome = await applyWebhookEvent(provider, event, verified);
   return { outcome };
+}
+
+/**
+ * Reconciliation for webhook events whose processing failed and which the
+ * provider never replayed. The stored `payload` carries everything
+ * `VerifiedWebhook` needs, so no raw body is required. Processing is
+ * idempotent (session claim, guarded balance update, PENDING-only refund
+ * transitions), so overlap with a late provider replay is safe.
+ */
+export async function sweepUnprocessedWebhookEvents(
+  providerFor: (name: string) => PaymentProvider = getPaymentProvider,
+  limit = 25,
+): Promise<{ retried: number; succeeded: number }> {
+  const stale = await prisma.providerWebhookEvent.findMany({
+    where: {
+      processedAt: null,
+      attempts: { lt: WEBHOOK_MAX_ATTEMPTS },
+      receivedAt: { lt: new Date(Date.now() - WEBHOOK_RETRY_MIN_AGE_MS) },
+    },
+    take: limit,
+    orderBy: { receivedAt: "asc" },
+  });
+
+  let retried = 0;
+  let succeeded = 0;
+  for (const event of stale) {
+    try {
+      const provider = providerFor(event.provider);
+      const payload = (event.payload ?? {}) as Record<string, unknown>;
+      const verified: VerifiedWebhook = {
+        eventId: event.eventId,
+        type: event.type,
+        providerSessionId:
+          typeof payload.providerSessionId === "string"
+            ? payload.providerSessionId
+            : undefined,
+        paymentId:
+          typeof payload.paymentId === "string" ? payload.paymentId : undefined,
+        refundId:
+          typeof payload.refundId === "string" ? payload.refundId : undefined,
+        amountMinor:
+          typeof payload.amountMinor === "string"
+            ? BigInt(payload.amountMinor)
+            : undefined,
+        currency:
+          typeof payload.currency === "string" ? payload.currency : undefined,
+      };
+      const outcome = await applyWebhookEvent(provider, event, verified);
+      retried += 1;
+      if (!outcome.startsWith("error:")) succeeded += 1;
+    } catch (error) {
+      logger.warn(
+        { eventId: event.eventId, error },
+        "Webhook event retry failed before processing",
+      );
+    }
+  }
+  return { retried, succeeded };
 }
 
 /**
@@ -535,6 +706,12 @@ export function startPaymentSessionScheduler(): () => void {
     } catch (error) {
       logger.error({ error }, "Payment session sweep failed");
       captureBackgroundError(error, "payment-session-sweep");
+    }
+    try {
+      await sweepUnprocessedWebhookEvents();
+    } catch (error) {
+      logger.error({ error }, "Webhook event retry sweep failed");
+      captureBackgroundError(error, "payment-webhook-sweep");
     } finally {
       running = false;
     }

@@ -31,7 +31,9 @@ router.post(
       ? request.params.provider[0]
       : request.params.provider;
     const provider =
-      name === "sandbox" ? sandboxPaymentProvider : getPaymentProvider(name);
+      name === "sandbox" && env.NODE_ENV !== "production"
+        ? sandboxPaymentProvider
+        : getPaymentProvider(name);
     if (!provider.verifyWebhook) {
       throw new AppError(
         "WEBHOOK_NOT_SUPPORTED",

@@ -56,6 +56,10 @@ export async function createRefund(
   }
 
   // Serializable check-and-create under a row lock on the payment.
+  // A PENDING/FAILED refund for the same payment+amount+reason is RESUMED
+  // rather than duplicated: the provider call below uses the refund row id
+  // as its idempotency key, so retrying the same row is safe even when a
+  // previous attempt succeeded provider-side but failed to record here.
   const refund = await prisma.$transaction(async (tx) => {
     const locked = await tx.$queryRaw<{ id: string; amountMinor: bigint }[]>`
       SELECT id, "amountMinor" FROM payments WHERE id = ${payment.id}::uuid FOR UPDATE`;
@@ -72,6 +76,7 @@ export async function createRefund(
     const alreadyRefunded = existing._sum.amountMinor ?? 0n;
     const refundable = locked[0].amountMinor - alreadyRefunded;
     const amount = BigInt(input.amountMinor);
+    const reason = input.reason.trim();
     if (amount <= 0n || amount > refundable) {
       throw new AppError(
         "REFUND_EXCEEDS_PAYMENT",
@@ -79,13 +84,23 @@ export async function createRefund(
         422,
       );
     }
+    const reusable = await tx.refund.findFirst({
+      where: {
+        paymentId: payment.id,
+        amountMinor: amount,
+        reason,
+        status: { in: ["PENDING", "FAILED"] },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (reusable) return reusable;
     return tx.refund.create({
       data: {
         companyId: context.companyId,
         invoiceId,
         paymentId: payment.id,
         amountMinor: amount,
-        reason: input.reason.trim(),
+        reason,
         status: "PENDING",
         createdBy: context.userId,
       },
@@ -103,21 +118,22 @@ export async function createRefund(
     return jsonSafe({ ...refund, status: "COMPLETED" as const });
   }
 
+  // Only the provider call is inside the try: a DB failure after the
+  // provider accepted must NOT mark the refund FAILED (the money already
+  // moved). Leaving it PENDING keeps it resumable — a retry reuses this
+  // row and the same provider idempotency key.
+  let providerRefundId: string | undefined;
   try {
+    // refund.id is the provider idempotency key: if a previous attempt
+    // reached the provider but crashed before recording the result, this
+    // retry returns the same providerRefundId instead of refunding twice.
     const result = await provider.refund(
       payment.providerPaymentId ?? payment.id,
       refund.amountMinor,
-      input.reason.trim(),
+      refund.reason,
+      refund.id,
     );
-    const synchronous = provider.name === "sandbox";
-    const updated = await prisma.refund.update({
-      where: { id: refund.id },
-      data: {
-        providerRefundId: result.providerRefundId,
-        ...(synchronous ? { status: "COMPLETED" as const } : {}),
-      },
-    });
-    return jsonSafe(updated);
+    providerRefundId = result.providerRefundId;
   } catch (error) {
     await prisma.refund.update({
       where: { id: refund.id },
@@ -133,6 +149,16 @@ export async function createRefund(
       502,
     );
   }
+
+  const synchronous = provider.name === "sandbox";
+  const updated = await prisma.refund.update({
+    where: { id: refund.id },
+    data: {
+      providerRefundId,
+      ...(synchronous ? { status: "COMPLETED" as const } : {}),
+    },
+  });
+  return jsonSafe(updated);
 }
 
 export async function listInvoiceRefunds(

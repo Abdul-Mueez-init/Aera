@@ -11,7 +11,11 @@ import { settlePaymentSession } from "./payment-session.service.js";
 const router = Router();
 
 function sandboxEnabled(): boolean {
-  return env.ONLINE_PAYMENTS_ENABLED && env.PAYMENT_PROVIDER === "sandbox";
+  return (
+    env.ONLINE_PAYMENTS_ENABLED &&
+    env.PAYMENT_PROVIDER === "sandbox" &&
+    env.NODE_ENV !== "production"
+  );
 }
 
 function escapeHtml(value: string): string {

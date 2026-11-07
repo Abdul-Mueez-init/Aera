@@ -21,6 +21,15 @@ export interface DisputePortalContext {
 
 const OPEN_STATUSES = ["OPEN", "UNDER_REVIEW"] as const;
 
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "P2002"
+  );
+}
+
 export async function createPortalDispute(
   context: DisputePortalContext,
   invoiceId: string,
@@ -63,28 +72,43 @@ export async function createPortalDispute(
     );
   }
 
-  const dispute = await prisma.$transaction(async (tx) => {
-    const created = await tx.invoiceDispute.create({
-      data: {
-        companyId: context.companyId,
-        invoiceId,
-        customerId: context.customerId,
-        reason: input.reason,
-        message: input.message.trim(),
-        status: "OPEN",
-      },
+  let dispute;
+  try {
+    dispute = await prisma.$transaction(async (tx) => {
+      const created = await tx.invoiceDispute.create({
+        data: {
+          companyId: context.companyId,
+          invoiceId,
+          customerId: context.customerId,
+          reason: input.reason,
+          message: input.message.trim(),
+          status: "OPEN",
+        },
+      });
+      await tx.invoiceDisputeEvent.create({
+        data: {
+          companyId: context.companyId,
+          disputeId: created.id,
+          type: "CREATED",
+          toStatus: "OPEN",
+          note: input.message.trim(),
+        },
+      });
+      return created;
     });
-    await tx.invoiceDisputeEvent.create({
-      data: {
-        companyId: context.companyId,
-        disputeId: created.id,
-        type: "CREATED",
-        toStatus: "OPEN",
-        note: input.message.trim(),
-      },
-    });
-    return created;
-  });
+  } catch (error) {
+    // The pre-check above races under parallel requests; the partial
+    // unique index invoice_disputes_one_open_per_invoice is the real
+    // guard. Surface the same 409 the check would have produced.
+    if (isUniqueConstraintError(error)) {
+      throw new AppError(
+        "DISPUTE_ALREADY_OPEN",
+        "An open dispute already exists for this invoice",
+        409,
+      );
+    }
+    throw error;
+  }
 
   void notificationPublisher.publish({
     type: "INVOICE_DISPUTE_OPENED",

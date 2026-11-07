@@ -53,14 +53,18 @@ export async function recomputeInvoiceBalance(
   let status: string;
   if (invoice.status === "VOID") {
     status = "VOID";
-  } else if (balanceDueMinor === 0n && invoice.status !== "DRAFT") {
+  } else if (invoice.status === "DRAFT") {
+    // A draft stays a draft even when credits/payments already exist
+    // (deposit and diagnostic credits are applied at creation time).
+    // Promoting it here would make issueInvoice treat it as already
+    // issued and skip the ISSUED transition entirely.
+    status = "DRAFT";
+  } else if (balanceDueMinor === 0n) {
     // Zero-total invoices are settled by definition — without this a
     // $0 invoice could absorb unlimited $0 payments forever.
     status = "PAID";
   } else if (settled > 0n) {
     status = "PARTIALLY_PAID";
-  } else if (invoice.status === "DRAFT") {
-    status = "DRAFT";
   } else {
     status = invoice.status === "OVERDUE" ? "OVERDUE" : "ISSUED";
   }
@@ -165,4 +169,68 @@ export async function applyDepositCredits(
     await recomputeInvoiceBalance(args.targetInvoiceId, tx);
   }
   return { appliedMinor };
+}
+
+/**
+ * Credit a target invoice from any paid source invoice (diagnostic fee,
+ * deposit, goodwill credit). The source row is locked FOR UPDATE and the
+ * creditable amount is `amountPaidMinor − Σ credits already sourced from
+ * it`, so a PARTIALLY_PAID source can never credit money it did not
+ * actually receive and two targets racing for the same source serialize.
+ * The unique (sourceInvoiceId, targetInvoiceId) index makes a duplicate
+ * application impossible.
+ */
+export async function applyPaidInvoiceCredit(
+  tx: Tx,
+  args: {
+    companyId: string;
+    sourceInvoiceId: string;
+    targetInvoiceId: string;
+  },
+): Promise<{ appliedMinor: bigint }> {
+  const locked = await tx.$queryRaw<
+    { id: string; amountPaidMinor: bigint }[]
+  >`SELECT id, "amountPaidMinor" FROM invoices WHERE id = ${args.sourceInvoiceId}::uuid AND "companyId" = ${args.companyId}::uuid FOR UPDATE`;
+  if (locked.length === 0) return { appliedMinor: 0n };
+
+  const consumedAgg = await tx.invoiceCreditApplication.aggregate({
+    where: { sourceInvoiceId: args.sourceInvoiceId },
+    _sum: { amountMinor: true },
+  });
+  const creditable =
+    locked[0].amountPaidMinor - (consumedAgg._sum.amountMinor ?? 0n);
+  if (creditable <= 0n) return { appliedMinor: 0n };
+
+  const target = await tx.invoice.findUniqueOrThrow({
+    where: { id: args.targetInvoiceId },
+    select: { balanceDueMinor: true },
+  });
+  const amount =
+    creditable < target.balanceDueMinor ? creditable : target.balanceDueMinor;
+  if (amount <= 0n) return { appliedMinor: 0n };
+
+  try {
+    await tx.invoiceCreditApplication.create({
+      data: {
+        companyId: args.companyId,
+        sourceInvoiceId: args.sourceInvoiceId,
+        targetInvoiceId: args.targetInvoiceId,
+        amountMinor: amount,
+      },
+    });
+  } catch (error) {
+    // Unique (sourceInvoiceId, targetInvoiceId) — already applied.
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: string }).code === "P2002"
+    ) {
+      return { appliedMinor: 0n };
+    }
+    throw error;
+  }
+
+  await recomputeInvoiceBalance(args.targetInvoiceId, tx);
+  return { appliedMinor: amount };
 }

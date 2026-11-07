@@ -47,10 +47,16 @@ export interface PaymentProvider {
     rawBody: Buffer,
     headers: Record<string, string | undefined>,
   ): VerifiedWebhook;
+  /**
+   * `idempotencyKey` is a stable caller-generated key (the Refund row id)
+   * that providers must honor so a retry after a timeout or crash cannot
+   * execute the refund twice provider-side.
+   */
   refund?(
     paymentId: string,
     amountMinor: bigint,
     reason: string,
+    idempotencyKey?: string,
   ): Promise<{
     providerRefundId?: string;
   }>;
