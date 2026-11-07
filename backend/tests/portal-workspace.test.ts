@@ -316,8 +316,22 @@ beforeEach(async () => {
     prisma.customerReview.deleteMany(),
     prisma.quoteApprovalEvent.deleteMany(),
     prisma.quoteItem.deleteMany(),
+    prisma.job.updateMany({
+      where: { sourceQuoteId: { not: null } },
+      data: { sourceQuoteId: null },
+    }),
+    prisma.quote.updateMany({
+      where: {
+        OR: [
+          { supersedesQuoteId: { not: null } },
+          { supersededByQuoteId: { not: null } },
+        ],
+      },
+      data: { supersedesQuoteId: null, supersededByQuoteId: null },
+    }),
     prisma.quote.deleteMany(),
     prisma.invoiceItem.deleteMany(),
+    prisma.invoiceCreditApplication.deleteMany(),
     prisma.invoice.deleteMany(),
     prisma.payment.deleteMany(),
     prisma.jobStatusHistory.deleteMany(),

@@ -650,6 +650,9 @@ describe("Phase G2 — Critical Customer-to-Cash Integration Test", () => {
     }
 
     // Clean up test data (optional for integration test, but good practice)
+    await prisma.invoiceCreditApplication.deleteMany({
+      where: { companyId: owner.companyId },
+    });
     await prisma.invoice.deleteMany({
       where: { companyId: owner.companyId },
     });

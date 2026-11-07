@@ -177,10 +177,23 @@ describe("Phase 8.2 — live tracking backend", () => {
     const fx = await seedCompany();
     const job = await seedJob(fx, { status: "EN_ROUTE" });
 
+    // Location sharing requires explicit consent on the first update.
+    const noConsent = await request(app)
+      .post(`/api/v1/jobs/${job.id}/location`)
+      .set(fx.auth)
+      .send({ latitude: 30.27, longitude: -97.74 });
+    expect(noConsent.status).toBe(422);
+    expect(noConsent.body.error.code).toBe("TRACKING_CONSENT_REQUIRED");
+
     const res = await request(app)
       .post(`/api/v1/jobs/${job.id}/location`)
       .set(fx.auth)
-      .send({ latitude: 30.27, longitude: -97.74, accuracy: 12 });
+      .send({
+        latitude: 30.27,
+        longitude: -97.74,
+        accuracy: 12,
+        consent: true,
+      });
     expect(res.status).toBe(200);
     expect(res.body.data.etaMinutes).toBeGreaterThan(0);
 
@@ -217,7 +230,7 @@ describe("Phase 8.2 — live tracking backend", () => {
     await request(app)
       .post(`/api/v1/jobs/${enRoute.id}/location`)
       .set(fx.auth)
-      .send({ latitude: 30.27, longitude: -97.74 });
+      .send({ latitude: 30.27, longitude: -97.74, consent: true });
     await prisma.jobTrackingState.update({
       where: { jobId: enRoute.id },
       data: { sharingActive: true },
@@ -241,7 +254,7 @@ describe("Phase 8.2 — live tracking backend", () => {
     await request(app)
       .post(`/api/v1/jobs/${job.id}/location`)
       .set(fx.auth)
-      .send({ latitude: 30.27, longitude: -97.74 });
+      .send({ latitude: 30.27, longitude: -97.74, consent: true });
 
     const portal = await portalSession(fx);
     const res = await request(app)

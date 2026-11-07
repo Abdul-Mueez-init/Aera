@@ -163,6 +163,7 @@ beforeEach(async () => {
   await prisma.$transaction([
     prisma.payment.deleteMany(),
     prisma.invoiceItem.deleteMany(),
+    prisma.invoiceCreditApplication.deleteMany(),
     prisma.invoice.deleteMany(),
     prisma.portalSession.deleteMany(),
     prisma.portalAccessGrant.deleteMany(),

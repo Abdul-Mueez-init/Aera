@@ -110,7 +110,7 @@ async function seedTechnician(fx: Fixture) {
 async function seedJob(
   fx: Fixture,
   opts: {
-    type?: "DIAGNOSTIC" | "REPAIR" | "OTHER";
+    type?: "DIAGNOSTIC" | "REPAIR" | "INSTALLATION" | "MAINTENANCE" | "OTHER";
     status?: string;
     technicianId?: string;
     serviceRequestId?: string;
@@ -133,12 +133,42 @@ async function seedJob(
   });
 }
 
+// Phase 6.3 completion requirements: REPAIR/INSTALLATION jobs need one
+// BEFORE and one AFTER photo before completeJob accepts completion.
+async function addCompletionPhotos(jobId: string) {
+  for (const kind of ["BEFORE", "AFTER"] as const) {
+    await prisma.jobPhoto.create({
+      data: {
+        companyId: fx.companyId,
+        jobId,
+        uploadedBy: tech.userId,
+        objectKey: `test/${jobId}/${kind}.jpg`,
+        mimeType: "image/jpeg",
+        sizeBytes: 1024n,
+        kind,
+      },
+    });
+  }
+}
+
 let fx: Fixture;
 let tech: { userId: string; auth: { Authorization: string } };
 
 beforeEach(async () => {
   await prisma.$transaction([
+    // Break the jobs↔quotes circular FKs first: a leftover job from a
+    // previous file's last test may still reference its source quote
+    // (Restrict), and a quote may reference its basis job.
+    prisma.job.updateMany({ data: { sourceQuoteId: null } }),
+    prisma.quote.updateMany({
+      data: {
+        basisJobId: null,
+        supersedesQuoteId: null,
+        supersededByQuoteId: null,
+      },
+    }),
     prisma.invoiceItem.deleteMany(),
+    prisma.invoiceCreditApplication.deleteMany(),
     prisma.invoice.deleteMany(),
     prisma.quoteApprovalEvent.deleteMany(),
     prisma.quoteAcceptance.deleteMany(),
@@ -197,6 +227,61 @@ describe("6.3 findings and completion requirements", () => {
     expect(done.body.data.reviewState).toBe("NOT_REQUIRED");
   });
 
+  it("enforces the completionRequirements map per job type", async () => {
+    // REPAIR without photos → blocked with BEFORE photo error.
+    const repair = await seedJob(fx, {
+      type: "REPAIR",
+      technicianId: tech.userId,
+    });
+    const noPhotos = await request(app)
+      .post(`/api/v1/jobs/${repair.id}/complete`)
+      .set(tech.auth)
+      .send({ summary: "Done" });
+    expect(noPhotos.status).toBe(422);
+    expect(noPhotos.body.error.code).toBe("JOB_BEFORE_PHOTO_REQUIRED");
+
+    // BEFORE only → blocked on AFTER.
+    await prisma.jobPhoto.create({
+      data: {
+        companyId: fx.companyId,
+        jobId: repair.id,
+        uploadedBy: tech.userId,
+        objectKey: `test/${repair.id}/before.jpg`,
+        mimeType: "image/jpeg",
+        sizeBytes: 1024n,
+        kind: "BEFORE",
+      },
+    });
+    const noAfter = await request(app)
+      .post(`/api/v1/jobs/${repair.id}/complete`)
+      .set(tech.auth)
+      .send({ summary: "Done" });
+    expect(noAfter.status).toBe(422);
+    expect(noAfter.body.error.code).toBe("JOB_AFTER_PHOTO_REQUIRED");
+
+    // INSTALLATION also requires both photos.
+    const install = await seedJob(fx, {
+      type: "INSTALLATION",
+      technicianId: tech.userId,
+    });
+    const installBlocked = await request(app)
+      .post(`/api/v1/jobs/${install.id}/complete`)
+      .set(tech.auth)
+      .send({ summary: "Done" });
+    expect(installBlocked.status).toBe(422);
+    expect(installBlocked.body.error.code).toBe("JOB_BEFORE_PHOTO_REQUIRED");
+
+    // MAINTENANCE and OTHER have no minimums.
+    for (const type of ["MAINTENANCE", "OTHER"] as const) {
+      const job = await seedJob(fx, { type, technicianId: tech.userId });
+      const res = await request(app)
+        .post(`/api/v1/jobs/${job.id}/complete`)
+        .set(tech.auth)
+        .send({ summary: "Done" });
+      expect(res.status).toBe(200);
+    }
+  });
+
   it("unassigned technician cannot add findings (6.1 authz)", async () => {
     const otherTech = await seedTechnician(fx);
     const job = await seedJob(fx, { technicianId: tech.userId });
@@ -208,6 +293,119 @@ describe("6.3 findings and completion requirements", () => {
   });
 });
 
+describe("4.6 repair quote from diagnostic findings", () => {
+  async function diagnosticJobWithFinding() {
+    const requestRow = await prisma.serviceRequest.create({
+      data: {
+        companyId: fx.companyId,
+        customerId: fx.customerId,
+        serviceAddressId: fx.addressId,
+        requestNumber: Math.floor(Math.random() * 900_000) + 1000,
+        title: "No cooling",
+        description: "AC dead",
+        serviceCategory: "HVAC",
+        source: "STAFF_DIRECT",
+        status: "ACCEPTED",
+      },
+    });
+    const job = await seedJob(fx, {
+      type: "DIAGNOSTIC",
+      status: "COMPLETED",
+      technicianId: tech.userId,
+      serviceRequestId: requestRow.id,
+    });
+    await prisma.jobFinding.create({
+      data: {
+        companyId: fx.companyId,
+        jobId: job.id,
+        authorUserId: tech.userId,
+        summary: "Failed capacitor",
+        recommendedWork: "Replace run capacitor and test",
+        likelyParts: [
+          { name: "Run capacitor 45/5", quantity: 1, unitPriceMinor: 4500 },
+        ],
+        customerVisible: true,
+      },
+    });
+    return { requestRow, job };
+  }
+
+  it("creates a REPAIR quote linked to the request and diagnostic job", async () => {
+    const { requestRow, job } = await diagnosticJobWithFinding();
+    const res = await request(app)
+      .post(`/api/v1/jobs/${job.id}/repair-quote`)
+      .set(fx.auth);
+    expect(res.status).toBe(201);
+    expect(res.body.data.kind).toBe("REPAIR");
+    expect(res.body.data.status).toBe("DRAFT");
+    expect(res.body.data.serviceRequestId).toBe(requestRow.id);
+    expect(res.body.data.basisJobId).toBe(job.id);
+    expect(res.body.data.customerId).toBe(fx.customerId);
+    // Items come only from findings: work line + priced likelyPart.
+    expect(res.body.data.items).toHaveLength(2);
+    expect(res.body.data.items[0].description).toBe(
+      "Replace run capacitor and test",
+    );
+    expect(res.body.data.items[1].description).toBe("Run capacitor 45/5");
+  });
+
+  it("rejects non-diagnostic, incomplete, and finding-less jobs", async () => {
+    const repair = await seedJob(fx, {
+      type: "REPAIR",
+      status: "COMPLETED",
+      technicianId: tech.userId,
+    });
+    const wrongType = await request(app)
+      .post(`/api/v1/jobs/${repair.id}/repair-quote`)
+      .set(fx.auth);
+    expect(wrongType.status).toBe(422);
+    expect(wrongType.body.error.code).toBe("REPAIR_QUOTE_REQUIRES_DIAGNOSTIC");
+
+    const requestRow = await prisma.serviceRequest.create({
+      data: {
+        companyId: fx.companyId,
+        customerId: fx.customerId,
+        serviceAddressId: fx.addressId,
+        requestNumber: Math.floor(Math.random() * 900_000) + 1000,
+        title: "No cooling",
+        description: "AC dead",
+        serviceCategory: "HVAC",
+        source: "STAFF_DIRECT",
+        status: "ACCEPTED",
+      },
+    });
+    const noFindings = await seedJob(fx, {
+      type: "DIAGNOSTIC",
+      status: "COMPLETED",
+      technicianId: tech.userId,
+      serviceRequestId: requestRow.id,
+    });
+    const empty = await request(app)
+      .post(`/api/v1/jobs/${noFindings.id}/repair-quote`)
+      .set(fx.auth);
+    expect(empty.status).toBe(422);
+    expect(empty.body.error.code).toBe("JOB_FINDING_REQUIRED");
+
+    const inProgress = await seedJob(fx, {
+      type: "DIAGNOSTIC",
+      status: "IN_PROGRESS",
+      technicianId: tech.userId,
+    });
+    const notDone = await request(app)
+      .post(`/api/v1/jobs/${inProgress.id}/repair-quote`)
+      .set(fx.auth);
+    expect(notDone.status).toBe(422);
+  });
+
+  it("technicians cannot create repair quotes", async () => {
+    const { job } = await diagnosticJobWithFinding();
+    const res = await request(app)
+      .post(`/api/v1/jobs/${job.id}/repair-quote`)
+      .set(tech.auth);
+    expect(res.status).toBe(403);
+  });
+});
+
 describe("6.4 completion review", () => {
   it("PENDING → APPROVED gates invoicing; CHANGES_REQUESTED reopens evidence", async () => {
     await prisma.company.update({
@@ -215,6 +413,7 @@ describe("6.4 completion review", () => {
       data: { requireCompletionReview: true },
     });
     const job = await seedJob(fx, { technicianId: tech.userId });
+    await addCompletionPhotos(job.id);
     const done = await request(app)
       .post(`/api/v1/jobs/${job.id}/complete`)
       .set(tech.auth)
@@ -393,6 +592,7 @@ describe("6.6 invoice scope lines", () => {
       .send({ reason: "Customer approved by phone" });
     expect(authorized.status).toBe(200);
 
+    await addCompletionPhotos(job.id);
     await request(app)
       .post(`/api/v1/jobs/${job.id}/complete`)
       .set(tech.auth)
@@ -449,6 +649,7 @@ describe("6.6 invoice scope lines", () => {
         invoiceNumber: `INV-${Math.floor(Math.random() * 900_000) + 1000}`,
         subtotalMinor: 5000n,
         totalMinor: 5000n,
+        amountPaidMinor: 5000n,
         balanceDueMinor: 0n,
         currency: "USD",
         status: "PAID",
@@ -466,7 +667,18 @@ describe("6.6 invoice scope lines", () => {
         },
       },
     });
-    void diagInvoice;
+    // The credit is capped at money actually received — record the
+    // payment that makes this diagnostic invoice PAID.
+    await prisma.payment.create({
+      data: {
+        companyId: fx.companyId,
+        invoiceId: diagInvoice.id,
+        amountMinor: 5000n,
+        currency: "USD",
+        method: "CARD",
+        idempotencyKey: `diag-pay-${diagInvoice.id}`,
+      },
+    });
 
     // Follow-up repair job on the same request.
     const repairJob = await seedJob(fx, {
@@ -489,12 +701,87 @@ describe("6.6 invoice scope lines", () => {
       .set(fx.auth)
       .send({});
     expect(invoice.status).toBe(201);
-    const credit = invoice.body.data.items.find(
+    // The diagnostic fee credits through InvoiceCreditApplication, not a
+    // negative line item: total stays at the parts total and the balance
+    // is reduced by the credit.
+    const creditLine = invoice.body.data.items.find(
       (item: { description: string }) =>
         item.description === "Credit: diagnostic fee",
     );
+    expect(creditLine).toBeUndefined();
+    expect(Number(invoice.body.data.totalMinor)).toBe(12000);
+    expect(Number(invoice.body.data.balanceDueMinor)).toBe(7000);
+    const credit = invoice.body.data.creditTargets.find(
+      (target: { sourceInvoice: { id: string } }) =>
+        target.sourceInvoice.id === diagInvoice.id,
+    );
     expect(credit).toBeDefined();
-    expect(Number(credit.totalMinor)).toBe(-5000);
-    expect(Number(invoice.body.data.totalMinor)).toBe(7000);
+    expect(Number(credit.amountMinor)).toBe(5000);
+  });
+
+  it("6.5 preview exposes unapproved parts; generation excludes them", async () => {
+    const job = await seedJob(fx, {
+      status: "COMPLETED",
+      technicianId: tech.userId,
+    });
+    const part = await prisma.jobPart.create({
+      data: {
+        companyId: fx.companyId,
+        jobId: job.id,
+        name: "Extra capacitor",
+        quantity: "1",
+        unitPriceMinor: 9000n,
+        currency: "USD",
+      },
+    });
+    const quote = await prisma.quote.create({
+      data: {
+        companyId: fx.companyId,
+        customerId: fx.customerId,
+        jobId: job.id,
+        kind: "REPAIR",
+        status: "APPROVED",
+        subtotalMinor: 20000n,
+        totalMinor: 20000n,
+        currency: "USD",
+        approvedAt: new Date(),
+        items: {
+          create: [
+            {
+              companyId: fx.companyId,
+              description: "Approved repair labor",
+              quantity: "1",
+              unitPriceMinor: 20000n,
+              totalMinor: 20000n,
+              sortOrder: 0,
+            },
+          ],
+        },
+      },
+    });
+
+    const preview = await request(app)
+      .get(`/api/v1/invoices/from-job/${job.id}/preview`)
+      .set(fx.auth);
+    expect(preview.status).toBe(200);
+    expect(preview.body.data.issueable).toBe(true);
+    expect(preview.body.data.items).toHaveLength(1);
+    expect(preview.body.data.items[0].sourceType).toBe("QUOTE_ITEM");
+    expect(preview.body.data.unapprovedParts).toHaveLength(1);
+    expect(preview.body.data.unapprovedParts[0].id).toBe(part.id);
+    expect(Number(preview.body.data.totalMinor)).toBe(20000);
+
+    const invoice = await request(app)
+      .post(`/api/v1/invoices/from-job/${job.id}`)
+      .set(fx.auth)
+      .send({});
+    expect(invoice.status).toBe(201);
+    expect(
+      invoice.body.data.items.every(
+        (item: { sourceType: string }) => item.sourceType !== "JOB_PART",
+      ),
+    ).toBe(true);
+    expect(Number(invoice.body.data.totalMinor)).toBe(20000);
+    expect(quote.id).toBeTruthy();
   });
 });

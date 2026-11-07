@@ -254,12 +254,30 @@ beforeEach(async () => {
     prisma.providerWebhookEvent.deleteMany(),
     prisma.invoiceCreditApplication.deleteMany(),
     prisma.invoiceItem.deleteMany(),
+    prisma.invoiceCreditApplication.deleteMany(),
     prisma.invoice.deleteMany(),
+    prisma.quote.updateMany({
+      where: { basisJobId: { not: null } },
+      data: { basisJobId: null },
+    }),
     prisma.jobStatusHistory.deleteMany(),
     prisma.job.deleteMany(),
     prisma.quoteApprovalEvent.deleteMany(),
     prisma.quoteAcceptance.deleteMany(),
     prisma.quoteItem.deleteMany(),
+    prisma.job.updateMany({
+      where: { sourceQuoteId: { not: null } },
+      data: { sourceQuoteId: null },
+    }),
+    prisma.quote.updateMany({
+      where: {
+        OR: [
+          { supersedesQuoteId: { not: null } },
+          { supersededByQuoteId: { not: null } },
+        ],
+      },
+      data: { supersedesQuoteId: null, supersededByQuoteId: null },
+    }),
     prisma.quote.deleteMany(),
     prisma.serviceRequestMessage.deleteMany(),
     prisma.serviceRequestAttachment.deleteMany(),
@@ -573,6 +591,112 @@ describe("7.4 deposits", () => {
       .set(fx.auth);
     // 25% of 20000 = 5000
     expect(sent.body.data.depositMinor).toBe("5000");
+  });
+
+  it("cancelling an unpaid deposit voids it and cancels the gated request", async () => {
+    const { requestRow, depositInvoice } = await depositFlow();
+
+    const missingReason = await request(app)
+      .post(`/api/v1/invoices/${depositInvoice.id}/cancel-deposit`)
+      .set(fx.auth)
+      .send({ refund: false });
+    expect(missingReason.status).toBe(422);
+
+    const cancel = await request(app)
+      .post(`/api/v1/invoices/${depositInvoice.id}/cancel-deposit`)
+      .set(fx.auth)
+      .send({ reason: "Customer withdrew", refund: false });
+    expect(cancel.status).toBe(200);
+    expect(cancel.body.data.alreadyCancelled).toBe(false);
+
+    const invoice = await prisma.invoice.findUniqueOrThrow({
+      where: { id: depositInvoice.id },
+    });
+    expect(invoice.status).toBe("VOID");
+    expect(invoice.balanceDueMinor).toBe(0n);
+
+    const requestAfter = await prisma.serviceRequest.findUniqueOrThrow({
+      where: { id: requestRow.id },
+    });
+    expect(requestAfter.status).toBe("CANCELLED");
+
+    const audit = await prisma.portalAuditEvent.findFirstOrThrow({
+      where: {
+        companyId: fx.companyId,
+        action: "DEPOSIT_INVOICE_CANCELLED",
+        resourceId: depositInvoice.id,
+      },
+    });
+    expect(audit.actorUserId).toBe(fx.userId);
+
+    // Idempotent: a second cancel reports alreadyCancelled.
+    const again = await request(app)
+      .post(`/api/v1/invoices/${depositInvoice.id}/cancel-deposit`)
+      .set(fx.auth)
+      .send({ reason: "Customer withdrew", refund: false });
+    expect(again.status).toBe(200);
+    expect(again.body.data.alreadyCancelled).toBe(true);
+  });
+
+  it("cancelling a paid deposit refunds payments then voids", async () => {
+    const { depositInvoice } = await depositFlow();
+    await payViaPortal(fx, depositInvoice.id);
+    const session = await prisma.paymentSession.findFirstOrThrow({
+      where: { invoiceId: depositInvoice.id },
+    });
+    await sendCheckoutWebhook({
+      providerSessionId: session.providerSessionId,
+      paymentId: "pi_deposit_refund",
+      amountMinor: 5000n,
+      currency: "USD",
+    });
+    expect(
+      (
+        await prisma.invoice.findUniqueOrThrow({
+          where: { id: depositInvoice.id },
+        })
+      ).status,
+    ).toBe("PAID");
+
+    const cancel = await request(app)
+      .post(`/api/v1/invoices/${depositInvoice.id}/cancel-deposit`)
+      .set(fx.auth)
+      .send({ reason: "Job no longer needed", refund: true });
+    expect(cancel.status).toBe(200);
+    expect(cancel.body.data.refunds).toHaveLength(1);
+
+    const refund = await prisma.refund.findFirstOrThrow({
+      where: { invoiceId: depositInvoice.id },
+    });
+    expect(refund.amountMinor).toBe(5000n);
+    expect(refund.reason).toContain("Job no longer needed");
+
+    const invoice = await prisma.invoice.findUniqueOrThrow({
+      where: { id: depositInvoice.id },
+    });
+    expect(invoice.status).toBe("VOID");
+  });
+
+  it("rejects cancellation of non-deposit invoices", async () => {
+    const invoice = await prisma.invoice.create({
+      data: {
+        companyId: fx.companyId,
+        customerId: fx.customerId,
+        invoiceNumber: `INV-${Math.floor(Math.random() * 900_000) + 1000}`,
+        kind: "STANDARD",
+        status: "ISSUED",
+        subtotalMinor: 1000n,
+        totalMinor: 1000n,
+        balanceDueMinor: 1000n,
+        currency: "USD",
+      },
+    });
+    const res = await request(app)
+      .post(`/api/v1/invoices/${invoice.id}/cancel-deposit`)
+      .set(fx.auth)
+      .send({ reason: "Nope", refund: false });
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("INVOICE_NOT_DEPOSIT");
   });
 });
 

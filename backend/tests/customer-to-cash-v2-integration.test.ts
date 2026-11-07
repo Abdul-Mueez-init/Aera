@@ -168,13 +168,41 @@ async function activateJob(jobId: string) {
   });
 }
 
+// Phase 6.3 completion requirements: REPAIR/INSTALLATION jobs need one
+// BEFORE and one AFTER photo before completeJob accepts completion.
+async function addCompletionPhotos(jobId: string) {
+  for (const kind of ["BEFORE", "AFTER"] as const) {
+    await prisma.jobPhoto.create({
+      data: {
+        companyId: fx.companyId,
+        jobId,
+        uploadedBy: tech.userId,
+        objectKey: `test/${jobId}/${kind}.jpg`,
+        mimeType: "image/jpeg",
+        sizeBytes: 1024n,
+        kind,
+      },
+    });
+  }
+}
+
 let fx: Fixture;
 let tech: { userId: string; auth: { Authorization: string } };
 
 beforeEach(async () => {
+  // Break circular quote↔job Restrict FKs before the delete sweep.
+  await prisma.quote.updateMany({
+    data: {
+      basisJobId: null,
+      supersedesQuoteId: null,
+      supersededByQuoteId: null,
+    },
+  });
+  await prisma.job.updateMany({ data: { sourceQuoteId: null } });
   await prisma.$transaction([
     prisma.payment.deleteMany(),
     prisma.invoiceItem.deleteMany(),
+    prisma.invoiceCreditApplication.deleteMany(),
     prisma.invoice.deleteMany(),
     prisma.jobChangeRequest.deleteMany(),
     prisma.jobFinding.deleteMany(),
@@ -278,6 +306,7 @@ describe("Branch A — request-first customer-to-cash", () => {
       .send({ summary: "Failed capacitor", customerVisible: true });
     expect(finding.status).toBe(201);
 
+    await addCompletionPhotos(job.id);
     const complete = await request(app)
       .post(`/api/v1/jobs/${job.id}/complete`)
       .set(tech.auth)
@@ -362,6 +391,7 @@ describe("Branch B — staff direct job", () => {
       });
     expect(part.status).toBe(201);
 
+    await addCompletionPhotos(jobId);
     const complete = await request(app)
       .post(`/api/v1/jobs/${jobId}/complete`)
       .set(tech.auth)
@@ -455,6 +485,7 @@ describe("Change order — field request to invoice", () => {
 
     // Complete + invoice: both approved quotes bill; no AUTHORIZATION line
     // (the approved CHANGE_ORDER already covers the change request).
+    await addCompletionPhotos(job.id);
     await request(app)
       .post(`/api/v1/jobs/${job.id}/complete`)
       .set(tech.auth)
@@ -509,6 +540,7 @@ describe("Change order — field request to invoice", () => {
       .send({ reason: "Customer unreachable, safety hazard" });
     expect(auth.status).toBe(200);
 
+    await addCompletionPhotos(job.id);
     await request(app)
       .post(`/api/v1/jobs/${job.id}/complete`)
       .set(tech.auth)
@@ -524,5 +556,160 @@ describe("Change order — field request to invoice", () => {
     ).find((i) => i.sourceType === "AUTHORIZATION");
     expect(authLine).toBeDefined();
     expect(Number(authLine!.totalMinor)).toBe(20000);
+  });
+
+  it("6.8 diagnostic → findings → repair quote → approval → repair job", async () => {
+    // Service request + completed diagnostic job with a finding.
+    const requestRow = await prisma.serviceRequest.create({
+      data: {
+        companyId: fx.companyId,
+        customerId: fx.customerId,
+        serviceAddressId: fx.addressId,
+        requestNumber: Math.floor(Math.random() * 900_000) + 1000,
+        title: "No cooling",
+        description: "AC dead",
+        serviceCategory: "HVAC",
+        source: "STAFF_DIRECT",
+        status: "QUOTING",
+      },
+    });
+    const diagJob = await prisma.job.create({
+      data: {
+        companyId: fx.companyId,
+        customerId: fx.customerId,
+        serviceAddressId: fx.addressId,
+        serviceRequestId: requestRow.id,
+        jobNumber: Math.floor(Math.random() * 900_000) + 1000,
+        serviceType: "Diagnostic",
+        problemDescription: "No cooling",
+        type: "DIAGNOSTIC",
+        status: "COMPLETED",
+        completedAt: new Date(),
+      },
+    });
+    await prisma.jobFinding.create({
+      data: {
+        companyId: fx.companyId,
+        jobId: diagJob.id,
+        authorUserId: fx.userId,
+        summary: "Failed run capacitor",
+        recommendedWork: "Replace run capacitor and test",
+        customerVisible: true,
+      },
+    });
+
+    // Staff create the repair quote from findings.
+    const quoteRes = await request(app)
+      .post(`/api/v1/jobs/${diagJob.id}/repair-quote`)
+      .set(fx.auth);
+    expect(quoteRes.status).toBe(201);
+    const quoteId = quoteRes.body.data.id as string;
+    expect(quoteRes.body.data.kind).toBe("REPAIR");
+    expect(quoteRes.body.data.basisJobId).toBe(diagJob.id);
+    expect(quoteRes.body.data.serviceRequestId).toBe(requestRow.id);
+
+    // Price it, send it, customer approves in the workspace.
+    const priced = await request(app)
+      .patch(`/api/v1/quotes/${quoteId}`)
+      .set(fx.auth)
+      .send({
+        currency: "USD",
+        kind: "REPAIR",
+        items: [
+          {
+            description: "Replace run capacitor and test",
+            quantity: "1",
+            unitPriceMinor: 18500,
+          },
+        ],
+      });
+    expect(priced.status).toBe(200);
+    const sent = await request(app)
+      .post(`/api/v1/quotes/${quoteId}/send`)
+      .set(fx.auth);
+    expect(sent.status).toBe(200);
+
+    const portal = await workspaceSession(fx);
+    const approve = await request(app)
+      .post(`/api/v1/portal/quotes/${quoteId}/respond`)
+      .set(portal)
+      .send({ action: "APPROVED" });
+    expect(approve.status).toBe(200);
+
+    // Exactly one REPAIR job materializes on the same request.
+    const repairJob = await prisma.job.findFirstOrThrow({
+      where: { companyId: fx.companyId, sourceQuoteId: quoteId },
+    });
+    expect(repairJob.type).toBe("REPAIR");
+    expect(repairJob.serviceRequestId).toBe(requestRow.id);
+    expect(repairJob.customerId).toBe(fx.customerId);
+
+    // Decline path: a second diagnostic job's quote declined leaves the
+    // diagnostic job, its request and findings untouched. It gets its
+    // own request because the first is already ACCEPTED after approval.
+    const requestRow2 = await prisma.serviceRequest.create({
+      data: {
+        companyId: fx.companyId,
+        customerId: fx.customerId,
+        serviceAddressId: fx.addressId,
+        requestNumber: Math.floor(Math.random() * 900_000) + 1000,
+        title: "Low refrigerant",
+        description: "Warm air",
+        serviceCategory: "HVAC",
+        source: "STAFF_DIRECT",
+        status: "QUOTING",
+      },
+    });
+    const diagJob2 = await prisma.job.create({
+      data: {
+        companyId: fx.companyId,
+        customerId: fx.customerId,
+        serviceAddressId: fx.addressId,
+        serviceRequestId: requestRow2.id,
+        jobNumber: Math.floor(Math.random() * 900_000) + 1000,
+        serviceType: "Diagnostic",
+        problemDescription: "No cooling",
+        type: "DIAGNOSTIC",
+        status: "COMPLETED",
+        completedAt: new Date(),
+      },
+    });
+    await prisma.jobFinding.create({
+      data: {
+        companyId: fx.companyId,
+        jobId: diagJob2.id,
+        authorUserId: fx.userId,
+        summary: "Low refrigerant",
+        recommendedWork: "Recharge refrigerant",
+        customerVisible: true,
+      },
+    });
+    const quote2 = await request(app)
+      .post(`/api/v1/jobs/${diagJob2.id}/repair-quote`)
+      .set(fx.auth);
+    expect(quote2.status).toBe(201);
+    const sent2 = await request(app)
+      .post(`/api/v1/quotes/${quote2.body.data.id}/send`)
+      .set(fx.auth);
+    expect(sent2.status).toBe(200);
+    const decline = await request(app)
+      .post(`/api/v1/portal/quotes/${quote2.body.data.id}/respond`)
+      .set(portal)
+      .send({ action: "DECLINED", reason: "Too expensive" });
+    expect(decline.status).toBe(200);
+
+    const diagAfter = await prisma.job.findUniqueOrThrow({
+      where: { id: diagJob2.id },
+    });
+    expect(diagAfter.status).toBe("COMPLETED");
+    expect(diagAfter.type).toBe("DIAGNOSTIC");
+    const findings = await prisma.jobFinding.count({
+      where: { jobId: diagJob2.id },
+    });
+    expect(findings).toBe(1);
+    const requestAfter = await prisma.serviceRequest.findUniqueOrThrow({
+      where: { id: requestRow2.id },
+    });
+    expect(requestAfter.status).not.toBe("CANCELLED");
   });
 });

@@ -209,6 +209,7 @@ beforeEach(async () => {
     prisma.providerWebhookEvent.deleteMany(),
     prisma.invoiceCreditApplication.deleteMany(),
     prisma.invoiceItem.deleteMany(),
+    prisma.invoiceCreditApplication.deleteMany(),
     prisma.invoice.deleteMany(),
     prisma.quoteApprovalEvent.deleteMany(),
     prisma.quoteAcceptance.deleteMany(),

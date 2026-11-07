@@ -118,6 +118,15 @@ beforeEach(async () => {
   // Clean in FK-safe order so the suite also passes on a shared test DB
   // where other suites left quotes/invoices behind.
   await prisma.$transaction([
+    // Break jobs↔quotes circular FKs left by other suites' last tests.
+    prisma.job.updateMany({ data: { sourceQuoteId: null } }),
+    prisma.quote.updateMany({
+      data: {
+        basisJobId: null,
+        supersedesQuoteId: null,
+        supersededByQuoteId: null,
+      },
+    }),
     prisma.portalAuditEvent.deleteMany(),
     prisma.portalSession.deleteMany(),
     prisma.portalAccessGrant.deleteMany(),
@@ -126,8 +135,14 @@ beforeEach(async () => {
     prisma.quoteItem.deleteMany(),
     prisma.quote.deleteMany(),
     prisma.invoiceItem.deleteMany(),
+    prisma.invoiceCreditApplication.deleteMany(),
     prisma.invoice.deleteMany(),
     prisma.job.deleteMany(),
+    prisma.serviceRequestEvent.deleteMany(),
+    prisma.serviceRequestMessage.deleteMany(),
+    prisma.serviceRequestAttachment.deleteMany(),
+    prisma.serviceRequestUpload.deleteMany(),
+    prisma.serviceRequest.deleteMany(),
     prisma.serviceAddress.deleteMany(),
     prisma.customer.deleteMany(),
     prisma.refreshSession.deleteMany(),

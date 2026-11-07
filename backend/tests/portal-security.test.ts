@@ -30,6 +30,7 @@ describe("Portal Security Tests", () => {
     await prisma.payment.deleteMany();
     await prisma.customerReview.deleteMany();
     await prisma.invoiceItem.deleteMany();
+    await prisma.invoiceCreditApplication.deleteMany();
     await prisma.invoice.deleteMany();
     await prisma.jobChangeRequest.deleteMany();
     await prisma.jobFinding.deleteMany();

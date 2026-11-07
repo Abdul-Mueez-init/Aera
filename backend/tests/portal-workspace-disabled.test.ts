@@ -62,6 +62,7 @@ beforeEach(async () => {
     prisma.customerReview.deleteMany(),
     prisma.quote.deleteMany(),
     prisma.invoiceItem.deleteMany(),
+    prisma.invoiceCreditApplication.deleteMany(),
     prisma.invoice.deleteMany(),
     prisma.jobStatusHistory.deleteMany(),
     prisma.job.deleteMany(),
